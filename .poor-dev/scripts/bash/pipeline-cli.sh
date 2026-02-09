@@ -3,9 +3,10 @@
 # Pipeline CLI Orchestrator
 # Manages tmux sessions and coordinates step execution via claude -p / opencode run.
 #
-# Usage (called by poor-dev-cli entrypoint):
+# Usage (called by poor-dev entrypoint):
 #   pipeline-cli.sh --description "desc" [--runtime R] [--model M] [--config C]
 #                   [--from STEP] [--feature-dir DIR] [--no-confirm]
+#   pipeline-cli.sh --interactive
 #
 # Each pipeline step runs in its own tmux window as an independent process.
 # Dashboard occupies window 0.
@@ -28,6 +29,7 @@ CONFIG_FILE="$REPO_ROOT/.poor-dev/pipeline-config.yaml"
 FROM_STEP=""
 FEATURE_DIR=""
 NO_CONFIRM=false
+INTERACTIVE=false
 SESSION_NAME=""
 CONTROL_PIPE=""
 
@@ -48,6 +50,7 @@ parse_args() {
             --from) FROM_STEP="$2"; shift 2 ;;
             --feature-dir) FEATURE_DIR="$2"; shift 2 ;;
             --no-confirm) NO_CONFIRM=true; shift ;;
+            --interactive) INTERACTIVE=true; shift ;;
             *) echo "ERROR: Unknown option '$1'" >&2; exit 1 ;;
         esac
     done
@@ -232,13 +235,17 @@ run_step() {
 
     # Run in the tmux worker window
     local log_file="/tmp/${SESSION_NAME}-${step}.log"
-    tmux send-keys -t "$SESSION_NAME:$window_name" \
-        "bash -c '$(printf '%q' "$DASHBOARD_SCRIPT") --worker-header $(printf '%q' "$step") $(printf '%q' "$step_num") $(printf '%q' "$total_steps") && $(printf '%q' "$(build_invoke_cmd "$runtime" "$model" "$step" "$args")") 2>&1 | tee $(printf '%q' "$log_file"); echo \"\$?\" > /tmp/${SESSION_NAME}-${step}.exit'" Enter
+    local exit_file="/tmp/${SESSION_NAME}-${step}.exit"
+    local cmd
+    cmd="$(build_invoke_cmd "$runtime" "$model" "$step" "$args")"
+    exec_in_window "$window_name" \
+        "bash $(printf '%q' "$DASHBOARD_SCRIPT") --worker-header $(printf '%q' "$step") $(printf '%q' "$step_num") $(printf '%q' "$total_steps")" \
+        "$cmd 2>&1 | tee $(printf '%q' "$log_file")" \
+        "echo \$? > $(printf '%q' "$exit_file")"
 
     # Wait for completion
     local max_wait=3600  # 1 hour max per step
     local waited=0
-    local exit_file="/tmp/${SESSION_NAME}-${step}.exit"
 
     while [[ ! -f "$exit_file" ]] && (( waited < max_wait )); do
         sleep 2
@@ -311,6 +318,22 @@ build_invoke_cmd() {
     esac
 }
 
+# --- Safe tmux command execution ---
+# Write command lines to a temp script file and execute via tmux send-keys.
+# This eliminates bash -c '...' quoting hell entirely.
+exec_in_window() {
+    local window="$1"
+    shift
+    local script="/tmp/${SESSION_NAME}-${window}-cmd.sh"
+    {
+        echo '#!/usr/bin/env bash'
+        printf '%s\n' "$@"
+    } > "$script"
+    chmod +x "$script"
+    sleep 0.3
+    tmux send-keys -t "$SESSION_NAME:$window" "bash '$script'" Enter
+}
+
 # --- Error handling ---
 handle_step_failure() {
     local step="$1" exit_code="$2" args="$3" step_num="$4" total_steps="$5"
@@ -333,8 +356,11 @@ handle_step_failure() {
         rm -f "$exit_file"
 
         local window_name="${step}"
-        tmux send-keys -t "$SESSION_NAME:$window_name" \
-            "bash -c '$(printf '%q' "$(build_invoke_cmd "$runtime" "$model" "$step" "$args")") 2>&1 | tee $(printf '%q' "$log_file"); echo \"\$?\" > $(printf '%q' "$exit_file")'" Enter
+        local cmd
+        cmd="$(build_invoke_cmd "$runtime" "$model" "$step" "$args")"
+        exec_in_window "$window_name" \
+            "$cmd 2>&1 | tee $(printf '%q' "$log_file")" \
+            "echo \$? > $(printf '%q' "$exit_file")"
 
         # Wait for retry
         local waited=0
@@ -409,15 +435,17 @@ bootstrap_triage() {
 
     # Mark triage as in_progress (but we need to init state first after triage creates the branch)
     # For triage, we invoke directly since no feature dir exists yet
-    local skill_prompt="Use the Skill tool to invoke /poor-dev.triage with args '$DESCRIPTION'"
 
     local triage_log="/tmp/${SESSION_NAME}-triage.log"
     local triage_exit="/tmp/${SESSION_NAME}-triage.exit"
 
-    # Create triage window
+    # Create triage window and execute via temp script
     tmux new-window -t "$SESSION_NAME" -n "triage"
-    tmux send-keys -t "$SESSION_NAME:triage" \
-        "bash -c '$(printf '%q' "$(build_invoke_cmd "$runtime" "$model" "triage" "$DESCRIPTION")") 2>&1 | tee $(printf '%q' "$triage_log"); echo \"\$?\" > $(printf '%q' "$triage_exit")'" Enter
+    local cmd
+    cmd="$(build_invoke_cmd "$runtime" "$model" "triage" "$DESCRIPTION")"
+    exec_in_window "triage" \
+        "$cmd 2>&1 | tee $(printf '%q' "$triage_log")" \
+        "echo \$? > $(printf '%q' "$triage_exit")"
 
     # Wait for triage completion
     local waited=0
@@ -515,6 +543,8 @@ cleanup_and_exit() {
     # Clean up temp files
     rm -f /tmp/${SESSION_NAME}-*.exit 2>/dev/null || true
     rm -f /tmp/${SESSION_NAME}-paused 2>/dev/null || true
+    rm -f /tmp/${SESSION_NAME}-*-cmd.sh 2>/dev/null || true
+    rm -f /tmp/${SESSION_NAME}-description 2>/dev/null || true
 
     if [[ "$code" -eq 0 ]]; then
         echo ""
@@ -530,6 +560,25 @@ cleanup_and_exit() {
 
 # --- Main pipeline loop ---
 run_pipeline() {
+    # Interactive mode: wait for user input
+    if $INTERACTIVE; then
+        local desc_file="/tmp/${SESSION_NAME}-description"
+        local waited=0
+        while [[ ! -f "$desc_file" ]] && (( waited < 300 )); do
+            sleep 0.5
+            ((waited++))
+        done
+        if [[ ! -f "$desc_file" ]]; then
+            cleanup_and_exit 1
+        fi
+        DESCRIPTION="$(cat "$desc_file")"
+        rm -f "$desc_file"
+        if [[ -z "$DESCRIPTION" ]]; then
+            cleanup_and_exit 1
+        fi
+        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+    fi
+
     local start_idx=0
     local step_count=${#ALL_STEPS[@]}
     local confirm_enabled
@@ -658,7 +707,12 @@ main() {
     parse_args "$@"
 
     # Initialize step args map
-    STEP_ARGS_MAP[triage]="$DESCRIPTION"
+    # Interactive mode: DESCRIPTION is set later from user input
+    if ! $INTERACTIVE; then
+        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+    else
+        STEP_ARGS_MAP[triage]=""
+    fi
     STEP_ARGS_MAP[specify]=""
     STEP_ARGS_MAP[clarify]=""
     STEP_ARGS_MAP[plan]=""
@@ -686,6 +740,14 @@ main() {
 
     # Trap for cleanup
     trap 'cleanup_and_exit 1' INT TERM
+
+    # Interactive mode: launch prompt inside tmux dashboard window
+    if $INTERACTIVE; then
+        local desc_file="/tmp/${SESSION_NAME}-description"
+        sleep 0.3
+        tmux send-keys -t "$SESSION_NAME:dashboard" \
+            "bash '${SCRIPT_DIR}/pipeline-prompt.sh' '${desc_file}'" Enter
+    fi
 
     # Attach to tmux and run pipeline
     # Run pipeline in background within tmux, then attach

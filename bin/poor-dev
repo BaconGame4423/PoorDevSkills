@@ -255,26 +255,7 @@ cmd_interactive() {
         exit 1
     fi
 
-    show_banner
-
-    printf "%bChecking dependencies...%b\n" "$C_CYAN" "$C_RESET"
-    check_dependencies
-    printf "%b✓ All dependencies satisfied.%b\n\n" "$C_GREEN" "$C_RESET"
-
-    local description
-    if command -v gum &>/dev/null; then
-        description="$(gum input --placeholder "機能説明 or バグ報告を入力..." --width 60)" || true
-    else
-        printf "%b> %b" "$C_CYAN" "$C_RESET"
-        read -r description
-    fi
-
-    if [[ -z "$description" ]]; then
-        printf "%bError: 説明が入力されませんでした。%b\n" "$C_RED" "$C_RESET" >&2
-        exit 1
-    fi
-
-    _POOR_DEV_BANNER_SHOWN=1 cmd_run "$description"
+    exec bash "$PROJECT_ROOT/.poor-dev/scripts/bash/pipeline-cli.sh" --interactive
 }
 
 # --- cmd_run ---

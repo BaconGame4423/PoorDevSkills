@@ -77,6 +77,6 @@ Present a summary to the user:
    Since roadmap is typically the final step, report completion:
    - "ロードマップフロー完了。生成されたドキュメント:"
    - List all artifact paths
-   - Suggest: "次のステップとして、各マイルストーンを `/poor-dev.triage` で機能開発フローに移行できます。"
+   - Suggest: "次のステップとして、各マイルストーンを `/poor-dev.intake` で機能開発フローに移行できます。"
 
 6. **Error fallback**: Report completion as text if tools fail.

@@ -9,10 +9,10 @@ feature:
 pipeline:
   mode: auto
   confirm: true
-  current_step: triage
+  current_step: intake
 
   steps:
-    - {id: triage,              status: pending}
+    - {id: intake,              status: pending}
     - {id: specify,             status: pending}
     - {id: clarify,             status: pending, conditional: true}
     - {id: plan,                status: pending}

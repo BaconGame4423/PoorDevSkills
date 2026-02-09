@@ -100,7 +100,7 @@ Options:
   --version                     バージョンを表示
 
 Steps:
-  triage, specify, clarify, plan, planreview, tasks,
+  intake, specify, clarify, plan, planreview, tasks,
   tasksreview, architecturereview, implement, qualityreview, phasereview,
   concept, goals, milestones, roadmap
 
@@ -117,7 +117,7 @@ Examples:
   poor-dev "ユーザー認証を追加"   パイプライン実行
   poor-dev --from plan          途中から再開
   poor-dev ask "アーキテクチャは？" 質問応答
-  poor-dev config set triage.model haiku  設定変更
+  poor-dev config set intake.model haiku  設定変更
 HELP
 }
 

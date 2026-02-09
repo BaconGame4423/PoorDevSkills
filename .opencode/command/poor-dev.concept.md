@@ -21,11 +21,11 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 - Run `.poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only` to get FEATURE_DIR
 - Check if `FEATURE_DIR/workflow-state.yaml` exists
-- If it exists, read it and check if the `triage` step is `completed`:
-  - **Yes (triage completed)** → Branch and directory already created by triage. **Skip Steps 1-2 entirely.**
+- If it exists, read it and check if the `intake` step is `completed`:
+  - **Yes (intake completed)** → Branch and directory already created by intake. **Skip Steps 1-2 entirely.**
     - Get FEATURE_DIR from `workflow-state.yaml`'s `feature.dir` field
     - Jump directly to Step 3 (template loading)
-  - **No (triage not completed or no triage step)** → Continue with Step 1 as normal (standalone mode)
+  - **No (intake not completed or no intake step)** → Continue with Step 1 as normal (standalone mode)
 - If `workflow-state.yaml` does not exist → Continue with Step 1 as normal (standalone mode)
 
 ### Step 1: Generate Short Name (standalone mode only)
@@ -38,7 +38,7 @@ Same as `poor-dev.specify` Steps 1-2:
    ```bash
    .poor-dev/scripts/bash/pipeline-state.sh init "$FEATURE_DIR"
    .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" roadmap
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
+   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
    ```
 
 ### Step 2: Not used (reserved)

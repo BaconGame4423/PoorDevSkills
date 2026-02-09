@@ -19,7 +19,7 @@ defaults:
   confirm: true            # Show confirmation prompt between steps
 
 steps:
-  triage:
+  intake:
     model: haiku
   # specify:
   #   model: sonnet        # inherits default

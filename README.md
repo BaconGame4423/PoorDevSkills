@@ -77,11 +77,11 @@ poor-dev --no-confirm "ユーザー認証機能を追加する"
 Claude Code / OpenCode のチャット内からスラッシュコマンドで個別ステップを実行します。
 
 ```bash
-# トリアージ（自動で機能/バグを分類）
-/poor-dev.triage "ユーザー認証機能を追加する"     # → 機能開発フローへ
-/poor-dev.triage "ログイン時に500エラーが発生する"  # → バグ修正フローへ
+# 受付（自動で機能/バグを分類）
+/poor-dev.intake "ユーザー認証機能を追加する"     # → 機能開発フローへ
+/poor-dev.intake "ログイン時に500エラーが発生する"  # → バグ修正フローへ
 
-# パイプラインモード: triage から自動遷移で全ステップ実行
+# パイプラインモード: intake から自動遷移で全ステップ実行
 # コンテキスト喪失時は /poor-dev.pipeline resume で復帰
 ```
 
@@ -103,7 +103,7 @@ poor-dev [command] [options] ["description"]
 | `ask "質問"` | コードベースに関する質問応答（パイプライン不要） |
 | `report [種別]` | プロジェクトレポート生成（パイプライン不要） |
 | `config [args]` | パイプライン設定の表示・変更 |
-| `switch` | フローを直接選択して開始（triage スキップ）※TUI 内では Tab で切替可能 |
+| `switch` | フローを直接選択して開始（intake スキップ）※TUI 内では Tab で切替可能 |
 | *(なし)* | インタラクティブモード（tmux 内でプロンプト入力 → Tab/Shift+Tab で6モード切替） |
 
 ### Options
@@ -119,7 +119,7 @@ poor-dev [command] [options] ["description"]
 | `--help, -h` | ヘルプを表示 |
 | `--version` | バージョンを表示 |
 
-**ステップ ID**: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`, `concept`, `goals`, `milestones`, `roadmap`
+**ステップ ID**: `intake`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`, `concept`, `goals`, `milestones`, `roadmap`
 
 ### 実行例
 
@@ -153,7 +153,7 @@ poor-dev switch
 
 # 設定の表示・変更
 poor-dev config
-poor-dev config set triage.model haiku
+poor-dev config set intake.model haiku
 poor-dev config set planreview.pm.model haiku
 ```
 
@@ -165,22 +165,30 @@ poor-dev config set planreview.pm.model haiku
 
 | キー | 動作 |
 |------|------|
-| `Tab` | 次のモードへ切替（triage → feature → bugfix → roadmap → ask → report） |
+| `Tab` | 次のモードへ切替（intake → feature → bugfix → roadmap → ask → report） |
 | `Shift+Tab` | 前のモードへ切替 |
-| `Ctrl+S` | モデル設定画面を開く（ステップ別・サブエージェント別モデル変更） |
+| `Ctrl+S` | モデル設定画面を開く（インクリメンタルフィルタ＋カスタムモデル入力対応） |
 | `Enter` | 送信（report は入力なしで実行） |
 | `Esc` | キャンセル |
 | `Ctrl+U` | 入力をクリア |
 
-#### パイプライン実行中
+#### パイプライン実行中（ステップ開始後）
 
 | キー | 動作 |
 |------|------|
-| `Enter` | 次のステップへ進む（確認プロンプト時） |
+| `q` | パイプライン中止（y/n 確認） |
+| `l` | ログ末尾3行の表示/非表示トグル |
+| `Ctrl+C` | 強制停止 |
+
+#### ステップ間（確認プロンプト時）
+
+| キー | 動作 |
+|------|------|
+| `Enter` | 次のステップへ進む |
 | `p` | パイプライン一時停止（ステップ完了後） |
-| `s` | 次ステップをスキップ（確認プロンプト時） |
+| `s` | 次ステップをスキップ |
 | `q` | パイプライン終了（状態保存、`--from` で再開可能） |
-| `m` | 次ステップに追加指示を付与（確認プロンプト時） |
+| `m` | 次ステップに追加指示を付与 |
 | `←→` | tmux タブ切替（完了ステップのログ参照） |
 
 ---
@@ -191,7 +199,7 @@ poor-dev config set planreview.pm.model haiku
 
 | コマンド | 用途 | 出力 |
 |---------|------|------|
-| `/poor-dev.triage` | 入力のトリアージ（機能/バグ分類） | ルーティング判定 |
+| `/poor-dev.intake` | 入力の受付（機能/バグ分類） | ルーティング判定 |
 | `/poor-dev.specify` | 機能仕様の作成 | spec.md |
 | `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
 | `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
@@ -226,7 +234,7 @@ poor-dev config set planreview.pm.model haiku
 |---------|------|
 | `/poor-dev.ask` | コードベースや仕様に関する質問応答 |
 | `/poor-dev.report` | プロジェクトレポート・ドキュメント生成 |
-| `/poor-dev.switch` | フローを直接選択して開始（triage スキップ） |
+| `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 | `/poor-dev.config` | パイプライン設定の対話的変更 |
 | `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
@@ -240,7 +248,7 @@ poor-dev config set planreview.pm.model haiku
 
 | # | ステップ | コマンド | 内容 |
 |---|---------|---------|------|
-| 0 | トリアージ | `/poor-dev.triage` | ユーザー入力を分類し、機能開発フローまたはバグ修正フローにルーティング |
+| 0 | 受付 | `/poor-dev.intake` | ユーザー入力を分類し、機能開発フローまたはバグ修正フローにルーティング |
 | 1 | 仕様作成 | `/poor-dev.specify` | 自然言語の機能説明から、ユーザーストーリー・受け入れ基準・非機能要件を含む仕様書（spec.md）を生成 |
 | 2 | 技術計画 | `/poor-dev.plan` | 仕様をもとに、アーキテクチャ・技術選定・フェーズ分割を含む実装計画（plan.md）を作成 |
 | 3 | 計画レビュー | `/poor-dev.planreview` | 4ペルソナが計画を多角的にレビューし、指摘ゼロまで自動修正ループを実行 |
@@ -251,17 +259,17 @@ poor-dev config set planreview.pm.model haiku
 | 8 | 品質レビュー | `/poor-dev.qualityreview` | 品質ゲート（型チェック・リント・テスト）実行後、コード品質を4ペルソナ+敵対的レビューで検証 |
 | 9 | 完了レビュー | `/poor-dev.phasereview` | 完了基準・リグレッション・ドキュメントを最終確認し、デプロイ可能判定 |
 
-> **パイプラインモード**: `/poor-dev.triage` から開始すると、各ステップ完了時に次のステップへ自動遷移します。コンテキスト喪失時は `/poor-dev.pipeline resume` で途中から復帰できます。
+> **パイプラインモード**: `/poor-dev.intake` から開始すると、各ステップ完了時に次のステップへ自動遷移します。コンテキスト喪失時は `/poor-dev.pipeline resume` で途中から復帰できます。
 
 > **CLI オーケストレーター**: `poor-dev "説明"` で tmux セッション内の独立プロセスとして全ステップを実行できます。各ステップごとにランタイム（claude/opencode）やモデルを設定可能です。
 
 ### バグ修正フロー
 
-`/poor-dev.triage` がバグ報告と判定した場合、以下の専用フローに切り替わります。
+`/poor-dev.intake` がバグ報告と判定した場合、以下の専用フローに切り替わります。
 
 | # | ステップ | コマンド | 内容 |
 |---|---------|---------|------|
-| 0 | トリアージ | `/poor-dev.triage` | 入力を分類しバグ修正フローにルーティング。過去のバグパターンを参照 |
+| 0 | 受付 | `/poor-dev.intake` | 入力を分類しバグ修正フローにルーティング。過去のバグパターンを参照 |
 | 1 | バグ調査 | `/poor-dev.bugfix` | 再現→調査→5 Whys分析→根本原因特定→修正計画。推測的修正を禁止 |
 | 2 | 実装 | `/poor-dev.implement` | 修正計画に基づき実装（小規模の場合） |
 | 3 | 品質レビュー | `/poor-dev.qualityreview` | 修正の品質検証 + ポストモーテム自動生成 + バグパターンDB更新 |
@@ -270,17 +278,17 @@ poor-dev config set planreview.pm.model haiku
 
 ### ロードマップフロー
 
-`/poor-dev.triage` がロードマップ・戦略策定と判定した場合、以下の企画フローに切り替わります。
+`/poor-dev.intake` がロードマップ・戦略策定と判定した場合、以下の企画フローに切り替わります。
 
 | # | ステップ | コマンド | 内容 |
 |---|---------|---------|------|
-| 0 | トリアージ | `/poor-dev.triage` | 入力を分類しロードマップフローにルーティング |
+| 0 | 受付 | `/poor-dev.intake` | 入力を分類しロードマップフローにルーティング |
 | 1 | コンセプト | `/poor-dev.concept` | ターゲットユーザー・課題・差別化を整理し concept.md を生成 |
 | 2 | ゴール定義 | `/poor-dev.goals` | 戦略ゴールと成功基準を定義し goals.md を生成 |
 | 3 | マイルストーン | `/poor-dev.milestones` | ゴールをマイルストーンに分解し milestones.md を生成 |
 | 4 | ロードマップ | `/poor-dev.roadmap` | 全成果物を統合しフェーズ計画を含む roadmap.md を生成 |
 
-> ロードマップ完了後、各マイルストーンを `/poor-dev.triage` で機能開発フローに移行できます。
+> ロードマップ完了後、各マイルストーンを `/poor-dev.intake` で機能開発フローに移行できます。
 
 ### ドキュメント/Q&Aフロー
 
@@ -371,8 +379,8 @@ defaults:
   confirm: true            # ステップ間で確認プロンプトを表示
 
 steps:
-  triage:
-    model: haiku           # トリアージは軽量モデルで十分
+  intake:
+    model: haiku           # 受付は軽量モデルで十分
   implement:
     model: opus            # 実装は高精度モデルを使用
 ```
@@ -383,7 +391,7 @@ steps:
 
 ```yaml
 steps:
-  triage:
+  intake:
     model: haiku
   specify:
     model: sonnet
@@ -437,7 +445,7 @@ poor-dev config set defaults.runtime opencode
 poor-dev config set defaults.model opus
 
 # ステップ別設定
-poor-dev config set triage.model haiku
+poor-dev config set intake.model haiku
 poor-dev config set implement.runtime claude
 
 # サブエージェント別設定

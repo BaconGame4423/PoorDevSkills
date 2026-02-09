@@ -1,5 +1,5 @@
 ---
-description: Triage user input to determine whether to route to feature development or bug fix flow.
+description: Intake user input to determine whether to route to feature development or bug fix flow.
 handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
@@ -112,7 +112,7 @@ If classified as **feature**:
 
 2. Update state:
    ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" triage completed --summary "Classified as feature: <summary>"
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as feature: <summary>"
    ```
 
 3. Continue to Pipeline Continuation (below) which will route to `/poor-dev.specify`
@@ -131,7 +131,7 @@ If classified as **bugfix**:
 
 3. Switch to bugfix pipeline:
    ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"bugfix","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
+   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"bugfix","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
    ```
 
 4. Copy bug report template and fill initial info:
@@ -149,7 +149,7 @@ If classified as **bugfix**:
 
 6. Update state:
    ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" triage completed --summary "Classified as bugfix: <summary>"
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as bugfix: <summary>"
    ```
 
 7. Continue to Pipeline Continuation (below) which will route to `/poor-dev.bugfix`
@@ -165,7 +165,7 @@ If classified as **roadmap**:
 
 2. Switch to roadmap pipeline:
    ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
+   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
    ```
 
 3. Update context paths in workflow-state.yaml:
@@ -178,7 +178,7 @@ If classified as **roadmap**:
 
 4. Update state:
    ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" triage completed --summary "Classified as roadmap: <summary>"
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Classified as roadmap: <summary>"
    ```
 
 5. Continue to Pipeline Continuation (below) which will route to `/poor-dev.concept`
@@ -191,7 +191,7 @@ Report to the user:
 - "このリクエストはパイプライン管理が不要です。以下のコマンドをお使いください:"
 - 質問応答: `/poor-dev.ask` or `poor-dev ask "質問"`
 - レポート生成: `/poor-dev.report` or `poor-dev report`
-- Pipeline state is NOT updated (triage did not complete a pipeline flow).
+- Pipeline state is NOT updated (intake did not complete a pipeline flow).
 - Do NOT proceed to Pipeline Continuation.
 
 ## Pipeline Continuation
@@ -219,7 +219,7 @@ Report to the user:
 
    **auto + confirm=true (default)**:
    - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: triage completed. Next is /poor-dev.$NEXT"
+     - question: "Pipeline: intake completed. Next is /poor-dev.$NEXT"
      - options: "Continue" / "Skip" / "Pause"
    - **OpenCode**: Use `question` tool with same content.
    - On "Continue" → invoke `/poor-dev.$NEXT`

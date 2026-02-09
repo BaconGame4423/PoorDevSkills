@@ -29,8 +29,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    .poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only
    ```
 
-2. Verify `$FEATURE_DIR/bug-report.md` exists (created by triage).
-   - If not found: **ERROR** — "Run `/poor-dev.triage` first to create the bug report and initialize the bugfix pipeline."
+2. Verify `$FEATURE_DIR/bug-report.md` exists (created by intake).
+   - If not found: **ERROR** — "Run `/poor-dev.intake` first to create the bug report and initialize the bugfix pipeline."
 
 3. Read `$FEATURE_DIR/workflow-state.yaml` and confirm `feature.type == "bugfix"`.
 
@@ -188,7 +188,7 @@ Continue directly to implement via Pipeline Continuation.
 
 Dynamically switch to full pipeline:
 ```bash
-.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"bugfix","status":"completed"},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
+.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"bugfix","status":"completed"},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
 ```
 
 Route to `poor-dev.plan` — `investigation.md` and `fix-plan.md` serve as context for planning.
@@ -201,7 +201,7 @@ If at any point during Stages 1-4 it becomes clear this is a missing feature rat
 2. If approved:
    ```bash
    .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" feature
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"specify","status":"pending"},{"id":"clarify","status":"pending","conditional":true},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"architecturereview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"phasereview","status":"pending"}]'
+   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"specify","status":"pending"},{"id":"clarify","status":"pending","conditional":true},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"architecturereview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"phasereview","status":"pending"}]'
    ```
    Update state and route to `poor-dev.specify`.
 

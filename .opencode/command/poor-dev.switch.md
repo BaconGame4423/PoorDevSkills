@@ -1,5 +1,5 @@
 ---
-description: "Select and start a development flow directly without triage classification."
+description: "Select and start a development flow directly without intake classification."
 handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
@@ -66,7 +66,7 @@ Otherwise, ask the user:
 
 ### Step 4: Branch & Directory Creation
 
-**Same logic as `/poor-dev.triage` Step 3**:
+**Same logic as `/poor-dev.intake` Step 3**:
 
 1. Generate a concise short name (2-4 words) from the description
 2. Check existing branches and determine next available number:
@@ -92,27 +92,27 @@ Based on the chosen flow type:
 **Feature**:
 ```bash
 .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" feature
-.poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" triage completed --summary "Direct flow selection: feature"
+.poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" intake completed --summary "Direct flow selection: feature"
 ```
 Continue to Pipeline Continuation (routes to `/poor-dev.specify`)
 
 **Bugfix**:
 ```bash
 .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" bugfix
-.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"bugfix","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
+.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"bugfix","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
 ```
 - Copy bug report template and fill initial info
 - Update context paths (bug_report_file, investigation_file, fix_plan_file)
-- Update state: `pipeline-state.sh update "$FEATURE_DIR" triage completed`
+- Update state: `pipeline-state.sh update "$FEATURE_DIR" intake completed`
 - Continue to Pipeline Continuation (routes to `/poor-dev.bugfix`)
 
 **Roadmap**:
 ```bash
 .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" roadmap
-.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
+.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
 ```
 - Update context paths (concept_file, goals_file, milestones_file, roadmap_file)
-- Update state: `pipeline-state.sh update "$FEATURE_DIR" triage completed`
+- Update state: `pipeline-state.sh update "$FEATURE_DIR" intake completed`
 - Continue to Pipeline Continuation (routes to `/poor-dev.concept`)
 
 ## Pipeline Continuation

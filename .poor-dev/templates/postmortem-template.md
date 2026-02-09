@@ -4,7 +4,7 @@
 **Branch**: [BRANCH]
 **Severity**: [Critical/High/Medium/Low]
 **Category**: [Logic Bug / Dependency / Environment / Regression / Concurrency / Data / Configuration]
-**Resolution Time**: [triage から qualityreview 完了までの期間]
+**Resolution Time**: [intake から qualityreview 完了までの期間]
 
 ## Summary
 [1-2行の要約]

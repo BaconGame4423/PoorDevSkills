@@ -33,8 +33,8 @@ INTERACTIVE=false
 SESSION_NAME=""
 CONTROL_PIPE=""
 
-# Step ordering (matches workflow-state-template.yaml; reloaded dynamically after triage)
-ALL_STEPS=(triage specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview)
+# Step ordering (matches workflow-state-template.yaml; reloaded dynamically after intake)
+ALL_STEPS=(intake specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview)
 
 # Step arguments mapping
 declare -A STEP_ARGS_MAP
@@ -167,15 +167,18 @@ setup_tmux() {
     mkfifo "$CONTROL_PIPE" 2>/dev/null || true
 
     # Create tmux session
+    # B6: POOR_DEV_SESSION 環境変数を設定 (pipeline-prompt.sh がログファイルを見つけるため)
     # Interactive mode: dashboard ウィンドウで直接 prompt スクリプトを実行
     # → raw コマンドがユーザーに見えない
     # → スクリプト終了後は exec bash で shell を維持（dashboard 起動用）
     if $INTERACTIVE; then
         local desc_file="/tmp/${SESSION_NAME}-description"
         tmux new-session -d -s "$SESSION_NAME" -n "dashboard" \
+            -e "POOR_DEV_SESSION=${SESSION_NAME}" \
             "bash '${SCRIPT_DIR}/pipeline-prompt.sh' '${desc_file}'; exec bash"
     else
-        tmux new-session -d -s "$SESSION_NAME" -n "dashboard"
+        tmux new-session -d -s "$SESSION_NAME" -n "dashboard" \
+            -e "POOR_DEV_SESSION=${SESSION_NAME}"
     fi
 
     # Start dashboard now if FEATURE_DIR is available (--from mode)
@@ -463,42 +466,42 @@ prompt_failure_action() {
     done
 }
 
-# --- Triage bootstrap ---
-bootstrap_triage() {
+# --- Intake bootstrap ---
+bootstrap_intake() {
     local runtime model max_budget
-    runtime="$(get_step_runtime "triage")"
-    model="$(get_step_model "triage")"
+    runtime="$(get_step_runtime "intake")"
+    model="$(get_step_model "intake")"
     max_budget="$(get_max_budget)"
 
-    # Mark triage as in_progress (but we need to init state first after triage creates the branch)
-    # For triage, we invoke directly since no feature dir exists yet
+    # Mark intake as in_progress (but we need to init state first after intake creates the branch)
+    # For intake, we invoke directly since no feature dir exists yet
 
-    local triage_log="/tmp/${SESSION_NAME}-triage.log"
-    local triage_exit="/tmp/${SESSION_NAME}-triage.exit"
+    local intake_log="/tmp/${SESSION_NAME}-intake.log"
+    local intake_exit="/tmp/${SESSION_NAME}-intake.exit"
 
-    # Create triage window and execute via temp script
-    tmux new-window -t "$SESSION_NAME" -n "triage"
+    # Create intake window and execute via temp script
+    tmux new-window -t "$SESSION_NAME" -n "intake"
     local cmd
-    cmd="$(build_invoke_cmd "$runtime" "$model" "triage" "$DESCRIPTION")"
-    exec_in_window "triage" \
-        "$cmd 2>&1 | tee $(printf '%q' "$triage_log")" \
-        "echo \$? > $(printf '%q' "$triage_exit")"
+    cmd="$(build_invoke_cmd "$runtime" "$model" "intake" "$DESCRIPTION")"
+    exec_in_window "intake" \
+        "$cmd 2>&1 | tee $(printf '%q' "$intake_log")" \
+        "echo \$? > $(printf '%q' "$intake_exit")"
 
-    # Wait for triage completion
+    # Wait for intake completion
     local waited=0
-    while [[ ! -f "$triage_exit" ]] && (( waited < 3600 )); do
+    while [[ ! -f "$intake_exit" ]] && (( waited < 3600 )); do
         sleep 2
         ((waited += 2))
     done
 
     local exit_code=1
-    if [[ -f "$triage_exit" ]]; then
-        exit_code="$(cat "$triage_exit")"
-        rm -f "$triage_exit"
+    if [[ -f "$intake_exit" ]]; then
+        exit_code="$(cat "$intake_exit")"
+        rm -f "$intake_exit"
     fi
 
     if [[ "$exit_code" -ne 0 ]]; then
-        echo "ERROR: Triage step failed with exit code $exit_code" >&2
+        echo "ERROR: Intake step failed with exit code $exit_code" >&2
         return 1
     fi
 
@@ -507,7 +510,7 @@ bootstrap_triage() {
     branch="$(git branch --show-current 2>/dev/null || echo "")"
 
     if [[ -z "$branch" || "$branch" == "main" || "$branch" == "master" ]]; then
-        echo "ERROR: Triage did not create a feature branch" >&2
+        echo "ERROR: Intake did not create a feature branch" >&2
         return 1
     fi
 
@@ -516,7 +519,7 @@ bootstrap_triage() {
     detected_dir="$(find_feature_dir_by_prefix "$REPO_ROOT" "$branch")"
 
     if [[ ! -d "$detected_dir" ]]; then
-        echo "ERROR: Feature directory not found after triage: $detected_dir" >&2
+        echo "ERROR: Feature directory not found after intake: $detected_dir" >&2
         return 1
     fi
 
@@ -525,7 +528,7 @@ bootstrap_triage() {
     # Set pipeline mode to manual (orchestrator controls progression)
     "$STATE_SCRIPT" set-mode "$FEATURE_DIR" manual &>/dev/null || true
 
-    update_window_name "triage" "✓"
+    update_window_name "intake" "✓"
     echo "$FEATURE_DIR"
 }
 
@@ -623,8 +626,8 @@ run_pipeline() {
             local flow_args=""
             [[ "$flow_rest" == *:* ]] && flow_args="${flow_rest#*:}"
             local runtime model
-            runtime="$(get_step_runtime "triage")"
-            model="$(get_step_model "triage")"
+            runtime="$(get_step_runtime "intake")"
+            model="$(get_step_model "intake")"
             tmux new-window -t "$SESSION_NAME" -n "$flow_type"
             local cmd
             cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "$flow_args")"
@@ -641,7 +644,7 @@ run_pipeline() {
             DESCRIPTION="${flow_and_desc#*:}"
         fi
 
-        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+        STEP_ARGS_MAP[intake]="$DESCRIPTION"
     fi
 
     # Handle FLOW: prefix from non-interactive mode (poor-dev switch / --description "FLOW:...")
@@ -651,8 +654,8 @@ run_pipeline() {
         local flow_args=""
         [[ "$flow_rest" == *:* ]] && flow_args="${flow_rest#*:}"
         local runtime model
-        runtime="$(get_step_runtime "triage")"
-        model="$(get_step_model "triage")"
+        runtime="$(get_step_runtime "intake")"
+        model="$(get_step_model "intake")"
         tmux new-window -t "$SESSION_NAME" -n "$flow_type"
         local cmd
         cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "$flow_args")"
@@ -667,7 +670,7 @@ run_pipeline() {
         local flow_and_desc="${DESCRIPTION#FLOW:}"
         local flow_type_ext="${flow_and_desc%%:*}"
         DESCRIPTION="${flow_and_desc#*:}"
-        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+        STEP_ARGS_MAP[intake]="$DESCRIPTION"
         # Triage will handle the flow type via its content analysis
     fi
 
@@ -686,18 +689,18 @@ run_pipeline() {
         done
     fi
 
-    # If starting from scratch, run triage first
+    # If starting from scratch, run intake first
     if [[ "$start_idx" -eq 0 && -z "$FROM_STEP" ]]; then
-        echo "Starting triage..."
+        echo "Starting intake..."
         local detected_dir
-        detected_dir="$(bootstrap_triage)"
+        detected_dir="$(bootstrap_intake)"
         if [[ $? -ne 0 ]]; then
-            echo "ERROR: Triage failed" >&2
+            echo "ERROR: Intake failed" >&2
             cleanup_and_exit 1
         fi
         FEATURE_DIR="$detected_dir"
         reload_steps_from_state
-        start_idx=1  # Skip triage in the loop since we just ran it
+        start_idx=1  # Skip intake in the loop since we just ran it
         step_count=${#ALL_STEPS[@]}  # Recalculate after reload
     fi
 
@@ -803,9 +806,9 @@ main() {
     # Initialize step args map
     # Interactive mode: DESCRIPTION is set later from user input
     if ! $INTERACTIVE; then
-        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+        STEP_ARGS_MAP[intake]="$DESCRIPTION"
     else
-        STEP_ARGS_MAP[triage]=""
+        STEP_ARGS_MAP[intake]=""
     fi
     STEP_ARGS_MAP[specify]=""
     STEP_ARGS_MAP[clarify]=""

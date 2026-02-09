@@ -13,13 +13,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CONFIG_FILE="$REPO_ROOT/.poor-dev/pipeline-config.yaml"
 
 # --- 6モード定義 ---
-MODES=(triage feature bugfix roadmap ask report)
+MODES=(intake feature bugfix roadmap ask report)
 MODE_IDX=0
 BUFFER=""
 
 # モード別プレースホルダー
 declare -A MODE_PLACEHOLDER
-MODE_PLACEHOLDER[triage]="機能説明 or バグ報告を入力..."
+MODE_PLACEHOLDER[intake]="機能説明 or バグ報告を入力..."
 MODE_PLACEHOLDER[feature]="機能の説明を入力..."
 MODE_PLACEHOLDER[bugfix]="バグの詳細を入力..."
 MODE_PLACEHOLDER[roadmap]="テーマを入力..."
@@ -28,7 +28,7 @@ MODE_PLACEHOLDER[report]="Enter で実行"
 
 # モード別: BUFFER 必須か
 declare -A MODE_REQUIRES_BUFFER
-MODE_REQUIRES_BUFFER[triage]=1
+MODE_REQUIRES_BUFFER[intake]=1
 MODE_REQUIRES_BUFFER[feature]=1
 MODE_REQUIRES_BUFFER[bugfix]=1
 MODE_REQUIRES_BUFFER[roadmap]=1
@@ -128,26 +128,24 @@ draw_footer() {
     fi
 }
 
-# --- Ctrl+S: モデル設定画面 ---
-open_settings() {
-    printf "\033[?25h"  # カーソル復元
+# --- Ctrl+S: モデル設定画面 (A1-A5) ---
 
-    # 設定項目リスト生成
+# サブエージェント定義 (設定画面で再利用)
+declare -A STEP_AGENTS
+STEP_AGENTS[planreview]="pm critical risk value"
+STEP_AGENTS[tasksreview]="techlead senior devops junior"
+STEP_AGENTS[architecturereview]="architect performance security sre"
+STEP_AGENTS[qualityreview]="qa testdesign code security"
+STEP_AGENTS[phasereview]="qa regression docs ux"
+
+# A5: 設定項目リスト生成 (毎回YAML再読み込み)
+build_settings_items() {
     local items=()
     local default_model
     default_model="$(yq '.defaults.model // "sonnet"' "$CONFIG_FILE" 2>/dev/null)"
     items+=("defaults.model ............... $default_model")
-    items+=("─────────────────────────────────────")
 
-    # ステップ + サブエージェント定義
-    local all_steps="triage specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview"
-
-    declare -A STEP_AGENTS
-    STEP_AGENTS[planreview]="pm critical risk value"
-    STEP_AGENTS[tasksreview]="techlead senior devops junior"
-    STEP_AGENTS[architecturereview]="architect performance security sre"
-    STEP_AGENTS[qualityreview]="qa testdesign code security"
-    STEP_AGENTS[phasereview]="qa regression docs ux"
+    local all_steps="intake specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview"
 
     for step in $all_steps; do
         local step_model
@@ -156,7 +154,6 @@ open_settings() {
         local display_model="${step_model:-(default)}"
         items+=("$step ..................... $display_model")
 
-        # サブエージェント
         if [[ -n "${STEP_AGENTS[$step]:-}" ]]; then
             for agent in ${STEP_AGENTS[$step]}; do
                 local agent_model
@@ -168,49 +165,67 @@ open_settings() {
         fi
     done
 
-    printf "\033[2J\033[H"
+    printf '%s\n' "${items[@]}"
+}
 
-    local selected
-    selected=$(printf '%s\n' "${items[@]}" | gum choose --header "モデル設定 (Esc: 戻る)" --cursor.foreground "141" --height 30) || {
-        # Esc or error → 入力画面に復帰
-        printf "\033[?25l"
-        draw_full
-        return
-    }
+# A5: 表示行からキー抽出
+extract_key_from_line() {
+    echo "$1" | sed 's/ *[.]*  *[^ ]*$//' | sed 's/^ *//' | sed 's/ *$//'
+}
 
-    # セパレータ選択時は無視
-    if [[ "$selected" == ─* ]]; then
-        printf "\033[?25l"
-        draw_full
-        return
+# A3: ヘッダー以降のみクリア
+clear_overlay_area() {
+    local start_row=$((HEADER_LINES))
+    tput cup "$start_row" 0 2>/dev/null
+    tput ed 2>/dev/null  # カーソル以降を全消去
+}
+
+# A2+A4: モデル選択 (gum filter + カスタム入力)
+select_model_for() {
+    local key="$1"
+    local available_height filter_height
+    available_height=$(( $(tput lines) - HEADER_LINES - 3 ))
+    filter_height=$available_height
+    (( filter_height < 5 )) && filter_height=5
+    (( filter_height > 25 )) && filter_height=25
+
+    local new_model
+    new_model=$(printf '%s\n' "haiku" "sonnet" "opus" \
+        "claude-sonnet-4-5-20250929" "claude-haiku-4-5-20251001" "claude-opus-4-6" \
+        "glm-4.7" "glm-4.7-1m" \
+        "gpt-4o" "gpt-4o-mini" "gpt-4.1" "gpt-4.1-mini" "gpt-4.1-nano" \
+        "o3" "o4-mini" \
+        "gemini-2.5-pro" "gemini-2.5-flash" \
+        "(default)" "カスタム入力..." \
+        | gum filter --header "モデル選択: $key (Esc: 戻る)" \
+            --header.foreground "141" \
+            --indicator.foreground "141" \
+            --match.foreground "214" \
+            --height "$filter_height") || return 1
+
+    if [[ "$new_model" == "カスタム入力..." ]]; then
+        new_model=$(gum input --placeholder "例: glm-4.7" \
+            --header "カスタムモデル名を入力" \
+            --header.foreground "141") || return 1
+        [[ -z "$new_model" ]] && return 1
     fi
 
-    # 選択された項目からキーを抽出
-    local key
-    key="$(echo "$selected" | sed 's/ *[.]*  *[^ ]*$//' | sed 's/^ *//' | sed 's/ *$//')"
+    echo "$new_model"
+}
 
-    # モデル選択
-    local new_model
-    new_model=$(gum choose "haiku" "sonnet" "opus" "(default)" \
-        --header "モデル選択: $key" --cursor.foreground "141") || {
-        printf "\033[?25l"
-        draw_full
-        return
-    }
+# A5: YAML保存
+save_model_setting() {
+    local key="$1" new_model="$2"
 
-    # 設定保存
     if [[ "$new_model" == "(default)" ]]; then
-        # オーバーライド削除
         if [[ "$key" == "defaults.model" ]]; then
             yq -i '.defaults.model = "sonnet"' "$CONFIG_FILE" 2>/dev/null
         elif [[ "$key" == *" > "* ]]; then
-            # agent-level: "planreview > pm" → steps.planreview.agents.pm.model を削除
             local step_part agent_part
             step_part="$(echo "$key" | awk -F' > ' '{print $1}')"
             agent_part="$(echo "$key" | awk -F' > ' '{print $2}')"
             yq -i "del(.steps.$step_part.agents.$agent_part.model)" "$CONFIG_FILE" 2>/dev/null || true
         else
-            # step-level
             yq -i "del(.steps.$key.model)" "$CONFIG_FILE" 2>/dev/null || true
         fi
     else
@@ -225,6 +240,44 @@ open_settings() {
             yq -i ".steps.$key.model = \"$new_model\"" "$CONFIG_FILE" 2>/dev/null
         fi
     fi
+}
+
+# A1: メイン設定画面 (while ループ化)
+open_settings() {
+    printf "\033[?25h"  # カーソル復元
+
+    local available_height filter_height
+    available_height=$(( $(tput lines) - HEADER_LINES - 3 ))
+    filter_height=$available_height
+    (( filter_height < 5 )) && filter_height=5
+    (( filter_height > 25 )) && filter_height=25
+
+    while true; do
+        # A3: ヘッダー以降のみクリア
+        clear_overlay_area
+
+        # A5: 設定項目リスト生成 (毎回YAML再読み込み→変更即反映)
+        local selected
+        selected=$(build_settings_items | gum filter --header "モデル設定 (Esc: 戻る)" \
+            --header.foreground "141" \
+            --indicator.foreground "141" \
+            --match.foreground "214" \
+            --height "$filter_height") || break  # Esc → ループ終了
+
+        # A5: キー抽出
+        local key
+        key="$(extract_key_from_line "$selected")"
+
+        # A3: ヘッダー以降のみクリア
+        clear_overlay_area
+
+        # A2+A4: モデル選択
+        local new_model
+        new_model="$(select_model_for "$key")" || continue  # Esc → 設定リストに戻る
+
+        # A5: 保存
+        save_model_setting "$key" "$new_model"
+    done
 
     printf "\033[?25l"
     draw_full
@@ -336,7 +389,7 @@ printf "\033[?25h"
 mode="$(current_mode)"
 
 case "$mode" in
-    triage)
+    intake)
         # BUFFER 必須
         [[ -z "$BUFFER" ]] && exit 1
         printf '%s' "$BUFFER" > "$DESC_FILE"

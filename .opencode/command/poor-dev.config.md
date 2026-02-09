@@ -24,7 +24,7 @@ Current Configuration:
 │ defaults.budget  │ 5.0      │
 │ defaults.confirm │ true     │
 ├──────────────────┼──────────┤
-│ triage.model     │ haiku    │
+│ intake.model     │ haiku    │
 │ implement.model  │ opus     │
 └──────────────────┴──────────┘
 ```
@@ -50,7 +50,7 @@ Current Configuration:
 
 **ステップ別設定を変更**:
 - Ask which step to configure
-- Valid steps: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`, `concept`, `goals`, `milestones`, `roadmap`
+- Valid steps: `intake`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`, `concept`, `goals`, `milestones`, `roadmap`
 - Ask which field to set (runtime, model)
 - Validate values as above
 - Apply with: `yq -i ".steps.<step>.<field> = <value>" .poor-dev/pipeline-config.yaml`
@@ -64,7 +64,7 @@ Current Configuration:
   yq -i '.defaults.max_budget_usd = 5.0' .poor-dev/pipeline-config.yaml
   yq -i '.defaults.confirm = true' .poor-dev/pipeline-config.yaml
   yq -i 'del(.steps)' .poor-dev/pipeline-config.yaml
-  yq -i '.steps.triage.model = "haiku"' .poor-dev/pipeline-config.yaml
+  yq -i '.steps.intake.model = "haiku"' .poor-dev/pipeline-config.yaml
   yq -i '.steps.implement.model = "opus"' .poor-dev/pipeline-config.yaml
   ```
 

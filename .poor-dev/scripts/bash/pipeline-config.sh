@@ -4,7 +4,7 @@
 #
 # Usage:
 #   pipeline-config.sh show                     # Show current config
-#   pipeline-config.sh get <key>                # Get a value (e.g., defaults.runtime, steps.triage.model)
+#   pipeline-config.sh get <key>                # Get a value (e.g., defaults.runtime, steps.intake.model)
 #   pipeline-config.sh set <key> <value>        # Set a value
 #   pipeline-config.sh reset                    # Reset to defaults
 #
@@ -19,7 +19,7 @@ REPO_ROOT="$(get_repo_root)"
 CONFIG_FILE="$REPO_ROOT/.poor-dev/pipeline-config.yaml"
 
 # Valid step names for validation
-VALID_STEPS="triage specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview concept goals milestones roadmap"
+VALID_STEPS="intake specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview concept goals milestones roadmap"
 
 # Valid agent names per step (for agent-level model config)
 declare -A VALID_AGENTS
@@ -222,14 +222,14 @@ cmd_set() {
             # Step-specific: extract step name
             local step_name="${key%%.*}"
             validate_step_name "$step_name" || exit 1
-            # Rewrite key for yq path: "triage.model" → "steps.triage.model"
+            # Rewrite key for yq path: "intake.model" → "steps.intake.model"
             key="steps.$key"
             validate_value "$key" "$value" || exit 1
             ;;
         *)
             echo "ERROR: Invalid key format '$key'." >&2
             echo "Use 'defaults.<field>', '<step>.<field>', or '<step>.<agent>.<field>' format." >&2
-            echo "Examples: defaults.runtime, triage.model, planreview.pm.model" >&2
+            echo "Examples: defaults.runtime, intake.model, planreview.pm.model" >&2
             exit 1
             ;;
     esac
@@ -260,7 +260,7 @@ cmd_reset() {
     yq -i '.defaults.max_budget_usd = 5.0' "$CONFIG_FILE"
     yq -i '.defaults.confirm = true' "$CONFIG_FILE"
     yq -i 'del(.steps)' "$CONFIG_FILE"
-    yq -i '.steps.triage.model = "haiku"' "$CONFIG_FILE"
+    yq -i '.steps.intake.model = "haiku"' "$CONFIG_FILE"
     yq -i '.steps.implement.model = "opus"' "$CONFIG_FILE"
 
     printf "OK: Configuration reset to defaults.\n"
@@ -287,7 +287,7 @@ case "$SUBCOMMAND" in
             echo "Usage: pipeline-config.sh set <key> <value>" >&2
             echo "Examples:" >&2
             echo "  pipeline-config.sh set defaults.runtime opencode" >&2
-            echo "  pipeline-config.sh set triage.model haiku" >&2
+            echo "  pipeline-config.sh set intake.model haiku" >&2
             exit 1
         fi
         cmd_set "$1" "$2"

@@ -214,7 +214,7 @@ draw_progress_footer
 # B1: メインスピナーループ
 START_TIME=$SECONDS
 while true; do
-    local elapsed=$(( SECONDS - START_TIME ))
+    elapsed=$(( SECONDS - START_TIME ))
 
     # B1+B2: スピナー + 経過時間
     draw_spinner_line "$elapsed"
@@ -223,7 +223,7 @@ while true; do
     draw_log_lines
 
     # B4: ノンブロッキングキー入力 (0.2秒待ち)
-    local input_key=""
+    input_key=""
     read -rsn1 -t 0.2 input_key || true
     case "$input_key" in
         q|Q)

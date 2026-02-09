@@ -28,7 +28,7 @@ screen_clear
 cursor_hide
 
 # popup 起動（-E: 終了時自動クローズ、-w/-h: サイズ指定）
-tmux display-popup -E -w 58 -h 12 \
+tmux display-popup -E -w 58 -h 14 \
     "bash '${SCRIPT_DIR}/pipeline-input-popup.sh' '${DESC_FILE}'" || true
 
 # popup 終了後、description 確認

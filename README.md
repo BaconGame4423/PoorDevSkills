@@ -100,6 +100,10 @@ poor-dev [command] [options] ["description"]
 | コマンド | 説明 |
 |---------|------|
 | `init [--force]` | 現在のディレクトリに poor-dev をセットアップ |
+| `ask "質問"` | コードベースに関する質問応答（パイプライン不要） |
+| `report [種別]` | プロジェクトレポート生成（パイプライン不要） |
+| `config [args]` | パイプライン設定の表示・変更 |
+| `switch` | フローを直接選択して開始（triage スキップ） |
 | *(なし)* | インタラクティブモード（tmux 内でプロンプト入力 → triage として処理） |
 
 ### Options
@@ -115,7 +119,7 @@ poor-dev [command] [options] ["description"]
 | `--help, -h` | ヘルプを表示 |
 | `--version` | バージョンを表示 |
 
-**ステップ ID**: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`
+**ステップ ID**: `triage`, `specify`, `clarify`, `plan`, `planreview`, `tasks`, `tasksreview`, `architecturereview`, `implement`, `qualityreview`, `phasereview`, `concept`, `goals`, `milestones`, `roadmap`
 
 ### 実行例
 
@@ -137,6 +141,19 @@ poor-dev --from plan --feature-dir specs/003-auth
 
 # 確認なし自動進行
 poor-dev --no-confirm "Quick feature"
+
+# 質問応答（パイプライン不要）
+poor-dev ask "このプロジェクトのアーキテクチャは？"
+
+# レポート生成
+poor-dev report
+
+# フロー直接選択
+poor-dev switch
+
+# 設定の表示・変更
+poor-dev config
+poor-dev config set triage.model haiku
 ```
 
 > **後方互換:** `./poor-dev-cli` も引き続き使用可能です（内部で `bin/poor-dev` に委譲）。
@@ -180,10 +197,23 @@ poor-dev --no-confirm "Quick feature"
 | `/poor-dev.qualityreview` | 品質レビュー + 自動修正 | 4 |
 | `/poor-dev.phasereview` | フェーズ完了レビュー + 自動修正 | 4 |
 
+### ロードマップ系
+
+| コマンド | 用途 | 出力 |
+|---------|------|------|
+| `/poor-dev.concept` | コンセプト壁打ち・ビジョン定義 | concept.md |
+| `/poor-dev.goals` | ゴール定義・成功基準策定 | goals.md |
+| `/poor-dev.milestones` | マイルストーン分解・依存関係整理 | milestones.md |
+| `/poor-dev.roadmap` | 全成果物を統合しロードマップ生成 | roadmap.md |
+
 ### ユーティリティ
 
 | コマンド | 用途 |
 |---------|------|
+| `/poor-dev.ask` | コードベースや仕様に関する質問応答 |
+| `/poor-dev.report` | プロジェクトレポート・ドキュメント生成 |
+| `/poor-dev.switch` | フローを直接選択して開始（triage スキップ） |
+| `/poor-dev.config` | パイプライン設定の対話的変更 |
 | `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
 | `/poor-dev.pipeline` | パイプライン状態確認・コンテキスト喪失後の復帰 |
@@ -223,6 +253,29 @@ poor-dev --no-confirm "Quick feature"
 | 3 | 品質レビュー | `/poor-dev.qualityreview` | 修正の品質検証 + ポストモーテム自動生成 + バグパターンDB更新 |
 
 > 大規模修正の場合は `/poor-dev.plan` → `/poor-dev.planreview` → `/poor-dev.tasks` → `/poor-dev.implement` → `/poor-dev.qualityreview` の既存パイプラインに合流します。
+
+### ロードマップフロー
+
+`/poor-dev.triage` がロードマップ・戦略策定と判定した場合、以下の企画フローに切り替わります。
+
+| # | ステップ | コマンド | 内容 |
+|---|---------|---------|------|
+| 0 | トリアージ | `/poor-dev.triage` | 入力を分類しロードマップフローにルーティング |
+| 1 | コンセプト | `/poor-dev.concept` | ターゲットユーザー・課題・差別化を整理し concept.md を生成 |
+| 2 | ゴール定義 | `/poor-dev.goals` | 戦略ゴールと成功基準を定義し goals.md を生成 |
+| 3 | マイルストーン | `/poor-dev.milestones` | ゴールをマイルストーンに分解し milestones.md を生成 |
+| 4 | ロードマップ | `/poor-dev.roadmap` | 全成果物を統合しフェーズ計画を含む roadmap.md を生成 |
+
+> ロードマップ完了後、各マイルストーンを `/poor-dev.triage` で機能開発フローに移行できます。
+
+### ドキュメント/Q&Aフロー
+
+パイプライン管理なしの軽量コマンドです。tmux セッションを起動せず、ターミナル内で直接実行します。
+
+| コマンド | CLI | 用途 |
+|---------|-----|------|
+| `/poor-dev.ask` | `poor-dev ask "質問"` | コードベースや仕様に関する質問応答 |
+| `/poor-dev.report` | `poor-dev report` | プロジェクトレポート・ドキュメント生成 |
 
 ---
 
@@ -331,6 +384,26 @@ steps:
 ```
 
 未指定のステップは `defaults` の値を継承します。
+
+### CLI からの設定変更
+
+```bash
+# 現在の設定を表示
+poor-dev config
+
+# デフォルト値を変更
+poor-dev config set defaults.runtime opencode
+poor-dev config set defaults.model opus
+
+# ステップ別設定
+poor-dev config set triage.model haiku
+poor-dev config set implement.runtime claude
+
+# 設定をリセット
+poor-dev config reset
+```
+
+スラッシュコマンドモードでは `/poor-dev.config` で対話的に設定変更ができます。
 
 ---
 

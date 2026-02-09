@@ -9,6 +9,10 @@ handoffs:
     agent: poor-dev.bugfix
     prompt: Investigate and fix this bug report
     send: true
+  - label: Roadmap Concept
+    agent: poor-dev.concept
+    prompt: Start roadmap concept exploration
+    send: true
 ---
 
 ## User Input
@@ -32,10 +36,12 @@ Analyze `$ARGUMENTS` and classify the user's intent through a 3-stage process.
 **1a. Keyword Analysis**:
 - **Feature signals**: "追加" "作成" "新しい" "実装" "対応" "〜したい" "〜できるように" "サポート" "導入" "add" "create" "new" "implement" "support" "introduce"
 - **Bugfix signals**: "エラー" "バグ" "壊れ" "動かない" "失敗" "クラッシュ" "不具合" "修正" "おかしい" "regression" "500" "例外" "タイムアウト" "error" "bug" "broken" "fail" "crash" "fix"
+- **Roadmap signals**: "ロードマップ" "企画" "構想" "コンセプト" "戦略" "方針" "ビジョン" "roadmap" "concept" "strategy" "vision" "planning" "計画策定" "方向性"
 
 **1b. Contextual Analysis** (when keywords are ambiguous):
 - Problem description pattern → bugfix ("〜が発生する" "〜になってしまう" "〜できない")
 - Desired state pattern → feature ("〜がほしい" "〜を追加" "〜に対応")
+- Planning/strategy pattern → roadmap ("〜の方針を決めたい" "〜の戦略を立てたい" "〜を企画する")
 - Improvement/change pattern → ambiguous ("〜を改善" "〜を変更" "〜を最適化")
 
 **1c. Confidence Rating**: High (clearly one type) / Medium (leans one way) / Low (cannot determine)
@@ -49,7 +55,9 @@ If confidence is Medium or below, ask the user to clarify:
 - Options:
   1. "機能リクエスト（新機能・拡張）"
   2. "バグ報告（既存機能の不具合・異常動作）"
-  3. "もう少し詳しく説明する"
+  3. "ロードマップ・戦略策定（プロジェクト企画段階）"
+  4. "質問・ドキュメント作成（パイプライン不要）"
+  5. "もう少し詳しく説明する"
 - If "もう少し詳しく" → receive additional explanation and re-classify from Step 1
 
 ### Step 3: Branch & Directory Creation (common to both flows)
@@ -145,6 +153,46 @@ If classified as **bugfix**:
    ```
 
 7. Continue to Pipeline Continuation (below) which will route to `/poor-dev.bugfix`
+
+### Step 4C: Roadmap Routing
+
+If classified as **roadmap**:
+
+1. Set type:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" roadmap
+   ```
+
+2. Switch to roadmap pipeline:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"triage","status":"completed"},{"id":"concept","status":"pending"},{"id":"goals","status":"pending"},{"id":"milestones","status":"pending"},{"id":"roadmap","status":"pending"}]'
+   ```
+
+3. Update context paths in workflow-state.yaml:
+   ```bash
+   yq -i ".context.concept_file = \"$FEATURE_DIR/concept.md\"" "$FEATURE_DIR/workflow-state.yaml"
+   yq -i ".context.goals_file = \"$FEATURE_DIR/goals.md\"" "$FEATURE_DIR/workflow-state.yaml"
+   yq -i ".context.milestones_file = \"$FEATURE_DIR/milestones.md\"" "$FEATURE_DIR/workflow-state.yaml"
+   yq -i ".context.roadmap_file = \"$FEATURE_DIR/roadmap.md\"" "$FEATURE_DIR/workflow-state.yaml"
+   ```
+
+4. Update state:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" triage completed --summary "Classified as roadmap: <summary>"
+   ```
+
+5. Continue to Pipeline Continuation (below) which will route to `/poor-dev.concept`
+
+### Step 4D: Non-Pipeline Routing
+
+If classified as **質問・ドキュメント作成**:
+
+Report to the user:
+- "このリクエストはパイプライン管理が不要です。以下のコマンドをお使いください:"
+- 質問応答: `/poor-dev.ask` or `poor-dev ask "質問"`
+- レポート生成: `/poor-dev.report` or `poor-dev report`
+- Pipeline state is NOT updated (triage did not complete a pipeline flow).
+- Do NOT proceed to Pipeline Continuation.
 
 ## Pipeline Continuation
 

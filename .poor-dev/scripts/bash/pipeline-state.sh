@@ -246,8 +246,8 @@ cmd_set_steps() {
 cmd_set_type() {
     local feature_dir="$1"
     local type="$2"
-    if [[ "$type" != "feature" && "$type" != "bugfix" ]]; then
-        echo "ERROR: Invalid type '$type'. Must be: feature, bugfix" >&2
+    if [[ "$type" != "feature" && "$type" != "bugfix" && "$type" != "roadmap" ]]; then
+        echo "ERROR: Invalid type '$type'. Must be: feature, bugfix, roadmap" >&2
         exit 1
     fi
     local sf

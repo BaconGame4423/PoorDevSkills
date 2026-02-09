@@ -83,6 +83,10 @@ Usage: poor-dev [command] [options] ["description"]
 
 Commands:
   init [--force]    現在のディレクトリに poor-dev をセットアップ
+  ask "質問"        コードベースに関する質問応答
+  report [種別]     プロジェクトレポート生成
+  config [args]     パイプライン設定の表示・変更
+  switch            フローを直接選択して開始
   (なし)            インタラクティブモード
 
 Options:
@@ -97,13 +101,23 @@ Options:
 
 Steps:
   triage, specify, clarify, plan, planreview, tasks,
-  tasksreview, architecturereview, implement, qualityreview, phasereview
+  tasksreview, architecturereview, implement, qualityreview, phasereview,
+  concept, goals, milestones, roadmap
+
+Config:
+  poor-dev config               設定を表示
+  poor-dev config show          設定を表示
+  poor-dev config get <key>     値を取得
+  poor-dev config set <key> <v> 値を設定
+  poor-dev config reset         デフォルトにリセット
 
 Examples:
   poor-dev init                 プロジェクトを初期化
   poor-dev                      インタラクティブモード
   poor-dev "ユーザー認証を追加"   パイプライン実行
   poor-dev --from plan          途中から再開
+  poor-dev ask "アーキテクチャは？" 質問応答
+  poor-dev config set triage.model haiku  設定変更
 HELP
 }
 
@@ -244,6 +258,84 @@ cmd_init() {
     printf "\n"
 }
 
+# --- cmd_simple (non-pipeline commands: ask, report) ---
+cmd_simple() {
+    local cmd="$1"; shift
+    local args="$*"
+    local PROJECT_ROOT
+    if ! PROJECT_ROOT="$(find_project_root)"; then
+        printf "%bError: poor-dev が初期化されていません。%b\n" "$C_RED" "$C_RESET" >&2
+        exit 1
+    fi
+
+    # Read runtime from pipeline-config.yaml
+    local runtime="claude"
+    local config="$PROJECT_ROOT/.poor-dev/pipeline-config.yaml"
+    if [[ -f "$config" ]]; then
+        local val
+        val="$(yq '.defaults.runtime // "claude"' "$config" 2>/dev/null)"
+        [[ -n "$val" && "$val" != "null" ]] && runtime="$val"
+    fi
+
+    case "$runtime" in
+        claude)
+            claude -p "Use the Skill tool to invoke /poor-dev.$cmd with args '$args'"
+            ;;
+        opencode)
+            opencode run "/poor-dev.$cmd $args"
+            ;;
+    esac
+}
+
+# --- cmd_config ---
+cmd_config() {
+    local PROJECT_ROOT
+    if ! PROJECT_ROOT="$(find_project_root)"; then
+        printf "%bError: poor-dev が初期化されていません。%b\n" "$C_RED" "$C_RESET" >&2
+        exit 1
+    fi
+    if [[ $# -eq 0 ]]; then
+        bash "$PROJECT_ROOT/.poor-dev/scripts/bash/pipeline-config.sh" show
+    else
+        bash "$PROJECT_ROOT/.poor-dev/scripts/bash/pipeline-config.sh" "$@"
+    fi
+}
+
+# --- cmd_switch ---
+cmd_switch() {
+    local PROJECT_ROOT
+    if ! PROJECT_ROOT="$(find_project_root)"; then
+        printf "%bError: poor-dev が初期化されていません。%b\n" "$C_RED" "$C_RESET" >&2
+        exit 1
+    fi
+    # gum でフロー選択
+    if ! command -v gum &>/dev/null; then
+        printf "%bError: gum が必要です。%b\n" "$C_RED" "$C_RESET" >&2
+        exit 1
+    fi
+    local flow
+    flow="$(bash "$PROJECT_ROOT/.poor-dev/scripts/bash/flow-selector.sh")" || exit 1
+
+    case "$flow" in
+        ask|report)
+            cmd_simple "$flow" "$@"
+            ;;
+        feature|bugfix|roadmap)
+            # 説明文を引数から取得 or gum input
+            local desc="${1:-}"
+            if [[ -z "$desc" ]]; then
+                desc="$(gum input --placeholder "${flow}の説明を入力..." --width 50)" || exit 1
+            fi
+            if [[ -z "$desc" ]]; then
+                printf "%bError: 説明が入力されませんでした。%b\n" "$C_RED" "$C_RESET" >&2
+                exit 1
+            fi
+            exec bash "$PROJECT_ROOT/.poor-dev/scripts/bash/pipeline-cli.sh" \
+                --description "FLOW:${flow}:${desc}"
+            ;;
+    esac
+}
+
 # --- cmd_interactive ---
 cmd_interactive() {
     local PROJECT_ROOT
@@ -324,6 +416,10 @@ cmd_run() {
 # --- Main routing ---
 case "${1:-}" in
     init)       shift; cmd_init "$@" ;;
+    ask)        shift; cmd_simple "ask" "$@" ;;
+    report)     shift; cmd_simple "report" "$@" ;;
+    config)     shift; cmd_config "$@" ;;
+    switch)     shift; cmd_switch "$@" ;;
     --help|-h)  show_help ;;
     --version)  show_version ;;
     "")         cmd_interactive ;;

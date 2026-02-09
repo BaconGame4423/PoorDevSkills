@@ -33,11 +33,22 @@ INTERACTIVE=false
 SESSION_NAME=""
 CONTROL_PIPE=""
 
-# Step ordering (matches workflow-state-template.yaml)
+# Step ordering (matches workflow-state-template.yaml; reloaded dynamically after triage)
 ALL_STEPS=(triage specify clarify plan planreview tasks tasksreview architecturereview implement qualityreview phasereview)
 
 # Step arguments mapping
 declare -A STEP_ARGS_MAP
+
+# Reload steps from workflow-state.yaml (for roadmap/bugfix dynamic steps)
+reload_steps_from_state() {
+    if [[ -n "$FEATURE_DIR" && -f "$FEATURE_DIR/workflow-state.yaml" ]]; then
+        local steps_arr=()
+        readarray -t steps_arr < <(yq '.pipeline.steps[].id' "$FEATURE_DIR/workflow-state.yaml" 2>/dev/null)
+        if [[ ${#steps_arr[@]} -gt 0 ]]; then
+            ALL_STEPS=("${steps_arr[@]}")
+        fi
+    fi
+}
 
 # --- Parse arguments ---
 parse_args() {
@@ -505,6 +516,8 @@ bootstrap_triage() {
 validate_from_step() {
     local from_step="$1"
 
+    reload_steps_from_state
+
     if [[ ! -f "$FEATURE_DIR/workflow-state.yaml" ]]; then
         echo "ERROR: workflow-state.yaml not found in $FEATURE_DIR. Cannot use --from." >&2
         exit 1
@@ -585,7 +598,54 @@ run_pipeline() {
         if [[ -z "$DESCRIPTION" ]]; then
             cleanup_and_exit 1
         fi
+
+        # Handle FLOW: prefix from flow selector (interactive popup)
+        if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:report ]]; then
+            local flow_type="${DESCRIPTION#FLOW:}"
+            local runtime model
+            runtime="$(get_step_runtime "triage")"
+            model="$(get_step_model "triage")"
+            tmux new-window -t "$SESSION_NAME" -n "$flow_type"
+            local cmd
+            cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "")"
+            exec_in_window "$flow_type" "$cmd"
+            while tmux list-windows -t "$SESSION_NAME" 2>/dev/null | grep -q "$flow_type"; do
+                sleep 2
+            done
+            cleanup_and_exit 0
+        fi
+
+        if [[ "$DESCRIPTION" == FLOW:*:* ]]; then
+            local flow_and_desc="${DESCRIPTION#FLOW:}"
+            local flow_type="${flow_and_desc%%:*}"
+            DESCRIPTION="${flow_and_desc#*:}"
+        fi
+
         STEP_ARGS_MAP[triage]="$DESCRIPTION"
+    fi
+
+    # Handle FLOW: prefix from non-interactive mode (poor-dev switch / --description "FLOW:...")
+    if [[ "$DESCRIPTION" == FLOW:ask || "$DESCRIPTION" == FLOW:report ]]; then
+        local flow_type="${DESCRIPTION#FLOW:}"
+        local runtime model
+        runtime="$(get_step_runtime "triage")"
+        model="$(get_step_model "triage")"
+        tmux new-window -t "$SESSION_NAME" -n "$flow_type"
+        local cmd
+        cmd="$(build_invoke_cmd "$runtime" "$model" "$flow_type" "")"
+        exec_in_window "$flow_type" "$cmd"
+        while tmux list-windows -t "$SESSION_NAME" 2>/dev/null | grep -q "$flow_type"; do
+            sleep 2
+        done
+        cleanup_and_exit 0
+    fi
+
+    if [[ "$DESCRIPTION" == FLOW:*:* ]]; then
+        local flow_and_desc="${DESCRIPTION#FLOW:}"
+        local flow_type_ext="${flow_and_desc%%:*}"
+        DESCRIPTION="${flow_and_desc#*:}"
+        STEP_ARGS_MAP[triage]="$DESCRIPTION"
+        # Triage will handle the flow type via its content analysis
     fi
 
     local start_idx=0
@@ -613,7 +673,9 @@ run_pipeline() {
             cleanup_and_exit 1
         fi
         FEATURE_DIR="$detected_dir"
+        reload_steps_from_state
         start_idx=1  # Skip triage in the loop since we just ran it
+        step_count=${#ALL_STEPS[@]}  # Recalculate after reload
     fi
 
     # Update tmux status bar with branch info
@@ -732,6 +794,10 @@ main() {
     STEP_ARGS_MAP[implement]=""
     STEP_ARGS_MAP[qualityreview]=""
     STEP_ARGS_MAP[phasereview]=""
+    STEP_ARGS_MAP[concept]=""
+    STEP_ARGS_MAP[goals]=""
+    STEP_ARGS_MAP[milestones]=""
+    STEP_ARGS_MAP[roadmap]=""
 
     # Validate --from usage
     if [[ -n "$FROM_STEP" ]]; then

@@ -237,11 +237,16 @@ MODE_LINE_ROW=$((HEADER_LINES))
 # モードライン + 空行 = 入力行
 INPUT_ROW=$((MODE_LINE_ROW + 2))
 # 入力行 + 空行 = フッター行
-FOOTER_ROW=$((INPUT_ROW + 2))
+FOOTER_ROW=$((INPUT_ROW + 1))
 
-# --- カーソル非表示 + 終了時復元 ---
+# --- フロー制御無効化 (Ctrl+S を XOFF から解放) + カーソル非表示 + 終了時復元 ---
+ORIG_STTY="$(stty -g)"
+stty -ixon
 printf "\033[?25l"
-cleanup() { printf "\033[?25h"; }
+cleanup() {
+    stty "$ORIG_STTY" 2>/dev/null
+    printf "\033[?25h"
+}
 trap cleanup EXIT
 
 # --- 初回描画 ---

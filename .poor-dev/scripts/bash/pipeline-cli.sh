@@ -135,17 +135,27 @@ setup_tmux() {
     CONTROL_PIPE="/tmp/${SESSION_NAME}-control"
     mkfifo "$CONTROL_PIPE" 2>/dev/null || true
 
-    # Create tmux session with dashboard window
-    tmux new-session -d -s "$SESSION_NAME" -n "dashboard" \
-        "bash $DASHBOARD_SCRIPT '$FEATURE_DIR' --control-pipe '$CONTROL_PIPE'"
+    # Create tmux session with a shell (dashboard starts later when FEATURE_DIR is available)
+    tmux new-session -d -s "$SESSION_NAME" -n "dashboard"
+
+    # Start dashboard now if FEATURE_DIR is available (--from mode)
+    if [[ -n "$FEATURE_DIR" && -f "$FEATURE_DIR/workflow-state.yaml" ]]; then
+        tmux send-keys -t "$SESSION_NAME:dashboard" \
+            "bash '$DASHBOARD_SCRIPT' '$FEATURE_DIR' --control-pipe '$CONTROL_PIPE'" Enter
+    fi
 
     # Configure status bar
     tmux set-option -t "$SESSION_NAME" status on
     tmux set-option -t "$SESSION_NAME" status-style "bg=colour235,fg=colour245"
     tmux set-option -t "$SESSION_NAME" status-left \
         "#[fg=colour214] ⌨ p:pause s:skip q:quit m:msg ←→:tab #[fg=colour245]|"
+
+    local branch_info=""
+    if [[ -n "$FEATURE_DIR" && -f "$FEATURE_DIR/workflow-state.yaml" ]]; then
+        branch_info="$(yq '.feature.branch // ""' "$FEATURE_DIR/workflow-state.yaml" 2>/dev/null || echo '')"
+    fi
     tmux set-option -t "$SESSION_NAME" status-right \
-        "#[fg=colour245]| #[fg=colour82]$(yq '.feature.branch // ""' "$FEATURE_DIR/workflow-state.yaml" 2>/dev/null)"
+        "#[fg=colour245]| #[fg=colour82]$branch_info"
 
     echo "$SESSION_NAME"
 }
@@ -448,7 +458,7 @@ bootstrap_triage() {
     FEATURE_DIR="$detected_dir"
 
     # Set pipeline mode to manual (orchestrator controls progression)
-    "$STATE_SCRIPT" set-mode "$FEATURE_DIR" manual 2>/dev/null || true
+    "$STATE_SCRIPT" set-mode "$FEATURE_DIR" manual &>/dev/null || true
 
     update_window_name "triage" "✓"
     echo "$FEATURE_DIR"
@@ -544,6 +554,7 @@ run_pipeline() {
             echo "ERROR: Triage failed" >&2
             cleanup_and_exit 1
         fi
+        FEATURE_DIR="$detected_dir"
         start_idx=1  # Skip triage in the loop since we just ran it
     fi
 

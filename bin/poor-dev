@@ -274,7 +274,7 @@ cmd_interactive() {
         exit 1
     fi
 
-    cmd_run "$description"
+    _POOR_DEV_BANNER_SHOWN=1 cmd_run "$description"
 }
 
 # --- cmd_run ---
@@ -327,11 +327,12 @@ cmd_run() {
         exit 1
     fi
 
-    show_banner
-
-    printf "%bChecking dependencies...%b\n" "$C_CYAN" "$C_RESET"
-    check_dependencies
-    printf "%b✓ All dependencies satisfied.%b\n\n" "$C_GREEN" "$C_RESET"
+    if [[ -z "${_POOR_DEV_BANNER_SHOWN:-}" ]]; then
+        show_banner
+        printf "%bChecking dependencies...%b\n" "$C_CYAN" "$C_RESET"
+        check_dependencies
+        printf "%b✓ All dependencies satisfied.%b\n\n" "$C_GREEN" "$C_RESET"
+    fi
 
     if [[ -n "$DESCRIPTION" ]]; then
         printf "%bFeature:%b %s\n" "$C_BOLD" "$C_RESET" "$DESCRIPTION"

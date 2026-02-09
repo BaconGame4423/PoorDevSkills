@@ -1,0 +1,32 @@
+# Pipeline CLI orchestrator configuration
+# Used by poor-dev-cli to control runtime, model, and behavior per step.
+
+defaults:
+  runtime: claude          # claude | opencode
+  model: sonnet
+  max_budget_usd: 5.0     # claude -p --max-budget-usd
+  confirm: true            # Show confirmation prompt between steps
+
+steps:
+  triage:
+    model: haiku
+  # specify:
+  #   model: sonnet        # inherits default
+  # clarify:
+  #   model: sonnet
+  # plan:
+  #   model: sonnet
+  # planreview:
+  #   model: sonnet
+  # tasks:
+  #   model: sonnet
+  # tasksreview:
+  #   model: sonnet
+  # architecturereview:
+  #   model: sonnet
+  implement:
+    model: opus
+  # qualityreview:
+  #   model: sonnet
+  # phasereview:
+  #   model: sonnet

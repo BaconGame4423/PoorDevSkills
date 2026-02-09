@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+#
+# poor-dev-cli — Pipeline CLI orchestrator entrypoint
+#
+# Runs the full PoorDevSkills pipeline in a tmux session with independent
+# processes for each step. Supports claude -p and opencode run backends.
+#
+# Usage:
+#   ./poor-dev-cli [OPTIONS] "feature description"
+#
+# Options:
+#   --runtime <claude|opencode>   Override default runtime
+#   --model <model>               Override default model
+#   --config <path>               Config file path (default: .poor-dev/pipeline-config.yaml)
+#   --from <step-id>              Resume from a specific step (requires existing feature dir)
+#   --feature-dir <path>          Feature directory (used with --from)
+#   --no-confirm                  Auto-proceed without confirmation prompts
+#   --help                        Show this help
+#
+# Examples:
+#   ./poor-dev-cli "Add user authentication"
+#   ./poor-dev-cli --runtime opencode --model glm-4.7 "Add OAuth2 support"
+#   ./poor-dev-cli --from plan --feature-dir specs/003-auth "Resume planning"
+#   ./poor-dev-cli --no-confirm "Quick feature"
+
+set -euo pipefail
+
+SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_SCRIPT="$SCRIPT_DIR/.poor-dev/scripts/bash/pipeline-cli.sh"
+
+# --- Colors ---
+C_RED="\033[38;5;203m"
+C_GREEN="\033[38;5;82m"
+C_YELLOW="\033[38;5;214m"
+C_CYAN="\033[38;5;87m"
+C_PURPLE="\033[38;5;141m"
+C_RESET="\033[0m"
+C_BOLD="\033[1m"
+
+# --- Help ---
+show_help() {
+    cat <<'HELP'
+Usage: ./poor-dev-cli [OPTIONS] "feature description"
+
+Options:
+  --runtime <claude|opencode>   Override default runtime
+  --model <model>               Override default model
+  --config <path>               Config file path (default: .poor-dev/pipeline-config.yaml)
+  --from <step-id>              Resume from a specific step
+  --feature-dir <path>          Feature directory (used with --from)
+  --no-confirm                  Auto-proceed without confirmation prompts
+  --help                        Show this help
+
+Steps:
+  triage, specify, clarify, plan, planreview, tasks,
+  tasksreview, architecturereview, implement, qualityreview, phasereview
+
+Examples:
+  ./poor-dev-cli "Add user authentication"
+  ./poor-dev-cli --from plan --feature-dir specs/003-auth
+  ./poor-dev-cli --no-confirm "Quick feature"
+HELP
+}
+
+# --- Dependency checks ---
+check_dependencies() {
+    local missing=()
+
+    if ! command -v tmux &>/dev/null; then
+        missing+=("tmux (required)")
+    fi
+
+    if ! command -v yq &>/dev/null; then
+        missing+=("yq (required) — https://github.com/mikefarah/yq#install")
+    fi
+
+    # Check for at least one runtime
+    local has_runtime=false
+    if command -v claude &>/dev/null; then
+        has_runtime=true
+    fi
+    if command -v opencode &>/dev/null; then
+        has_runtime=true
+    fi
+    if ! $has_runtime; then
+        missing+=("claude or opencode (at least one runtime required)")
+    fi
+
+    # Optional: gum
+    if command -v gum &>/dev/null; then
+        printf "  %b✓%b gum (optional, enhanced rendering)\n" "$C_GREEN" "$C_RESET"
+    else
+        printf "  %b○%b gum (optional, using ANSI fallback)\n" "$C_YELLOW" "$C_RESET"
+    fi
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        printf "\n%bMissing dependencies:%b\n" "$C_RED" "$C_RESET"
+        for dep in "${missing[@]}"; do
+            printf "  %b✗%b %s\n" "$C_RED" "$C_RESET" "$dep"
+        done
+        exit 1
+    fi
+}
+
+# --- Parse args ---
+DESCRIPTION=""
+PASS_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --runtime|--model|--config|--from|--feature-dir)
+            PASS_ARGS+=("$1" "$2")
+            shift 2
+            ;;
+        --no-confirm)
+            PASS_ARGS+=("$1")
+            shift
+            ;;
+        -*)
+            printf "%bUnknown option: %s%b\n" "$C_RED" "$1" "$C_RESET" >&2
+            show_help
+            exit 1
+            ;;
+        *)
+            DESCRIPTION="$1"
+            shift
+            ;;
+    esac
+done
+
+# --- Validate ---
+# Description is required unless --from is specified
+has_from=false
+for arg in "${PASS_ARGS[@]:-}"; do
+    if [[ "$arg" == "--from" ]]; then
+        has_from=true
+        break
+    fi
+done
+
+if [[ -z "$DESCRIPTION" ]] && ! $has_from; then
+    printf "%bError: Feature description required.%b\n\n" "$C_RED" "$C_RESET" >&2
+    show_help
+    exit 1
+fi
+
+# --- Banner ---
+printf "\n"
+printf "  %b╭────────────────────────────────────╮%b\n" "$C_PURPLE" "$C_RESET"
+printf "  %b│%b  %b◆ poor-dev pipeline CLI%b            %b│%b\n" "$C_PURPLE" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_PURPLE" "$C_RESET"
+printf "  %b╰────────────────────────────────────╯%b\n" "$C_PURPLE" "$C_RESET"
+printf "\n"
+
+# --- Check dependencies ---
+printf "%bChecking dependencies...%b\n" "$C_CYAN" "$C_RESET"
+check_dependencies
+printf "%b✓ All dependencies satisfied.%b\n\n" "$C_GREEN" "$C_RESET"
+
+# --- Launch ---
+if [[ -n "$DESCRIPTION" ]]; then
+    printf "%bFeature:%b %s\n" "$C_BOLD" "$C_RESET" "$DESCRIPTION"
+fi
+printf "%bLaunching tmux session...%b\n\n" "$C_CYAN" "$C_RESET"
+
+exec bash "$CLI_SCRIPT" --description "$DESCRIPTION" "${PASS_ARGS[@]}"

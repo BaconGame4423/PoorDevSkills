@@ -10,6 +10,7 @@
 #   pipeline-state.sh set-mode <feature-dir> <mode>
 #   pipeline-state.sh set-steps <feature-dir> '<json-array>'
 #   pipeline-state.sh set-type <feature-dir> <feature|bugfix>
+#   pipeline-state.sh status <feature-dir>
 #
 # Requires: yq (https://github.com/mikefarah/yq)
 
@@ -41,6 +42,16 @@ require_state() {
         exit 1
     fi
     echo "$sf"
+}
+
+# flock wrapper for safe concurrent YAML writes
+yq_write() {
+    local sf="$1"; shift
+    local lockfile="${sf}.lock"
+    (
+        flock -w 10 200 || { echo "ERROR: Could not acquire lock on $lockfile" >&2; return 1; }
+        yq "$@" "$sf"
+    ) 200>"$lockfile"
 }
 
 # --- Subcommands ---
@@ -79,22 +90,22 @@ cmd_init() {
     created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
     # Populate feature block
-    yq -i ".feature.name = \"$dir_basename\"" "$sf"
-    yq -i ".feature.branch = \"$branch_name\"" "$sf"
-    yq -i ".feature.dir = \"$feature_dir\"" "$sf"
-    yq -i ".feature.created = \"$created\"" "$sf"
+    yq_write "$sf" -i ".feature.name = \"$dir_basename\""
+    yq_write "$sf" -i ".feature.branch = \"$branch_name\""
+    yq_write "$sf" -i ".feature.dir = \"$feature_dir\""
+    yq_write "$sf" -i ".feature.created = \"$created\""
 
     # Set pipeline mode
-    yq -i ".pipeline.mode = \"$mode\"" "$sf"
-    yq -i ".pipeline.confirm = $confirm" "$sf"
+    yq_write "$sf" -i ".pipeline.mode = \"$mode\""
+    yq_write "$sf" -i ".pipeline.confirm = $confirm"
 
     # Populate context paths
-    yq -i ".context.spec_file = \"$feature_dir/spec.md\"" "$sf"
-    yq -i ".context.plan_file = \"$feature_dir/plan.md\"" "$sf"
-    yq -i ".context.tasks_file = \"$feature_dir/tasks.md\"" "$sf"
-    yq -i ".context.bug_report_file = \"\"" "$sf"
-    yq -i ".context.investigation_file = \"\"" "$sf"
-    yq -i ".context.fix_plan_file = \"\"" "$sf"
+    yq_write "$sf" -i ".context.spec_file = \"$feature_dir/spec.md\""
+    yq_write "$sf" -i ".context.plan_file = \"$feature_dir/plan.md\""
+    yq_write "$sf" -i ".context.tasks_file = \"$feature_dir/tasks.md\""
+    yq_write "$sf" -i ".context.bug_report_file = \"\""
+    yq_write "$sf" -i ".context.investigation_file = \"\""
+    yq_write "$sf" -i ".context.fix_plan_file = \"\""
 
     echo "$sf"
 }
@@ -135,16 +146,16 @@ cmd_update() {
     fi
 
     # Update status
-    yq -i ".pipeline.steps[$idx].status = \"$status\"" "$sf"
+    yq_write "$sf" -i ".pipeline.steps[$idx].status = \"$status\""
 
     # Update current_step when marking in_progress or completed
     if [[ "$status" == "in_progress" || "$status" == "completed" ]]; then
-        yq -i ".pipeline.current_step = \"$step_id\"" "$sf"
+        yq_write "$sf" -i ".pipeline.current_step = \"$step_id\""
     fi
 
     # Optional fields
     if [[ -n "$summary" ]]; then
-        yq -i ".last_step_summary = \"$summary\"" "$sf"
+        yq_write "$sf" -i ".last_step_summary = \"$summary\""
     fi
     if [[ -n "$artifacts" ]]; then
         # Convert comma-separated list to yaml array
@@ -155,13 +166,13 @@ cmd_update() {
             arr_expr+="\"${ARTS[$i]}\""
         done
         arr_expr+="]"
-        yq -i ".pipeline.steps[$idx].artifacts = $arr_expr" "$sf"
+        yq_write "$sf" -i ".pipeline.steps[$idx].artifacts = $arr_expr"
     fi
     if [[ -n "$verdict" ]]; then
-        yq -i ".pipeline.steps[$idx].verdict = \"$verdict\"" "$sf"
+        yq_write "$sf" -i ".pipeline.steps[$idx].verdict = \"$verdict\""
     fi
     if [[ -n "$iterations" ]]; then
-        yq -i ".pipeline.steps[$idx].iterations = $iterations" "$sf"
+        yq_write "$sf" -i ".pipeline.steps[$idx].iterations = $iterations"
     fi
 
     echo "OK"
@@ -219,7 +230,7 @@ cmd_set_mode() {
 
     local sf
     sf="$(require_state "$feature_dir")"
-    yq -i ".pipeline.mode = \"$mode\"" "$sf"
+    yq_write "$sf" -i ".pipeline.mode = \"$mode\""
     echo "OK"
 }
 
@@ -228,7 +239,7 @@ cmd_set_steps() {
     local steps_json="$2"
     local sf
     sf="$(require_state "$feature_dir")"
-    yq -i ".pipeline.steps = $steps_json" "$sf"
+    yq_write "$sf" -i ".pipeline.steps = $steps_json"
     echo "OK"
 }
 
@@ -241,15 +252,67 @@ cmd_set_type() {
     fi
     local sf
     sf="$(require_state "$feature_dir")"
-    yq -i ".feature.type = \"$type\"" "$sf"
+    yq_write "$sf" -i ".feature.type = \"$type\""
     echo "OK"
+}
+
+cmd_status() {
+    local sf
+    sf="$(require_state "$1")"
+
+    local feature_name branch mode
+    feature_name="$(yq '.feature.name' "$sf")"
+    branch="$(yq '.feature.branch' "$sf")"
+    mode="$(yq '.pipeline.mode' "$sf")"
+
+    local step_count
+    step_count="$(yq '.pipeline.steps | length' "$sf")"
+
+    local completed=0 total="$step_count"
+    for (( i=0; i<step_count; i++ )); do
+        local s
+        s="$(yq ".pipeline.steps[$i].status" "$sf")"
+        if [[ "$s" == "completed" || "$s" == "skipped" ]]; then
+            ((completed++))
+        fi
+    done
+
+    local pct=0
+    if (( total > 0 )); then
+        pct=$(( completed * 100 / total ))
+    fi
+
+    printf "Feature : %s\n" "$feature_name"
+    printf "Branch  : %s\n" "$branch"
+    printf "Mode    : %s\n" "$mode"
+    printf "Progress: %d/%d (%d%%)\n\n" "$completed" "$total" "$pct"
+
+    printf "%-4s %-20s %-12s\n" "#" "Step" "Status"
+    printf "%-4s %-20s %-12s\n" "──" "──────────────────" "──────────"
+
+    for (( i=0; i<step_count; i++ )); do
+        local sid sstatus icon
+        sid="$(yq ".pipeline.steps[$i].id" "$sf")"
+        sstatus="$(yq ".pipeline.steps[$i].status" "$sf")"
+
+        case "$sstatus" in
+            completed) icon="✓" ;;
+            in_progress) icon="⠹" ;;
+            pending) icon="◌" ;;
+            skipped) icon="○" ;;
+            failed) icon="✗" ;;
+            *) icon="?" ;;
+        esac
+
+        printf "%-4s %-20s %s %s\n" "$((i+1))" "$sid" "$icon" "$sstatus"
+    done
 }
 
 # --- Main dispatch ---
 
 SUBCOMMAND="${1:-}"
 if [[ -z "$SUBCOMMAND" ]]; then
-    echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type> <feature-dir> [options]" >&2
+    echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type|status> <feature-dir> [options]" >&2
     exit 1
 fi
 shift
@@ -304,9 +367,16 @@ case "$SUBCOMMAND" in
         fi
         cmd_set_type "$1" "$2"
         ;;
+    status)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: pipeline-state.sh status <feature-dir>" >&2
+            exit 1
+        fi
+        cmd_status "$1"
+        ;;
     *)
         echo "ERROR: Unknown subcommand '$SUBCOMMAND'" >&2
-        echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type> <feature-dir> [options]" >&2
+        echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type|status> <feature-dir> [options]" >&2
         exit 1
         ;;
 esac

@@ -653,10 +653,10 @@ go test ./... -cover
 
 ## リソース
 
-- [SpecKitドキュメント](.specify/memory/constitution.md)
+- [SpecKitドキュメント](.poor-dev/memory/constitution.md)
 - [Reviewコマンド](.opencode/command/review.md)
-- [テンプレート](.specify/templates/)
-- [スクリプト](.specify/scripts/)
+- [テンプレート](.poor-dev/templates/)
+- [スクリプト](.poor-dev/scripts/)
 
 ---
 

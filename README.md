@@ -315,13 +315,13 @@ cargo test
 ### ドキュメント
 
 - [AGENT.md](AGENT.md) - エージェントワークフローの完全ドキュメント
-- [.specify/memory/constitution.md](.specify/memory/constitution.md) - PoorDevSkills憲法
+- [.poor-dev/memory/constitution.md](.poor-dev/memory/constitution.md) - PoorDevSkills憲法
 - [.opencode/command/review.md](.opencode/command/review.md) - Reviewコマンドの詳細
-- [.specify/templates/](.specify/templates/) - テンプレートファイル
+- [.poor-dev/templates/](.poor-dev/templates/) - テンプレートファイル
 
 ### ツール
 
-- [SpecKit](.specify/) - 仕様化・計画・タスク分解のフレームワーク
+- [SpecKit](.poor-dev/) - 仕様化・計画・タスク分解のフレームワーク
 - [SwarmTools](https://github.com/dollspace-gay/swarm-tools) - 並列エージェント実行
 - [Hivemind](https://github.com/dollspace-gay/hivemind) - 知識管理
 - [CASS](https://github.com/dollspace-gay/cass) - コードAI検索システム

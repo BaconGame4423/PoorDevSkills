@@ -6,14 +6,14 @@
 追加されたセクション: 全セクション追加
 削除されたセクション: (該当なし - 初期バージョン)
 更新が必要なテンプレート:
-  ✅ .specify/templates/plan-template.md (憲法チェックセクション)
-  ✅ .specify/templates/spec-template.md (要件整合性)
-  ✅ .specify/templates/tasks-template.md (タスク分類)
+  ✅ .poor-dev/templates/plan-template.md (憲法チェックセクション)
+  ✅ .poor-dev/templates/spec-template.md (要件整合性)
+  ✅ .poor-dev/templates/tasks-template.md (タスク分類)
   ⚠ README.md (作成が必要)
 フォローアップ TODO: なし
 -->
 
-# DevSkills 憲法
+# PoorDevSkills 憲法
 
 ## コア原則
 
@@ -174,12 +174,12 @@
 DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フローを使用します。詳細は[AGENT.md](/home/bacon/DevSkills/AGENT.md)を参照してください。
 
 #### フェーズ1: 仕様化
-1. `/speckit.specify` を使用して優先順位付けされたユーザーストーリーを持つ機能仕様を作成する
+1. `/poor-dev.specify` を使用して優先順位付けされたユーザーストーリーを持つ機能仕様を作成する
 2. 各ストーリーの明確な受け入れ基準を定義する
 3. TDDを必要とする重要なパスを特定する
 
 #### フェーズ2: 計画
-1. `/speckit.plan` を使用して実装計画を作成する
+1. `/poor-dev.plan` を使用して実装計画を作成する
 2. plan.mdで憲法コンプライアンスをチェックする
 3. アーキテクチャ、技術スタック、プロジェクト構造を定義する
 
@@ -189,7 +189,7 @@ DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フ�
 3. GO/CONDITIONAL/NO-GO判定を受け、必要に応じて修正する
 
 #### フェーズ4: タスク分解
-1. `/speckit.tasks` を使用してユーザーストーリー別に整理されたタスクリストを作成する
+1. `/poor-dev.tasks` を使用してユーザーストーリー別に整理されたタスクリストを作成する
 2. 並列タスクを[P]でマークする
 3. タスクシーケンスに検証ゲートを含める
 
@@ -204,7 +204,7 @@ DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フ�
 3. SOLID原則、拡張性、セキュリティを確認する
 
 #### フェーズ7: 実装
-1. `/speckit.implement` または `/swarm` を使用してタスクを実行する
+1. `/poor-dev.implement` または `/swarm` を使用してタスクを実行する
 2. 各タスクは検証ゲートを通過しなければならない
 3. 進捗を追跡し、エラーを報告する
 
@@ -234,13 +234,13 @@ DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フ�
 
 | フェーズ | コマンド | 確認事項 |
 |----------|----------|----------|
-| 仕様 | `/speckit.specify` | ユーザー価値、明確な要件 |
-| 計画 | `/speckit.plan` | 技術選択、アーキテクチャ |
+| 仕様 | `/poor-dev.specify` | ユーザー価値、明確な要件 |
+| 計画 | `/poor-dev.plan` | 技術選択、アーキテクチャ |
 | プランレビュー | `/review plan` | 価値、リスク、実現可能性 |
-| タスク | `/speckit.tasks` | 依存関係、並列化 |
+| タスク | `/poor-dev.tasks` | 依存関係、並列化 |
 | タスクレビュー | `/review tasks` | 依存関係、並列化、網羅性 |
 | 設計レビュー | `/review architecture` | SOLID、拡張性、セキュリティ |
-| 実装 | `/speckit.implement` or `/swarm` | 実装の完全性 |
+| 実装 | `/poor-dev.implement` or `/swarm` | 実装の完全性 |
 | 品質ゲート | `/finish` | 型チェック、リンティング、テスト |
 | 品質レビュー | `/review quality` | テスト、コード品質、敵対的レビュー |
 | フェーズ完了 | `/review phase` | DoD、統合、文書 |
@@ -266,15 +266,15 @@ DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フ�
 
 ### コンプライアンスレビュー
 1. すべてのPRは憲法コンプライアンスを検証しなければならない
-2. `/speckit.analyze` は成果物間の違反をチェックする
+2. `/poor-dev.analyze` は成果物間の違反をチェックする
 3. 複雑性の違反は複雑性追跡テーブルで正当化されなければならない
 4. 非準拠のコードはマージしてはならない
 
 ### ランタイムガイダンス
 憲法原則を超える開発ガイダンスについては、以下を参照してください:
-- `.specify/templates/plan-template.md` - 計画構造とゲート
-- `.specify/templates/spec-template.md` - 仕様形式と要件
-- `.specify/templates/tasks-template.md` - タスク編成とパターン
+- `.poor-dev/templates/plan-template.md` - 計画構造とゲート
+- `.poor-dev/templates/spec-template.md` - 仕様形式と要件
+- `.poor-dev/templates/tasks-template.md` - タスク編成とパターン
 - `.opencode/command/` ディレクトリのエージェント固有のガイダンス
 
 ## スキル開発ガイドライン

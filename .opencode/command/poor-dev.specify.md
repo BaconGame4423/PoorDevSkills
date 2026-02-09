@@ -24,6 +24,19 @@ The text the user typed after `/poor-dev.poor-dev` in the triggering message **i
 
 Given that feature description, do this:
 
+0. **Pipeline Branch Inheritance Check** (NEW):
+   - Run `.poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only` to get FEATURE_DIR
+   - Check if `FEATURE_DIR/workflow-state.yaml` exists
+   - If it exists, read it and check if the `triage` step is `completed`:
+     - **Yes (triage completed)** → Branch and directory already created by triage. **Skip Steps 1-2 entirely.**
+       - Get FEATURE_DIR from `workflow-state.yaml`'s `feature.dir` field
+       - Set SPEC_FILE = `$FEATURE_DIR/spec.md`
+       - Jump directly to Step 3 (template loading)
+     - **No (triage not completed or no triage step)** → Continue with Step 1 as normal (standalone mode)
+   - If `workflow-state.yaml` does not exist → Continue with Step 1 as normal (standalone mode)
+
+   **Note**: This ensures `/poor-dev.specify` works both standalone (direct invocation) and as part of the triage pipeline.
+
 1. **Generate a concise short name** (2-4 words) for the branch:
    - Analyze the feature description and extract the most meaningful keywords
    - Create a 2-4 word short name that captures the essence of the feature

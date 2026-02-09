@@ -4,23 +4,25 @@ feature:
   branch: ""
   dir: ""
   created: ""
+  type: ""
 
 pipeline:
   mode: auto
   confirm: true
-  current_step: specify
+  current_step: triage
 
   steps:
-    - {id: specify,              status: pending}
-    - {id: clarify,              status: pending, conditional: true}
-    - {id: plan,                 status: pending}
-    - {id: planreview,           status: pending}
-    - {id: tasks,                status: pending}
-    - {id: tasksreview,          status: pending}
-    - {id: architecturereview,   status: pending}
-    - {id: implement,            status: pending}
-    - {id: qualityreview,        status: pending}
-    - {id: phasereview,          status: pending}
+    - {id: triage,              status: pending}
+    - {id: specify,             status: pending}
+    - {id: clarify,             status: pending, conditional: true}
+    - {id: plan,                status: pending}
+    - {id: planreview,          status: pending}
+    - {id: tasks,               status: pending}
+    - {id: tasksreview,         status: pending}
+    - {id: architecturereview,  status: pending}
+    - {id: implement,           status: pending}
+    - {id: qualityreview,       status: pending}
+    - {id: phasereview,         status: pending}
 
 last_step_summary: ""
 
@@ -28,3 +30,6 @@ context:
   spec_file: ""
   plan_file: ""
   tasks_file: ""
+  bug_report_file: ""
+  investigation_file: ""
+  fix_plan_file: ""

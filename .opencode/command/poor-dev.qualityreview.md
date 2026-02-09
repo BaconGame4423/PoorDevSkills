@@ -159,3 +159,110 @@ log:
   - {n: 5, issues: 0}
 next: /poor-dev.phasereview
 ```
+
+## Pipeline Continuation
+
+**This section executes ONLY after the review loop completes with 0 issues and GO verdict.**
+**Do NOT execute during the internal fix-review loop (STEP 1-4 cycle).**
+
+1. **Check for pipeline state**: Determine FEATURE_DIR from `$ARGUMENTS` path, then look for `FEATURE_DIR/workflow-state.yaml`:
+   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
+   - **Found** → Pipeline mode. Continue below.
+
+2. **Bugfix Postmortem Generation** (conditional):
+
+   Read `workflow-state.yaml` and check `feature.type`. **If `feature.type == "bugfix"`**, execute the following postmortem steps before continuing the pipeline:
+
+   ### 2a. Generate Postmortem
+
+   1. Read the following artifacts from FEATURE_DIR:
+      - `bug-report.md`
+      - `investigation.md`
+      - `fix-plan.md`
+   2. Read `.poor-dev/templates/postmortem-template.md`
+   3. Get the full diff for this bugfix branch:
+      ```bash
+      git diff main...HEAD
+      ```
+   4. Generate `$FEATURE_DIR/postmortem.md` based on the template:
+      - Fill in all template fields from the artifacts
+      - **Fix Applied** section: list actual changed files and change types from the git diff
+      - **Resolution Time**: calculate from `feature.created` in workflow-state.yaml to current time
+      - **Category**: use the category identified in investigation.md
+      - **5 Whys**: copy from investigation.md
+      - **Prevention**: derive concrete prevention actions from the root cause
+
+   ### 2b. Update Bug Pattern Database
+
+   1. Read `.poor-dev/memory/bug-patterns.md`
+   2. Determine the next pattern ID:
+      - If Pattern Index table is empty, use `BP-001`
+      - Otherwise, find the highest existing ID and increment
+   3. Add a new row to the **Pattern Index** table:
+      ```
+      | BP-NNN | [Category] | [Short pattern description] | 1 | [TODAY] |
+      ```
+   4. Add a new pattern entry to the **Patterns** section:
+      ```markdown
+      ### BP-NNN: [Pattern Name]
+      - **Category**: [from investigation.md]
+      - **Cause Pattern**: [under what conditions/situations this occurs]
+      - **Symptoms**: [how it manifests]
+      - **Detection**: [how to detect early]
+      - **Prevention**: [how to prevent]
+      - **Past Occurrences**: [branch name]
+      ```
+   5. Save the updated `bug-patterns.md`
+
+   ### 2c. Update Pipeline State
+
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" postmortem completed --summary "Postmortem generated, bug pattern BP-NNN added"
+   ```
+
+   ### 2d. Report to User
+
+   Present the postmortem summary and new bug pattern to the user:
+   - Postmortem file path
+   - Root cause summary
+   - Prevention actions
+   - New bug pattern ID and description
+
+   **If `feature.type != "bugfix"`** (i.e., it's a regular feature), skip all of step 2 entirely.
+
+3. **Preemptive summary** (3-5 lines): Compose a summary including:
+   - Final iteration count and issue resolution history
+   - Key fixes applied during the review loop
+   - Verdict: GO with 0 issues
+   - (If bugfix) Postmortem and bug pattern generation results
+
+4. **Update state**:
+   ```bash
+   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" qualityreview completed --summary "<summary>" --verdict GO --iterations $N
+   ```
+
+5. **Get next step**:
+   ```bash
+   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
+   ```
+
+6. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
+
+   **auto + confirm=true (default)**:
+   - **Claude Code**: Use `AskUserQuestion` tool with:
+     - question: "Pipeline: qualityreview completed (GO, $N iterations). Next is /poor-dev.$NEXT"
+     - options: "Continue" / "Skip" / "Pause"
+   - **OpenCode**: Use `question` tool with same content.
+   - On "Continue" → invoke `/poor-dev.$NEXT`
+   - On "Skip" → update that step to `skipped`, get next, ask again
+   - On "Pause" → set mode to `paused`, report how to resume
+
+   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
+
+   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
+
+   **If `$NEXT` is `done`**: Pipeline complete. Report final status.
+
+7. **Error fallback**:
+   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
+   - If state update fails → warn but do not affect main skill output

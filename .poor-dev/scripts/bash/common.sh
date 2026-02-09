@@ -148,6 +148,10 @@ RESEARCH='$feature_dir/research.md'
 DATA_MODEL='$feature_dir/data-model.md'
 QUICKSTART='$feature_dir/quickstart.md'
 CONTRACTS_DIR='$feature_dir/contracts'
+BUG_REPORT='$feature_dir/bug-report.md'
+INVESTIGATION='$feature_dir/investigation.md'
+FIX_PLAN='$feature_dir/fix-plan.md'
+POSTMORTEM='$feature_dir/postmortem.md'
 EOF
 }
 

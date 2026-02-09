@@ -8,6 +8,8 @@
 #   pipeline-state.sh update <feature-dir> <step-id> <status> [--summary "..."] [--artifacts a,b,c] [--verdict GO] [--iterations N]
 #   pipeline-state.sh next <feature-dir>
 #   pipeline-state.sh set-mode <feature-dir> <mode>
+#   pipeline-state.sh set-steps <feature-dir> '<json-array>'
+#   pipeline-state.sh set-type <feature-dir> <feature|bugfix>
 #
 # Requires: yq (https://github.com/mikefarah/yq)
 
@@ -90,6 +92,9 @@ cmd_init() {
     yq -i ".context.spec_file = \"$feature_dir/spec.md\"" "$sf"
     yq -i ".context.plan_file = \"$feature_dir/plan.md\"" "$sf"
     yq -i ".context.tasks_file = \"$feature_dir/tasks.md\"" "$sf"
+    yq -i ".context.bug_report_file = \"\"" "$sf"
+    yq -i ".context.investigation_file = \"\"" "$sf"
+    yq -i ".context.fix_plan_file = \"\"" "$sf"
 
     echo "$sf"
 }
@@ -218,11 +223,33 @@ cmd_set_mode() {
     echo "OK"
 }
 
+cmd_set_steps() {
+    local feature_dir="$1"
+    local steps_json="$2"
+    local sf
+    sf="$(require_state "$feature_dir")"
+    yq -i ".pipeline.steps = $steps_json" "$sf"
+    echo "OK"
+}
+
+cmd_set_type() {
+    local feature_dir="$1"
+    local type="$2"
+    if [[ "$type" != "feature" && "$type" != "bugfix" ]]; then
+        echo "ERROR: Invalid type '$type'. Must be: feature, bugfix" >&2
+        exit 1
+    fi
+    local sf
+    sf="$(require_state "$feature_dir")"
+    yq -i ".feature.type = \"$type\"" "$sf"
+    echo "OK"
+}
+
 # --- Main dispatch ---
 
 SUBCOMMAND="${1:-}"
 if [[ -z "$SUBCOMMAND" ]]; then
-    echo "Usage: pipeline-state.sh <init|get|update|next|set-mode> <feature-dir> [options]" >&2
+    echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type> <feature-dir> [options]" >&2
     exit 1
 fi
 shift
@@ -263,9 +290,23 @@ case "$SUBCOMMAND" in
         fi
         cmd_set_mode "$1" "$2"
         ;;
+    set-steps)
+        if [[ $# -lt 2 ]]; then
+            echo "Usage: pipeline-state.sh set-steps <feature-dir> '<json-array>'" >&2
+            exit 1
+        fi
+        cmd_set_steps "$1" "$2"
+        ;;
+    set-type)
+        if [[ $# -lt 2 ]]; then
+            echo "Usage: pipeline-state.sh set-type <feature-dir> <feature|bugfix>" >&2
+            exit 1
+        fi
+        cmd_set_type "$1" "$2"
+        ;;
     *)
         echo "ERROR: Unknown subcommand '$SUBCOMMAND'" >&2
-        echo "Usage: pipeline-state.sh <init|get|update|next|set-mode> <feature-dir> [options]" >&2
+        echo "Usage: pipeline-state.sh <init|get|update|next|set-mode|set-steps|set-type> <feature-dir> [options]" >&2
         exit 1
         ;;
 esac

@@ -1,1 +1,0 @@
-../../agents/claude/architecturereview-security.md

@@ -1,1 +1,0 @@
-../../agents/opencode/tasksreview-techlead.md

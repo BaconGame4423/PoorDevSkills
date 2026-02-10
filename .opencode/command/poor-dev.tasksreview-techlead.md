@@ -1,1 +1,0 @@
-../../commands/poor-dev.tasksreview-techlead.md

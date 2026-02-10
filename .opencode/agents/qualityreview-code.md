@@ -1,1 +1,0 @@
-../../agents/opencode/qualityreview-code.md

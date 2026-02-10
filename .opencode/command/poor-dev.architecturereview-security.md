@@ -1,1 +1,0 @@
-../../commands/poor-dev.architecturereview-security.md

@@ -1,1 +1,0 @@
-../../agents/opencode/architecturereview-security.md

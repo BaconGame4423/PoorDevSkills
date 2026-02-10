@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bacon/PoorDevSkills.git"
+    "url": "git+https://github.com/BaconGame4423/PoorDevSkills.git"
   },
   "engines": {
     "node": ">=18.0.0"

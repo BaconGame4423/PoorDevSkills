@@ -38,19 +38,19 @@ GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を
 ### 新規プロジェクトにインストール
 
 ```bash
-npx poor-dev init
+npx github:BaconGame4423/PoorDevSkills init
 ```
 
 ### 既存インストールを最新版に更新
 
 ```bash
-npx poor-dev@latest update
+npx github:BaconGame4423/PoorDevSkills update
 ```
 
 ### インストール状況の確認
 
 ```bash
-npx poor-dev status
+npx github:BaconGame4423/PoorDevSkills status
 ```
 
 ---
@@ -304,7 +304,7 @@ PoorDevSkills は **Claude Code** と **OpenCode** の両方から利用でき�
 /poor-dev.config reset                          # 推奨デフォルトにリセット
 ```
 
-設定はプロジェクトルートの `.poor-dev/config.json` に保存され、`npx poor-dev update` で上書きされません。
+設定はプロジェクトルートの `.poor-dev/config.json` に保存され、`npx github:BaconGame4423/PoorDevSkills update` で上書きされません。
 
 ### 利用可能モデルの確認
 

@@ -1,1 +1,0 @@
-../../agents/opencode/phasereview-qa.md

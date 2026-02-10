@@ -1,1 +1,0 @@
-../../agents/opencode/planreview-pm.md

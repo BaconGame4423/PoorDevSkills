@@ -14,9 +14,9 @@ Options:
   dir    Target directory (defaults to current directory)
 
 Examples:
-  npx poor-dev init
-  npx poor-dev@latest update
-  npx poor-dev status
+  npx github:BaconGame4423/PoorDevSkills init
+  npx github:BaconGame4423/PoorDevSkills update
+  npx github:BaconGame4423/PoorDevSkills status
 `.trim();
 
 const [subcommand, targetArg] = process.argv.slice(2);

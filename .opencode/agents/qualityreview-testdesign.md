@@ -1,1 +1,0 @@
-../../agents/opencode/qualityreview-testdesign.md

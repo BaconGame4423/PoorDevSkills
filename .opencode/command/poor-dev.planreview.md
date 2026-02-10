@@ -34,12 +34,6 @@ Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
 **IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-**Model Configuration**: Before spawning sub-agents, read `.poor-dev/pipeline-config.yaml`. For each persona, resolve model:
-1. `steps.planreview.agents.<persona>.model`
-2. `steps.planreview.model`
-3. `defaults.model`
-Pass via Task tool `model` parameter.
-
 **Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
 **OpenCode**: Use `@planreview-pm`, `@planreview-risk`, `@planreview-value`, `@planreview-critical`.
 
@@ -107,46 +101,3 @@ log:
   - {n: 7, issues: 0}
 next: /poor-dev.tasks
 ```
-
-## Pipeline Continuation
-
-**This section executes ONLY after the review loop completes with 0 issues and GO verdict.**
-**Do NOT execute during the internal fix-review loop (STEP 1-4 cycle).**
-
-1. **Check for pipeline state**: Determine FEATURE_DIR from `$ARGUMENTS` path, then look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Preemptive summary** (3-5 lines): Compose a summary including:
-   - Final iteration count and issue resolution history
-   - Key fixes applied during the review loop
-   - Verdict: GO with 0 issues
-
-3. **Update state**:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" planreview completed --summary "<summary>" --verdict GO --iterations $N
-   ```
-
-4. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: planreview completed (GO, $N iterations). Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - **OpenCode**: Use `question` tool with same content.
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update that step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
-
-6. **Error fallback**:
-   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
-   - If state update fails → warn but do not affect main skill output

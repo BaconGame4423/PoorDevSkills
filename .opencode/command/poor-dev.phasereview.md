@@ -34,12 +34,6 @@ Each sub-agent instruction: "Review phase `$ARGUMENTS`. Check all phase artifact
 
 **IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-**Model Configuration**: Before spawning sub-agents, read `.poor-dev/pipeline-config.yaml`. For each persona, resolve model:
-1. `steps.phasereview.agents.<persona>.model`
-2. `steps.phasereview.model`
-3. `defaults.model`
-Pass via Task tool `model` parameter.
-
 **Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
 **OpenCode**: Use `@phasereview-qa`, `@phasereview-regression`, `@phasereview-docs`, `@phasereview-ux`.
 

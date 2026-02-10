@@ -34,12 +34,6 @@ Each sub-agent instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
 **IMPORTANT**: Always spawn NEW sub-agents. Never reuse previous ones (prevents context contamination).
 
-**Model Configuration**: Before spawning sub-agents, read `.poor-dev/pipeline-config.yaml`. For each persona, resolve model:
-1. `steps.architecturereview.agents.<persona>.model`
-2. `steps.architecturereview.model`
-3. `defaults.model`
-Pass via Task tool `model` parameter.
-
 **Claude Code**: Use Task tool with subagent_type "general-purpose" for each persona. Include the persona agent file content as instructions.
 **OpenCode**: Use `@architecturereview-architect`, `@architecturereview-security`, `@architecturereview-performance`, `@architecturereview-sre`.
 

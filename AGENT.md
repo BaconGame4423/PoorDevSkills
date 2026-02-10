@@ -391,6 +391,70 @@ r:
 
 ---
 
+## モデル設定（ハイブリッドモデル）
+
+### 概要
+
+レビューの CLI とモデルをカテゴリ・エージェント単位で設定できます。設定は `.poor-dev/config.json` に保存されます。
+
+### コマンドリファレンス
+
+| サブコマンド | 説明 |
+|-------------|------|
+| `/poor-dev.config show` | 現在の設定 + 利用可能モデル一覧 |
+| `/poor-dev.config default <cli> <model>` | デフォルト CLI/モデルを設定 |
+| `/poor-dev.config set <key> <cli> <model>` | カテゴリまたはエージェント単位で上書き |
+| `/poor-dev.config unset <key>` | 上書きを削除（デフォルトに戻す） |
+| `/poor-dev.config reset` | 推奨デフォルトにリセット |
+
+### 設定ファイルフォーマット
+
+```json
+{
+  "default": {
+    "cli": "opencode",
+    "model": "zai-coding-plan/glm-4.7"
+  },
+  "overrides": {
+    "fixer": { "cli": "claude", "model": "sonnet" },
+    "phasereview": { "cli": "claude", "model": "haiku" }
+  }
+}
+```
+
+### 解決順序
+
+各ペルソナの CLI/モデルは以下の優先度で解決:
+
+```
+overrides.<agent名> → overrides.<カテゴリ名> → default
+```
+
+例: `phasereview-qa` の場合
+1. `overrides.phasereview-qa` があればそれを使用
+2. なければ `overrides.phasereview` を使用
+3. なければ `default` を使用
+
+### 推奨デフォルト
+
+| カテゴリ | CLI | モデル | 理由 |
+|---------|-----|--------|------|
+| planreview | opencode | GLM4.7 | 安価。一次レビュー向け |
+| tasksreview | opencode | GLM4.7 | 同上 |
+| architecturereview | opencode | GLM4.7 | 同上 |
+| qualityreview | opencode | GLM4.7 | 同上 |
+| phasereview | claude | haiku | 最終ゲートキーパー |
+| fixer | claude | sonnet | コード修正の正確さ重視 |
+
+### 実行モード
+
+オーケストレータは設定に基づき自動ルーティング:
+
+- **ネイティブ実行**: 設定の cli が現在の CLI と同じ → そのまま実行
+- **クロス CLI 実行**: 設定の cli が異なる → Bash 経由で他方の CLI を呼び出し
+
+---
+
 ## Swarm統合
 
 ### Swarm Mailの使用

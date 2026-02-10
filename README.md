@@ -201,6 +201,47 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 | `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
 | `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
+| `/poor-dev.config` | ハイブリッドモデル設定（CLI/モデルのカテゴリ別設定） |
+
+---
+
+## デュアルランタイム戦略
+
+PoorDevSkills は **Claude Code** と **OpenCode** の両方から利用でき、レビューごとに CLI とモデルを使い分けられます。
+
+### 推奨ワークフロー
+
+| フェーズ | CLI | モデル | 理由 |
+|---------|-----|--------|------|
+| planreview (4 ペルソナ) | OpenCode | GLM4.7 | 安価。一次レビューとして十分 |
+| tasksreview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
+| architecturereview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
+| qualityreview (4 ペルソナ) | OpenCode | GLM4.7 | 同上 |
+| **phasereview** (4 ペルソナ) | **Claude** | **haiku** | 最終ゲートキーパー。品質保証 |
+| **fixer** (修正エージェント) | **Claude** | **sonnet** | コード修正。正確さが必要 |
+
+### 設定方法
+
+```bash
+/poor-dev.config show                          # 現在の設定 + 利用可能モデル一覧
+/poor-dev.config default opencode zai-coding-plan/glm-4.7  # デフォルト設定
+/poor-dev.config set phasereview claude haiku   # カテゴリ上書き
+/poor-dev.config set fixer claude sonnet        # 個別エージェント上書き
+/poor-dev.config unset qualityreview            # 上書きを削除（デフォルトに戻る）
+/poor-dev.config reset                          # 推奨デフォルトにリセット
+```
+
+設定はプロジェクトルートの `.poor-dev/config.json` に保存され、`npx poor-dev update` で上書きされません。
+
+### 利用可能モデルの確認
+
+```bash
+# OpenCode のモデル一覧
+opencode models
+
+# Claude Code のモデル（固定）
+# haiku, sonnet, opus
+```
 
 ---
 

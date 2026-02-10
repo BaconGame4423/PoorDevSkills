@@ -33,6 +33,12 @@ Run automated quality gates before persona review:
 
 If gates fail, record failures as C or H severity and proceed to fix loop.
 
+### STAGE 0.5: Config Resolution
+
+1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
+2. For each persona (`qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`) and for `review-fixer`, resolve config with priority: `overrides.<agent>` → `overrides.qualityreview` → `default`.
+3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**.
+
 ### STAGE 1-4: Review Loop
 
 Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
@@ -40,8 +46,15 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 **STEP 1**: Spawn 4 NEW parallel sub-agents (never reuse — prevents context contamination).
   Personas: `qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`.
   Instruction: "Review `$ARGUMENTS`. Output compact English YAML."
-  - **Claude Code**: Task tool with subagent_type "general-purpose" for each.
-  - **OpenCode**: `@qualityreview-qa`, `@qualityreview-testdesign`, `@qualityreview-code`, `@qualityreview-security`.
+
+  **Execution routing** (per persona, based on STAGE 0.5):
+
+  - **Native (Claude Code)**: `Task(subagent_type="qualityreview-qa", model=<resolved model>, prompt="Review...")`.
+  - **Native (OpenCode)**: `@qualityreview-qa` (uses session default model). If config specifies a different model: `opencode run --model <model> --agent qualityreview-qa "Review..."` via Bash.
+  - **Cross-CLI → OpenCode**: Bash `opencode run --model <model> --agent qualityreview-qa --format json "Review $ARGUMENTS. Output compact English YAML."` with `run_in_background: true`.
+  - **Cross-CLI → Claude**: Bash `claude -p --model <model> --agent qualityreview-qa --no-session-persistence --output-format text "Review $ARGUMENTS. Output compact English YAML."` with `run_in_background: true`.
+
+  Run all 4 personas in parallel. Wait for all to complete.
 
 **STEP 2**: Run adversarial review, then aggregate all results. Count issues by severity (C/H/M/L).
   Adversarial judgments: APPROVED | NEEDS_CHANGES (add to issues) | HALLUCINATING (ignore).
@@ -49,7 +62,7 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 
 **STEP 3**: Issues remain → STEP 4. Zero issues AND adversarial APPROVED/HALLUCINATING → done. 3 strikes → abort.
 
-**STEP 4**: Spawn `review-fixer` sub-agent with aggregated issues (priority C→H→M→L). After fix → back to STEP 1.
+**STEP 4**: Spawn `review-fixer` sub-agent with aggregated issues (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic as STEP 1). After fix → back to STEP 1.
 
 ### Progress Tracking
 

@@ -17,12 +17,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
-### Step 0: Pipeline Branch Inheritance Check
+### Step 0: Feature ディレクトリの特定
 
-- Run `.poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only` to get FEATURE_DIR
-- Check if `FEATURE_DIR/workflow-state.yaml` exists and `concept` step is `completed`:
-  - **Yes** → Use existing FEATURE_DIR. Skip to Step 1.
-  - **No** → Error: "concept ステップを先に完了してください。`/poor-dev.concept` を実行してください。"
+1. 現在のブランチ名を取得: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
+2. ブランチ名から数字プレフィックスを抽出（例: `003-roadmap-plan` → `003`）
+3. 対応するディレクトリを特定: `FEATURE_DIR=$(ls -d specs/${PREFIX}-* 2>/dev/null | head -1)`
+4. `$FEATURE_DIR/concept.md` が存在することを確認
+   - 存在しない場合: Error: "concept ステップを先に完了してください。`/poor-dev.concept` を実行してください。"
 
 ### Step 1: Read Concept
 
@@ -31,7 +32,86 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ### Step 2: Define Goals
 
-1. Read `.poor-dev/templates/goals-template.md`
+1. Use the following template as a base:
+
+   ```markdown
+   # Goals: [PROJECT/FEATURE NAME]
+
+   **Created**: [DATE]
+   **Input**: concept.md
+
+   ---
+
+   ## Strategic Goals
+
+   <!-- 3-5 high-level goals that define success for this project -->
+
+   ### Goal 1: [Name]
+
+   - **Description**:
+   - **Success Metric**:
+   - **Priority**: P1 / P2 / P3
+
+   ### Goal 2: [Name]
+
+   - **Description**:
+   - **Success Metric**:
+   - **Priority**: P1 / P2 / P3
+
+   ### Goal 3: [Name]
+
+   - **Description**:
+   - **Success Metric**:
+   - **Priority**: P1 / P2 / P3
+
+   ## Success Criteria
+
+   <!-- Measurable outcomes that determine if goals are met -->
+
+   | ID | Criterion | Metric | Target | Priority |
+   |----|-----------|--------|--------|----------|
+   | SC-1 | | | | |
+   | SC-2 | | | | |
+   | SC-3 | | | | |
+
+   ## Key Results
+
+   <!-- Specific, time-bound results expected -->
+
+   | Quarter/Phase | Key Result | Status |
+   |---------------|-----------|--------|
+   | | | Planned |
+
+   ## Assumptions
+
+   <!-- What we're assuming to be true -->
+
+   1.
+   2.
+
+   ## Risks
+
+   <!-- What could prevent us from achieving these goals -->
+
+   | Risk | Probability | Impact | Mitigation |
+   |------|------------|--------|------------|
+   | | High/Med/Low | High/Med/Low | |
+
+   ## Dependencies
+
+   <!-- External dependencies that affect goal achievement -->
+
+   -
+
+   ## Decision Log
+
+   <!-- Key decisions made during goal definition -->
+
+   | Decision | Rationale | Date |
+   |----------|-----------|------|
+   | | | |
+   ```
+
 2. Based on the concept, propose 3-5 strategic goals with:
    - Clear descriptions
    - Measurable success metrics
@@ -50,43 +130,3 @@ You **MUST** consider the user input before proceeding (if not empty).
 ### Step 4: Write Goals Document
 
 - Write completed goals to `$FEATURE_DIR/goals.md`
-- Update context paths:
-  ```bash
-  yq -i ".context.goals_file = \"$FEATURE_DIR/goals.md\"" "$FEATURE_DIR/workflow-state.yaml"
-  ```
-
-## Pipeline Continuation
-
-**This section executes ONLY after all skill work is complete.**
-
-1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion. Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Preemptive summary** (3-5 lines): goals count, key success criteria, priorities.
-
-3. **Update state**:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" goals completed --summary "<summary>"
-   ```
-
-4. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - Use `AskUserQuestion` / `question` with:
-     - question: "Pipeline: goals completed. Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest next step.
-
-6. **Error fallback**: Report next step as text if tools fail.

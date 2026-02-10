@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.switch.md
+../../commands/poor-dev.switch.md

@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.architecturereview-security.md
+../../commands/poor-dev.architecturereview-security.md

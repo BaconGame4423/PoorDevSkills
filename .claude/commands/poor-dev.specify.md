@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.specify.md
+../../commands/poor-dev.specify.md

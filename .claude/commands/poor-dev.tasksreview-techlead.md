@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.tasksreview-techlead.md
+../../commands/poor-dev.tasksreview-techlead.md

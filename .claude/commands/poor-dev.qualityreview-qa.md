@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.qualityreview-qa.md
+../../commands/poor-dev.qualityreview-qa.md

@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.phasereview-qa.md
+../../commands/poor-dev.phasereview-qa.md

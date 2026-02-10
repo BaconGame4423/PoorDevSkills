@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.milestones.md
+../../commands/poor-dev.milestones.md

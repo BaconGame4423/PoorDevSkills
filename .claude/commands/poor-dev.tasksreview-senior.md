@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.tasksreview-senior.md
+../../commands/poor-dev.tasksreview-senior.md

@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.taskstoissues.md
+../../commands/poor-dev.taskstoissues.md

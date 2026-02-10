@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.constitution.md
+../../commands/poor-dev.constitution.md

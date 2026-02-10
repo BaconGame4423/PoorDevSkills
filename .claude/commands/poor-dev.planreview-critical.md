@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.planreview-critical.md
+../../commands/poor-dev.planreview-critical.md

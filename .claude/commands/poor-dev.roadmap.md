@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.roadmap.md
+../../commands/poor-dev.roadmap.md

@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.planreview-risk.md
+../../commands/poor-dev.planreview-risk.md

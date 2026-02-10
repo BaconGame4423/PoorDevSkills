@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.analyze.md
+../../commands/poor-dev.analyze.md

@@ -1,0 +1,32 @@
+{
+  "name": "poor-dev",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-powered development workflow slash commands for OpenCode & Claude Code",
+  "bin": {
+    "poor-dev": "./bin/poor-dev.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "commands/",
+    "agents/",
+    "templates/"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "opencode",
+    "development",
+    "workflow",
+    "slash-commands"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bacon/PoorDevSkills.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

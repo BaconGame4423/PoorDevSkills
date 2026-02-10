@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.bugfix.md
+../../commands/poor-dev.bugfix.md

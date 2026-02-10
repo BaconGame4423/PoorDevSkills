@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.checklist.md
+../../commands/poor-dev.checklist.md

@@ -13,6 +13,28 @@ GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を
 
 ---
 
+## インストール
+
+### 新規プロジェクトにインストール
+
+```bash
+npx poor-dev init
+```
+
+### 既存インストールを最新版に更新
+
+```bash
+npx poor-dev@latest update
+```
+
+### インストール状況の確認
+
+```bash
+npx poor-dev status
+```
+
+---
+
 ## クイックスタート
 
 Claude Code または OpenCode のチャット内からスラッシュコマンドで各ステップを実行します。

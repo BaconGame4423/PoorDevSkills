@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.tasksreview-junior.md
+../../commands/poor-dev.tasksreview-junior.md

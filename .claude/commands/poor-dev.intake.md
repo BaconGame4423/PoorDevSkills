@@ -1,1 +1,1 @@
-../../.opencode/command/poor-dev.intake.md
+../../commands/poor-dev.intake.md

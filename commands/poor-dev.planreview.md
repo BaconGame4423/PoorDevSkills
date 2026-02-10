@@ -20,7 +20,7 @@ $ARGUMENTS
 
 1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
 2. For each persona (`planreview-pm`, `planreview-risk`, `planreview-value`, `planreview-critical`) and for `review-fixer`, resolve config with priority: `overrides.<agent>` → `overrides.planreview` → `default`.
-3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**.
+3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**. This is MANDATORY — you MUST NOT substitute native execution when cross-CLI is required.
 
 ## Review Loop
 
@@ -30,12 +30,28 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
   Personas: `planreview-pm`, `planreview-risk`, `planreview-value`, `planreview-critical`.
   Instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-  **Execution routing** (per persona, based on STEP 0):
+  **Execution routing** — MANDATORY dispatch per STEP 0 resolution. DO NOT override with your own judgment.
 
-  - **Native (Claude Code)**: `Task(subagent_type="planreview-pm", model=<resolved model>, prompt="Review...")`.
-  - **Native (OpenCode)**: `@planreview-pm` (uses session default model). If config specifies a different model: `opencode run --model <model> --agent planreview-pm "Review..."` via Bash.
-  - **Cross-CLI → OpenCode**: Bash `opencode run --model <model> --agent planreview-pm --format json "Review $ARGUMENTS. Output compact English YAML."` with `run_in_background: true`.
-  - **Cross-CLI → Claude**: Bash `claude -p --model <model> --agent planreview-pm --no-session-persistence --output-format text "Review $ARGUMENTS. Output compact English YAML."` with `run_in_background: true`.
+  ```
+  resolved_cli = config resolution from STEP 0
+  current_cli  = runtime you are executing in ("claude" or "opencode")
+
+  IF resolved_cli == current_cli:
+    # Native execution
+    IF current_cli == "claude":
+      → Task(subagent_type="planreview-pm", model=<resolved model>, prompt="Review $ARGUMENTS. Output compact English YAML.")
+    ELSE:  # current_cli == "opencode"
+      → @planreview-pm  (if config model == session default)
+      → Bash: opencode run --model <model> --agent planreview-pm "Review $ARGUMENTS. Output compact English YAML."  (if different model)
+  ELSE:
+    # Cross-CLI — REQUIRED even if native feels more convenient
+    IF resolved_cli == "opencode":
+      → Bash: opencode run --model <model> --agent planreview-pm --format json "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
+    ELSE:  # resolved_cli == "claude"
+      → Bash: claude -p --model <model> --agent planreview-pm --no-session-persistence --output-format text "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
+  ```
+
+  **VIOLATION**: Using native Task/subagent when config resolves to a different CLI is a routing bug. Follow the tree above exactly.
 
   Run all 4 personas in parallel. Wait for all to complete.
 

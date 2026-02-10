@@ -12,6 +12,7 @@ handoffs:
   - label: Reclassify as Feature
     agent: poor-dev.specify
     prompt: This turned out to be a feature request. Create a specification.
+    send: true
 ---
 
 ## User Input
@@ -24,15 +25,14 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Prerequisites
 
-1. Run prerequisite check to get FEATURE_DIR:
-   ```bash
-   .poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only
-   ```
+1. Determine the feature directory from the current branch:
+   - Get current branch: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
+   - Extract numeric prefix (e.g., `003-fix-bug-name` -> `003`)
+   - Find matching directory: `FEATURE_DIR=$(ls -d specs/${PREFIX}-* 2>/dev/null | head -1)`
+   - If not found, show error
 
 2. Verify `$FEATURE_DIR/bug-report.md` exists (created by intake).
-   - If not found: **ERROR** — "Run `/poor-dev.intake` first to create the bug report and initialize the bugfix pipeline."
-
-3. Read `$FEATURE_DIR/workflow-state.yaml` and confirm `feature.type == "bugfix"`.
+   - If not found: **ERROR** -- "Run `/poor-dev.intake` first to create the bug report and initialize the bugfix pipeline."
 
 ## Stage 1: Bug Report Completion
 
@@ -152,9 +152,9 @@ Do NOT proceed to fix if:
 - Multiple equally likely cause candidates exist without distinguishing tests
 - Bug could not be reproduced and there is no way to verify hypotheses
 
-→ If unclear, ask the user for additional context (**Claude Code**: `AskUserQuestion` / **OpenCode**: `question`) and iterate.
+> If unclear, ask the user for additional context (**Claude Code**: `AskUserQuestion` / **OpenCode**: `question`) and iterate.
 
-→ **Do NOT proceed to Stage 5 until the user approves the root cause.**
+> **Do NOT proceed to Stage 5 until the user approves the root cause.**
 
 ## Stage 5: Fix Plan + Scale Assessment
 
@@ -186,64 +186,11 @@ Continue directly to implement via Pipeline Continuation.
 
 ### 5d. Large Scale → Full Pipeline
 
-Dynamically switch to full pipeline:
-```bash
-.poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"bugfix","status":"completed"},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"postmortem","status":"pending"}]'
-```
-
-Route to `poor-dev.plan` — `investigation.md` and `fix-plan.md` serve as context for planning.
+Route to `poor-dev.plan` -- `investigation.md` and `fix-plan.md` serve as context for planning.
 
 ## Stage 6: Reclassification Escape
 
 If at any point during Stages 1-4 it becomes clear this is a missing feature rather than a bug:
 
 1. Ask the user: "これはバグではなく未実装機能のようです。機能リクエストとして再分類しますか？"
-2. If approved:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh set-type "$FEATURE_DIR" feature
-   .poor-dev/scripts/bash/pipeline-state.sh set-steps "$FEATURE_DIR" '[{"id":"intake","status":"completed"},{"id":"specify","status":"pending"},{"id":"clarify","status":"pending","conditional":true},{"id":"plan","status":"pending"},{"id":"planreview","status":"pending"},{"id":"tasks","status":"pending"},{"id":"tasksreview","status":"pending"},{"id":"architecturereview","status":"pending"},{"id":"implement","status":"pending"},{"id":"qualityreview","status":"pending"},{"id":"phasereview","status":"pending"}]'
-   ```
-   Update state and route to `poor-dev.specify`.
-
-## Pipeline Continuation
-
-**This section executes ONLY after all skill work is complete.**
-
-1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion as normal. Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Preemptive summary** (3-5 lines): Compose a summary including:
-   - Root cause identified
-   - Fix plan and scale assessment
-   - Generated artifacts (bug-report.md, investigation.md, fix-plan.md)
-   - Pipeline routing decision (small → implement, large → plan)
-
-3. **Update state**:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" bugfix completed --summary "<summary>"
-   ```
-
-4. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-5. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: bugfix completed. Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - **OpenCode**: Use `question` tool with same content.
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update that step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
-
-6. **Error fallback**:
-   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
-   - If state update fails → warn but do not affect main skill output
+2. If approved: Update the feature type and route to `poor-dev.specify`.

@@ -608,11 +608,9 @@ r:
 
 ## リソース
 
-- [憲法](.poor-dev/memory/constitution.md)
+- [憲法](constitution.md)
 - [レビューオーケストレータ](.opencode/command/poor-dev.*review.md)
 - [ペルソナエージェント](.opencode/agents/)
-- [テンプレート](.poor-dev/templates/)
-- [スクリプト](.poor-dev/scripts/)
 
 ---
 

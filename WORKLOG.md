@@ -1,5 +1,49 @@
 # 作業記録
 
+## 2026-02-10: speckit 時代の残存参照を一掃し poor-dev.* に統一
+
+### 背景
+
+CLI削除（`.poor-dev/` 全削除）完了後のプロジェクト全体レビューで、`speckit` 時代の残存参照を多数検出。`poor-dev.*` コマンド自体のロジックは正常だが、テンプレート内の注釈・ドキュメント・旧コマンドファイルに古い参照が散在していた。
+
+### 作業内容
+
+#### 1. 旧コマンドファイル削除（15ファイル、3,038行削減）
+
+**speckit.* コマンド（9ファイル）** — `.specify/scripts/bash/` を参照しており `.specify/` は既に存在しない。`poor-dev.*` が完全に同等機能を提供済み:
+- `speckit.{analyze,checklist,clarify,constitution,implement,plan,specify,tasks,taskstoissues}.md`
+
+**旧 review*.md（6ファイル）** — speckit 時代のレビューコマンド。handoffs に `speckit.*` エージェント参照。`poor-dev.md` + `poor-dev.*review.md` が同等機能を提供済み:
+- `review.md`, `review-{plan,tasks,architecture,quality,phase}.md`
+
+#### 2. コマンドファイル修正（3ファイル）
+
+| ファイル | 修正内容 |
+|---------|---------|
+| `poor-dev.plan.md` | `/speckit.plan` 注釈行削除、ディレクトリ構造コメント内の speckit 参照を poor-dev に置換 |
+| `poor-dev.bugfix.md` | "via Pipeline Continuation" → `/poor-dev.implement` への遷移指示に置換 |
+| `poor-dev.md` | YAML例中 `target: .specify/plan.md` → `target: plan.md`、Usage Examples のパスを `specs/NNN-feature/` 形式に置換 |
+
+#### 3. AGENT.md 修正
+
+- SpecKit系コマンドテーブル → 「開発系コマンド」に改称、全コマンドを `poor-dev.*` に置換
+- フロー図中の `/speckit.*` と `/review` コマンド → `poor-dev.*` に置換
+- トラブルシューティング中の speckit 参照 → `poor-dev.*` に置換
+- 概要・用語集の SpecKit/Reviewスキル用語 → poor-dev コマンド用語に更新
+
+### 検証結果
+
+- `speckit` 参照: コマンドファイル・AGENT.md・README.md で **0件**
+- `.specify/` 参照: コマンドファイル・AGENT.md・README.md で **0件**
+- `Pipeline Continuation` 参照: コマンドファイルで **0件**
+- 壊れたシンボリックリンク: `.claude/commands/` で **0件**
+
+### コミット
+
+- `1d96519` refactor: speckit 時代の残存参照を一掃し poor-dev.* に統一
+
+---
+
 ## 2026-02-08: SpecKitとReviewスキルの統合ワークフロー作成
 
 ### 作業内容
@@ -273,5 +317,5 @@
 
 ---
 
-**最終更新**: 2026-02-08
+**最終更新**: 2026-02-10
 **次回見直し**: 2026-03-08

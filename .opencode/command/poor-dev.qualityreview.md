@@ -165,7 +165,7 @@ next: /poor-dev.phasereview
 **This section executes ONLY after the review loop completes with 0 issues and GO verdict.**
 **Do NOT execute during the internal fix-review loop (STEP 1-4 cycle).**
 
-Determine FEATURE_DIR from `$ARGUMENTS` path, then read `FEATURE_DIR/workflow-state.yaml` and check `feature.type`. **If `feature.type == "bugfix"`**, execute the following postmortem steps. **If `feature.type != "bugfix"`** (i.e., it's a regular feature), skip this section entirely.
+Determine FEATURE_DIR from `$ARGUMENTS` path (extract numeric prefix from the path, find matching `specs/NNN-*` directory). Check if `FEATURE_DIR/bug-report.md` exists. **If it exists** (bugfix flow), execute the following postmortem steps. **If it does not exist** (i.e., it's a regular feature), skip this section entirely.
 
 ### 2a. Generate Postmortem
 
@@ -221,7 +221,7 @@ Determine FEATURE_DIR from `$ARGUMENTS` path, then read `FEATURE_DIR/workflow-st
 4. Generate `$FEATURE_DIR/postmortem.md` based on the template:
    - Fill in all template fields from the artifacts
    - **Fix Applied** section: list actual changed files and change types from the git diff
-   - **Resolution Time**: calculate from `feature.created` in workflow-state.yaml to current time
+   - **Resolution Time**: estimate based on branch creation date (`git log --format=%ci --diff-filter=A -- $FEATURE_DIR | tail -1`)
    - **Category**: use the category identified in investigation.md
    - **5 Whys**: copy from investigation.md
    - **Prevention**: derive concrete prevention actions from the root cause

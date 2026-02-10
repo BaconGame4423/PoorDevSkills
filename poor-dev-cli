@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Legacy entrypoint — delegates to bin/poor-dev
-SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/bin/poor-dev" "$@"

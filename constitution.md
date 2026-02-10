@@ -6,10 +6,10 @@
 追加されたセクション: 全セクション追加
 削除されたセクション: (該当なし - 初期バージョン)
 更新が必要なテンプレート:
-  ✅ .poor-dev/templates/plan-template.md (憲法チェックセクション)
-  ✅ .poor-dev/templates/spec-template.md (要件整合性)
-  ✅ .poor-dev/templates/tasks-template.md (タスク分類)
-  ⚠ README.md (作成が必要)
+  ✅ .opencode/command/poor-dev.plan.md 内インラインテンプレート (憲法チェックセクション)
+  ✅ .opencode/command/poor-dev.specify.md 内インラインテンプレート (要件整合性)
+  ✅ .opencode/command/poor-dev.tasks.md 内インラインテンプレート (タスク分類)
+  ✅ README.md
 フォローアップ TODO: なし
 -->
 
@@ -272,9 +272,9 @@ DevSkillsはSpecKitとReviewスキルを統合した構造化された開発フ�
 
 ### ランタイムガイダンス
 憲法原則を超える開発ガイダンスについては、以下を参照してください:
-- `.poor-dev/templates/plan-template.md` - 計画構造とゲート
-- `.poor-dev/templates/spec-template.md` - 仕様形式と要件
-- `.poor-dev/templates/tasks-template.md` - タスク編成とパターン
+- `.opencode/command/poor-dev.plan.md` 内のインラインテンプレート - 計画構造とゲート
+- `.opencode/command/poor-dev.specify.md` 内のインラインテンプレート - 仕様形式と要件
+- `.opencode/command/poor-dev.tasks.md` 内のインラインテンプレート - タスク編成とパターン
 - `.opencode/command/` ディレクトリのエージェント固有のガイダンス
 
 ## スキル開発ガイドライン

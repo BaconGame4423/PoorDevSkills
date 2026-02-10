@@ -184,7 +184,7 @@ PoorDevSkillsは poor-dev コマンド群による構造化された開発フロ
 3. アーキテクチャ、技術スタック、プロジェクト構造を定義する
 
 #### フェーズ3: プランレビュー
-1. `/review plan plan.md` を使用してプランをレビューする
+1. `/poor-dev.planreview plan.md` を使用してプランをレビューする
 2. PM・リスク・価値・批判のペルソナからフィードバックを収集する
 3. GO/CONDITIONAL/NO-GO判定を受け、必要に応じて修正する
 
@@ -194,12 +194,12 @@ PoorDevSkillsは poor-dev コマンド群による構造化された開発フロ
 3. タスクシーケンスに検証ゲートを含める
 
 #### フェーズ5: タスクレビュー
-1. `/review tasks tasks.md` を使用してタスクをレビューする
+1. `/poor-dev.tasksreview tasks.md` を使用してタスクをレビューする
 2. テックリード・シニア・DevOps・ジュニアのペルソナからフィードバックを収集する
 3. 依存関係と並列化の機会を確認する
 
 #### フェーズ6: 設計レビュー（必要時）
-1. `/review architecture data-model.md` を使用して設計をレビューする
+1. `/poor-dev.architecturereview data-model.md` を使用して設計をレビューする
 2. アーキテクト・セキュリティ・性能・運用のペルソナからフィードバックを収集する
 3. SOLID原則、拡張性、セキュリティを確認する
 
@@ -214,13 +214,13 @@ PoorDevSkillsは poor-dev コマンド群による構造化された開発フロ
 3. 全てのゲートをパスする必要がある
 
 #### フェーズ9: 品質レビュー
-1. `/review quality` を使用して実装をレビューする
+1. `/poor-dev.qualityreview` を使用して実装をレビューする
 2. QA・テスト設計・コード・セキュリティのペルソナからフィードバックを収集する
 3. `swarm_adversarial_review` を実行して敵対的レビューを行う
 4. 3ストライクルールを適用する
 
 #### フェーズ10: フェーズ完了レビュー
-1. `/review phase [フェーズ名]` を使用してフェーズをレビューする
+1. `/poor-dev.phasereview [フェーズ名]` を使用してフェーズをレビューする
 2. 品質保証・リグレッション・文書化・UXのペルソナからフィードバックを収集する
 3. Definition of Doneを確認する
 
@@ -236,14 +236,14 @@ PoorDevSkillsは poor-dev コマンド群による構造化された開発フロ
 |----------|----------|----------|
 | 仕様 | `/poor-dev.specify` | ユーザー価値、明確な要件 |
 | 計画 | `/poor-dev.plan` | 技術選択、アーキテクチャ |
-| プランレビュー | `/review plan` | 価値、リスク、実現可能性 |
+| プランレビュー | `/poor-dev.planreview` | 価値、リスク、実現可能性 |
 | タスク | `/poor-dev.tasks` | 依存関係、並列化 |
-| タスクレビュー | `/review tasks` | 依存関係、並列化、網羅性 |
-| 設計レビュー | `/review architecture` | SOLID、拡張性、セキュリティ |
+| タスクレビュー | `/poor-dev.tasksreview` | 依存関係、並列化、網羅性 |
+| 設計レビュー | `/poor-dev.architecturereview` | SOLID、拡張性、セキュリティ |
 | 実装 | `/poor-dev.implement` or `/swarm` | 実装の完全性 |
 | 品質ゲート | `/finish` | 型チェック、リンティング、テスト |
-| 品質レビュー | `/review quality` | テスト、コード品質、敵対的レビュー |
-| フェーズ完了 | `/review phase` | DoD、統合、文書 |
+| 品質レビュー | `/poor-dev.qualityreview` | テスト、コード品質、敵対的レビュー |
+| フェーズ完了 | `/poor-dev.phasereview` | DoD、統合、文書 |
 | 検証 | 手動テスト | 全体動作、MVP |
 | デプロイ | デプロイコマンド | 本番環境 |
 

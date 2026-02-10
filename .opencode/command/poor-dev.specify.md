@@ -1,6 +1,6 @@
 ---
 description: Create or update the feature specification from a natural language feature description.
-handoffs: 
+handoffs:
   - label: Build Technical Plan
     agent: poor-dev.plan
     prompt: Create a plan for the spec. I am building with...
@@ -23,19 +23,6 @@ You **MUST** consider the user input before proceeding (if not empty).
 The text the user typed after `/poor-dev.poor-dev` in the triggering message **is** the feature description. Assume you always have it available in this conversation even if `$ARGUMENTS` appears literally below. Do not ask the user to repeat it unless they provided an empty command.
 
 Given that feature description, do this:
-
-0. **Pipeline Branch Inheritance Check** (NEW):
-   - Run `.poor-dev/scripts/bash/check-prerequisites.sh --json --paths-only` to get FEATURE_DIR
-   - Check if `FEATURE_DIR/workflow-state.yaml` exists
-   - If it exists, read it and check if the `intake` step is `completed`:
-     - **Yes (intake completed)** → Branch and directory already created by intake. **Skip Steps 1-2 entirely.**
-       - Get FEATURE_DIR from `workflow-state.yaml`'s `feature.dir` field
-       - Set SPEC_FILE = `$FEATURE_DIR/spec.md`
-       - Jump directly to Step 3 (template loading)
-     - **No (intake not completed or no intake step)** → Continue with Step 1 as normal (standalone mode)
-   - If `workflow-state.yaml` does not exist → Continue with Step 1 as normal (standalone mode)
-
-   **Note**: This ensures `/poor-dev.specify` works both standalone (direct invocation) and as part of the intake pipeline.
 
 1. **Generate a concise short name** (2-4 words) for the branch:
    - Analyze the feature description and extract the most meaningful keywords
@@ -67,27 +54,140 @@ Given that feature description, do this:
       - Find the highest number N
       - Use N+1 for the new branch number
 
-   d. Run the script `.poor-dev/scripts/bash/create-new-feature.sh --json "$ARGUMENTS"` with the calculated number and short-name:
-      - Pass `--number N+1` and `--short-name "your-short-name"` along with the feature description
-      - Bash example: `.poor-dev/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" --json --number 5 --short-name "user-auth" "Add user authentication"`
-      - PowerShell example: `.poor-dev/scripts/bash/create-new-feature.sh --json "$ARGUMENTS" -Json -Number 5 -ShortName "user-auth" "Add user authentication"`
-
-   e. **Initialize pipeline state** (after branch creation succeeds):
+   d. Create the feature branch and specs directory:
       ```bash
-      .poor-dev/scripts/bash/pipeline-state.sh init "$FEATURE_DIR"
+      git checkout -b NNN-short-name
+      mkdir -p specs/NNN-short-name
       ```
-      This creates `FEATURE_DIR/workflow-state.yaml` for pipeline tracking. If this fails, warn but continue (pipeline is optional).
+      Where NNN is the next available number determined in step 2c.
 
    **IMPORTANT**:
    - Check all three sources (remote branches, local branches, specs directories) to find the highest number
    - Only match branches/directories with the exact short-name pattern
    - If no existing branches/directories found with this short-name, start with number 1
-   - You must only ever run this script once per feature
-   - The JSON is provided in the terminal as output - always refer to it to get the actual content you're looking for
-   - The JSON output will contain BRANCH_NAME and SPEC_FILE paths
+   - Set FEATURE_DIR to `specs/NNN-short-name`
+   - Set SPEC_FILE to `FEATURE_DIR/spec.md`
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot")
 
-3. Load `.poor-dev/templates/spec-template.md` to understand required sections.
+3. Use the following spec template to understand required sections:
+
+   ```markdown
+   # Feature Specification: [FEATURE NAME]
+
+   **Feature Branch**: `[###-feature-name]`
+   **Created**: [DATE]
+   **Status**: Draft
+   **Input**: User description: "$ARGUMENTS"
+
+   ## User Scenarios & Testing *(mandatory)*
+
+   <!--
+     IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
+     Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
+     you should still have a viable MVP (Minimum Viable Product) that delivers value.
+
+     Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
+     Think of each story as a standalone slice of functionality that can be:
+     - Developed independently
+     - Tested independently
+     - Deployed independently
+     - Demonstrated to users independently
+   -->
+
+   ### User Story 1 - [Brief Title] (Priority: P1)
+
+   [Describe this user journey in plain language]
+
+   **Why this priority**: [Explain the value and why it has this priority level]
+
+   **Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
+
+   **Acceptance Scenarios**:
+
+   1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+   2. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+   ---
+
+   ### User Story 2 - [Brief Title] (Priority: P2)
+
+   [Describe this user journey in plain language]
+
+   **Why this priority**: [Explain the value and why it has this priority level]
+
+   **Independent Test**: [Describe how this can be tested independently]
+
+   **Acceptance Scenarios**:
+
+   1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+   ---
+
+   ### User Story 3 - [Brief Title] (Priority: P3)
+
+   [Describe this user journey in plain language]
+
+   **Why this priority**: [Explain the value and why it has this priority level]
+
+   **Independent Test**: [Describe how this can be tested independently]
+
+   **Acceptance Scenarios**:
+
+   1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+   ---
+
+   [Add more user stories as needed, each with an assigned priority]
+
+   ### Edge Cases
+
+   <!--
+     ACTION REQUIRED: The content in this section represents placeholders.
+     Fill them out with the right edge cases.
+   -->
+
+   - What happens when [boundary condition]?
+   - How does system handle [error scenario]?
+
+   ## Requirements *(mandatory)*
+
+   <!--
+     ACTION REQUIRED: The content in this section represents placeholders.
+     Fill them out with the right functional requirements.
+   -->
+
+   ### Functional Requirements
+
+   - **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
+   - **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
+   - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
+   - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
+   - **FR-005**: System MUST [behavior, e.g., "log all security events"]
+
+   *Example of marking unclear requirements:*
+
+   - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
+   - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+
+   ### Key Entities *(include if feature involves data)*
+
+   - **[Entity 1]**: [What it represents, key attributes without implementation]
+   - **[Entity 2]**: [What it represents, relationships to other entities]
+
+   ## Success Criteria *(mandatory)*
+
+   <!--
+     ACTION REQUIRED: Define measurable success criteria.
+     These must be technology-agnostic and measurable.
+   -->
+
+   ### Measurable Outcomes
+
+   - **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
+   - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
+   - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
+   - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+   ```
 
 4. Follow this execution flow:
 
@@ -123,20 +223,20 @@ Given that feature description, do this:
 
       ```markdown
       # Specification Quality Checklist: [FEATURE NAME]
-      
+
       **Purpose**: Validate specification completeness and quality before proceeding to planning
       **Created**: [DATE]
       **Feature**: [Link to spec.md]
-      
+
       ## Content Quality
-      
+
       - [ ] No implementation details (languages, frameworks, APIs)
       - [ ] Focused on user value and business needs
       - [ ] Written for non-technical stakeholders
       - [ ] All mandatory sections completed
-      
+
       ## Requirement Completeness
-      
+
       - [ ] No [NEEDS CLARIFICATION] markers remain
       - [ ] Requirements are testable and unambiguous
       - [ ] Success criteria are measurable
@@ -145,16 +245,16 @@ Given that feature description, do this:
       - [ ] Edge cases are identified
       - [ ] Scope is clearly bounded
       - [ ] Dependencies and assumptions identified
-      
+
       ## Feature Readiness
-      
+
       - [ ] All functional requirements have clear acceptance criteria
       - [ ] User scenarios cover primary flows
       - [ ] Feature meets measurable outcomes defined in Success Criteria
       - [ ] No implementation details leak into specification
-      
+
       ## Notes
-      
+
       - Items marked incomplete require spec updates before `/poor-dev.clarify` or `/poor-dev.plan`
       ```
 
@@ -179,20 +279,20 @@ Given that feature description, do this:
 
            ```markdown
            ## Question [N]: [Topic]
-           
+
            **Context**: [Quote relevant spec section]
-           
+
            **What we need to know**: [Specific question from NEEDS CLARIFICATION marker]
-           
+
            **Suggested Answers**:
-           
+
            | Option | Answer | Implications |
            |--------|--------|--------------|
            | A      | [First suggested answer] | [What this means for the feature] |
            | B      | [Second suggested answer] | [What this means for the feature] |
            | C      | [Third suggested answer] | [What this means for the feature] |
            | Custom | Provide your own answer | [Explain how to provide custom input] |
-           
+
            **Your choice**: _[Wait for user response]_
            ```
 
@@ -210,8 +310,6 @@ Given that feature description, do this:
    d. **Update Checklist**: After each validation iteration, update the checklist file with current pass/fail status
 
 7. Report completion with branch name, spec file path, checklist results, and readiness for the next phase (`/poor-dev.clarify` or `/poor-dev.plan`).
-
-**NOTE:** The script creates and checks out the new branch and initializes the spec file before writing.
 
 ## General Guidelines
 
@@ -275,52 +373,3 @@ Success criteria must be:
 - "Database can handle 1000 TPS" (implementation detail, use user-facing metric)
 - "React components render efficiently" (framework-specific)
 - "Redis cache hit rate above 80%" (technology-specific)
-
-## Pipeline Continuation
-
-**This section executes ONLY after all skill work is complete (step 7 reporting done).**
-
-1. **Check for pipeline state**: Look for `FEATURE_DIR/workflow-state.yaml`:
-   - **Not found** → Standalone mode. Report completion as normal (existing behavior). Skip remaining steps.
-   - **Found** → Pipeline mode. Continue below.
-
-2. **Clarify condition check**: Scan the spec.md for `[NEEDS CLARIFICATION` markers:
-   - **Markers present** → Leave `clarify` step as `pending` (next will route to clarify).
-   - **No markers** → Skip clarify:
-     ```bash
-     .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" clarify skipped
-     ```
-
-3. **Preemptive summary** (3-5 lines): Compose a summary including:
-   - Generated artifacts (spec.md path, checklist path)
-   - Key decisions and assumptions made
-   - Number of clarification markers (if any)
-
-4. **Update state**:
-   ```bash
-   .poor-dev/scripts/bash/pipeline-state.sh update "$FEATURE_DIR" specify completed --summary "<summary>"
-   ```
-
-5. **Get next step**:
-   ```bash
-   NEXT=$(.poor-dev/scripts/bash/pipeline-state.sh next "$FEATURE_DIR")
-   ```
-
-6. **Transition based on mode** (read `pipeline.mode` and `pipeline.confirm` from state):
-
-   **auto + confirm=true (default)**:
-   - **Claude Code**: Use `AskUserQuestion` tool with:
-     - question: "Pipeline: specify completed. Next is /poor-dev.$NEXT"
-     - options: "Continue" / "Skip" / "Pause"
-   - **OpenCode**: Use `question` tool with same content.
-   - On "Continue" → invoke `/poor-dev.$NEXT`
-   - On "Skip" → update that step to `skipped`, get next, ask again
-   - On "Pause" → set mode to `paused`, report how to resume
-
-   **auto + confirm=false**: Immediately invoke `/poor-dev.$NEXT`
-
-   **manual / paused**: Report completion + suggest: "Next: `/poor-dev.$NEXT`. Run `/poor-dev.pipeline resume` to continue."
-
-7. **Error fallback**:
-   - If question tool fails → report as text: "Next: `/poor-dev.$NEXT`. Use `/poor-dev.pipeline resume` to continue."
-   - If state update fails → warn but do not affect main skill output

@@ -63,7 +63,7 @@ Loop STEP 1-4 until convergence. Convergence conditions:
 - 0 new C/H issues for 2 consecutive iterations (M/L accepted as advisory), OR
 - All 4 personas vote GO, OR
 - Total C + H == 0.
-Safety: confirm with user after 5 iterations.
+Safety: confirm with user after 10 iterations.
 Note: adversarial judgments and 3-strike rule remain independent of convergence — see STEP 3.
 
 **STEP 1**: Spawn 4 NEW parallel sub-agents (never reuse — prevents context contamination).
@@ -117,7 +117,7 @@ These markers MUST be output in all execution modes (interactive and Non-Interac
   - 0 new C/H for last 2 iterations AND adversarial APPROVED/HALLUCINATING → DONE (M/L as advisory).
   - All 4 personas GO AND adversarial APPROVED/HALLUCINATING → DONE.
   - C + H == 0 AND adversarial APPROVED/HALLUCINATING → DONE.
-  - iteration >= 5 → CONFIRM with user.
+  - iteration >= 10 → CONFIRM with user.
   - ELSE → STEP 4.
 
 **STEP 4**: Fix with constraints.

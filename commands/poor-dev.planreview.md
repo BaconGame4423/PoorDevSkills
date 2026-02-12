@@ -42,7 +42,7 @@ Loop STEP 1-4 until convergence. Convergence conditions:
 - 0 new C/H issues for 2 consecutive iterations (M/L accepted as advisory), OR
 - All 4 personas vote GO, OR
 - Total C + H == 0.
-Safety: confirm with user after 5 iterations.
+Safety: confirm with user after 10 iterations.
 
 **STEP 1**: Spawn 4 NEW parallel sub-agents (never reuse — prevents context contamination).
   Personas: `planreview-pm`, `planreview-risk`, `planreview-value`, `planreview-critical`.
@@ -91,7 +91,7 @@ This marker MUST be output in all execution modes (interactive and Non-Interacti
   - 0 new C/H for last 2 iterations → DONE (M/L as advisory).
   - All 4 personas GO → DONE.
   - C + H == 0 → DONE.
-  - iteration >= 5 → CONFIRM with user.
+  - iteration >= 10 → CONFIRM with user.
   - ELSE → STEP 4.
 
 **STEP 4**: Fix with constraints.

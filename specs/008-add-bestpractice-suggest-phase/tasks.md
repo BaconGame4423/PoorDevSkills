@@ -39,11 +39,14 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [ ] T004 Create .poor-dev directory structure for configuration and caching
 - [ ] T005 Verify jq installation on development environment (run `jq --version` and verify output)
 - [ ] T006 Verify GLM4.7 model access and availability (run `gh model list` and verify zai-coding-plan/glm-4.7 is available)
-- [ ] T007 Test GitHub API connectivity (https://api.github.com/rate_limit)
-- [ ] T008 Test OSV API connectivity (https://api.osv.dev/v1/query)
-- [ ] T009 Test npm registry connectivity (https://registry.npmjs.org/express)
+- [ ] T007 Test GitHub API connectivity (https://api.github.com/rate_limit) (success: API returns 200 OK)
+- [ ] T008 Test OSV API connectivity (https://api.osv.dev/v1/query) (success: API returns 200 OK)
+- [ ] T009 Test npm registry connectivity (https://registry.npmjs.org/express) (success: API returns 200 OK)
 - [ ] T010 Check GITHUB_TOKEN environment variable for increased rate limit
 - [ ] T011 Create dependency verification script in scripts/verify-dependencies.sh (check jq version, GLM4.7 access, API connectivity, GITHUB_TOKEN, exit with status 0 on success)
+- [ ] T101 Implement cache path detection in lib/cache-initializer.mjs (.poor-dev/cache/exploration-cache.yaml)
+- [ ] T102 Implement pre-seeded data structure in lib/cache-initializer.mjs (categories: authentication, database, api, logging, testing)
+- [ ] T103 Implement cache initialization in lib/cache-initializer.mjs (create cache if not exists)
 - [ ] T054 Test WebFetch tool availability in GLM4.7 sub-agent mode (verify WebFetch is accessible when dispatching GLM4.7 tasks)
 
 ---
@@ -274,9 +277,6 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 10 Tasks
 
-- [ ] T101 Implement cache path detection in lib/cache-initializer.mjs (.poor-dev/cache/exploration-cache.yaml)
-- [ ] T102 Implement pre-seeded data structure in lib/cache-initializer.mjs (categories: authentication, database, api, logging, testing)
-- [ ] T103 Implement cache initialization in lib/cache-initializer.mjs (create cache if not exists)
 - [ ] T104 Implement cache last_updated tracking in lib/cache-initializer.mjs
 - [ ] T105 Implement cache freshness check in lib/cache-validator.mjs (check if cache is >= 1 month old)
 - [ ] T106 Implement cache validation in lib/cache-validator.mjs (validate all libraries via GitHub/OSV APIs)
@@ -510,7 +510,7 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 4 (US2: Exploration) → Ph
 **Parallel Opportunities Identified**: 2 phases with parallelizable tasks
 **Suggested MVP Scope**: Phase 1-7 (Days 1-7) + Phase 8-9 (Day 7)
 **Independent Test Criteria**: Defined for each user story
-**Go/No-Go Criteria**: All dependencies verified before Day 1 (Phase 1)
+**Go/No-Go Criteria**: scripts/verify-dependencies.sh exits with code 0 on Day 0
 
 ---
 

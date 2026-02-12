@@ -1,0 +1,290 @@
+type: tasksreview
+target: specs/008-add-bestpractice-suggest-phase/tasks.md
+iterations:
+  - iteration: 1
+    timestamp: "2026-02-12T17:00:00Z"
+    target_lines: 533
+    total_issues: 35
+    fixed_in_iteration: 11
+    rejected: 23
+    remaining: 0
+    by_severity:
+      C: 11 fixed, 11 rejected
+      H: 0 fixed, 12 rejected
+      M: 0
+      L: 0
+    delta_lines: +3 (530 → 533, 100.6% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: All
+        description: "Task count inconsistency - Overview shows 67 but actual is 145"
+        fix: "Updated Total Tasks from 67 to 145 to match actual task count"
+
+      - id: TR-003
+        severity: C
+        persona: SENIOR
+        description: "Phase 2 task dependencies contradict parallel claims"
+        fix: "Added [P] parallelizable markers to Phase 2 tasks T017-T027"
+
+      - id: TR-008
+        severity: C
+        persona: SENIOR
+        description: "API integration tasks missing implementation guidance"
+        fix: "Enhanced T055 and T060 with REST API integration patterns (GitHub API endpoints, OSV API endpoints)"
+
+      - id: TR-009
+        severity: C
+        persona: SENIOR
+        description: "GLM4.7 dispatch implementation undefined"
+        fix: "Clarified T048 GLM4.7 dispatch mechanism by adding 'use Bash tool with gh CLI' specification"
+
+      - id: TR-011
+        severity: C
+        persona: SENIOR
+        description: "Suggestion display format undefined"
+        fix: "Enhanced T034 and T035 with specific visualization details (colored badges/progress bars)"
+
+      - id: TR-019
+        severity: C
+        persona: TECHLEAD
+        description: "FR-010 not explicitly linked to fallback tasks"
+        fix: "Added FR-010 reference to Phase 7 goal to explicitly link fallback requirement"
+
+      - id: TR-020
+        severity: C
+        persona: JUNIOR
+        description: "MVP acceptance criteria has pre-checked [x] boxes"
+        fix: "Changed MVP acceptance criteria from pre-checked [x] to unchecked [ ]"
+
+      - id: TR-021
+        severity: C
+        persona: JUNIOR
+        description: "Format validation has pre-filled ✅ marks"
+        fix: "Changed Format Validation from pre-filled ✅ to unchecked [ ]"
+
+      - id: TR-022
+        severity: C
+        persona: JUNIOR
+        description: "US4 is P2 but not differentiated"
+        fix: "Updated Phase 6 header from 'User Story 4 (P1)' to 'User Story 4 (P2)'"
+
+      - id: TR-031
+        severity: H
+        persona: SENIOR
+        description: "Polling interval configuration undefined"
+        fix: "Added default values to T051 polling interval (30s default, idle_timeout: 300s, max_timeout: 900s)"
+
+      - id: TR-015
+        severity: C
+        persona: DEVOPS
+        description: "No monitoring infrastructure tasks"
+        fix: "Added CI/CD pipeline, deployment procedures, and monitoring infrastructure to Post-MVP deferrals section"
+
+  - iteration: 2
+    timestamp: "2026-02-12T18:00:00Z"
+    target_lines: 520
+    total_issues: 14
+    fixed_in_iteration: 6
+    rejected: 8
+    remaining: 0
+    by_severity:
+      C: 6 fixed, 1 rejected
+      H: 0 fixed, 7 rejected
+      M: 0
+      L: 0
+    delta_lines: -13 (533 → 520, 98.1% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 3 parallelizable claim incorrect - T028-T039 all modify same file"
+        fix: "Removed incorrect parallelizable claim for Phase 3 (T028-T039 all modify commands/poor-dev.suggest.md)"
+
+      - id: TR-002
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 4 parallelizable claim incorrect - T040-T054 modify same files"
+        fix: "Removed incorrect parallelizable claim for Phase 4 (T040-T054 modify same files)"
+
+      - id: TR-003
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 5 parallelizable claim incorrect - T055-T070 modify same files"
+        fix: "Removed incorrect parallelizable claim for Phase 5 (T055-T070 modify same files)"
+
+      - id: TR-004
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 6 parallelizable claim incorrect - duplicate of Phase 3"
+        fix: "Removed duplicate incorrect parallelizable claim for Phase 3"
+
+      - id: TR-005
+        severity: C
+        persona: TECHLEAD
+        description: "Phase 10 parallelizable claim incorrect - T101-T111 modify same files"
+        fix: "Removed incorrect parallelizable claim for Phase 10 (T101-T111 modify same files)"
+
+      - id: TR-006
+        severity: C
+        persona: SENIOR
+        description: "T116 misalignment - documents WSL setup but belongs in Phase 13"
+        fix: "Removed T116 from Phase 11 as duplicate of T138"
+
+  - iteration: 3
+    timestamp: "2026-02-12T19:00:00Z"
+    target_lines: 522
+    total_issues: 10
+    fixed_in_iteration: 10
+    rejected: 0
+    remaining: 0
+    by_severity:
+      C: 9 fixed, 0 rejected
+      H: 1 fixed, 0 rejected
+      M: 0
+      L: 0
+    delta_lines: +2 (520 → 522, 100.4% of original, within 120% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: All
+        description: "Task count inconsistency - Overview says 144 but breakdown shows 145 and Format Validation says T001-T145"
+        fix: "Updated Total Tasks to 145 in Overview and Summary to match actual task count with deploy documentation added"
+
+      - id: TR-002
+        severity: C
+        persona: All
+        description: "Missing task T116 - gap between T115 and T117 needs renumbering"
+        fix: "Renumbered tasks T117-T145 to T116-T144, then added T145 for deploy documentation"
+
+      - id: TR-003
+        severity: C
+        persona: TECHLEAD
+        description: "Critical path missing Phase 1 (Setup) at line ~387"
+        fix: "Added Phase 1 (Setup) to User Story Completion Order and Dependencies section"
+
+      - id: TR-004
+        severity: C
+        persona: DEVOPS
+        description: "Deploy process not defined - need basic deploy documentation for MVP"
+        fix: "Added T145 to create basic deploy documentation with manual deployment steps"
+
+      - id: TR-005
+        severity: C
+        persona: DEVOPS
+        description: "SC-005 performance monitoring deferred - add structured logging with duration tracking to T139"
+        fix: "Added 'with duration tracking' to T138 structured logging task for performance monitoring"
+
+      - id: TR-006
+        severity: C
+        persona: SENIOR
+        description: "T005-T011 dependency verification tasks lack implementation guidance"
+        fix: "Enhanced T005 with 'jq --version' check, T006 with 'gh model list' verification, T011 with script exit status logic"
+
+      - id: TR-007
+        severity: C
+        persona: SENIOR
+        description: "T117-T132 test suite tasks lack file paths"
+        fix: "Already resolved - all test suite tasks T116-T129 have explicit file paths"
+
+      - id: TR-008
+        severity: C
+        persona: SENIOR
+        description: "T112-T115 Windows verification tasks lack success criteria"
+        fix: "Added success criteria in parentheses to all WSL 2 Ubuntu verification tasks (T112-T115)"
+
+      - id: TR-009
+        severity: C
+        persona: SENIOR
+        description: "T030-T039 suggestion phase tasks lack success criteria"
+        fix: "Added success criteria in parentheses to all Phase 3 suggestion phase tasks (T028-T039)"
+
+      - id: TR-010
+        severity: H
+        persona: JUNIOR
+        description: "T133 comment expectation unclear"
+        fix: "Clarified T132 to specify 'Add inline comments to complex code sections only' with explicit guideline references"
+
+  - iteration: 4
+    timestamp: "2026-02-12T20:00:00Z"
+    target_lines: 522
+    total_issues: 17
+    fixed_in_iteration: 1
+    rejected: 16
+    remaining: 0
+    by_severity:
+      C: 1 fixed, 14 rejected
+      H: 0 fixed, 1 rejected
+      M: 0 fixed, 1 rejected
+      L: 0
+    delta_lines: 0 (522 → 522, 98.5% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: TECHLEAD
+        description: "Parallel execution contradiction - T017-T020 have [P] but same file"
+        fix: "Removed [P] markers from T017-T020 because they all reference the same file lib/suggestion-validator.mjs"
+
+  - iteration: 5
+    timestamp: "2026-02-12T21:00:00Z"
+    target_lines: 522
+    total_issues: 8
+    fixed_in_iteration: 4
+    rejected: 4
+    remaining: 0
+    by_severity:
+      C: 4 fixed, 3 rejected
+      H: 0 fixed, 1 rejected
+      M: 0
+      L: 0
+    delta_lines: -1 (522 → 521, 98.3% of original, within 150% limit)
+    fixes_applied:
+      - id: TR-002
+        severity: C
+        persona: TECHLEAD
+        description: "T026, T027 have incorrect [P] markers - same file"
+        fix: "Removed [P] markers from T026, T027 - both reference same file lib/suggestion-parser.mjs"
+
+      - id: TR-003
+        severity: C
+        persona: TECHLEAD
+        description: "T054 WebFetch verification should be in Phase 1, not Phase 4"
+        fix: "Moved T054 from Phase 4 to Phase 1 - WebFetch verification is a dependency check that belongs in setup phase"
+
+      - id: TR-007
+        severity: C
+        persona: SENIOR
+        description: "Line 376 dependency circular reference"
+        fix: "Fixed circular reference on line 376 - removed 'Phase 6 (suggestions generated)' dependency which made US4 depend on itself"
+
+      - id: TR-008
+        severity: H
+        persona: SENIOR
+        description: "Phase 11 success criteria format inconsistent"
+        fix: "Refined Phase 11 success criteria to be less redundant with goal - removed explicit WSL 2 Ubuntu mentions"
+
+  - iteration: 6
+    timestamp: "2026-02-12T22:00:00Z"
+    target_lines: 522
+    total_issues: 2
+    fixed_in_iteration: 2
+    rejected: 0
+    remaining: 0
+    by_severity:
+      C: 2 fixed, 0 rejected
+      H: 0 fixed, 0 rejected
+      M: 0
+      L: 0
+    delta_lines: +1 (521 → 522, 98.5% of original, within 120% limit)
+    fixes_applied:
+      - id: TR-001
+        severity: C
+        persona: All
+        description: "T021, T022 both modify lib/backup-manager.mjs but have [P] markers"
+        fix: "Removed [P] markers from T021 and T022 - both reference same file lib/backup-manager.mjs, cannot be parallelized"
+
+      - id: TR-002
+        severity: C
+        persona: All
+        description: "T025 has incorrect [P] marker - same file as T026/T027 which don't have [P]"
+        fix: "Removed [P] marker from T025 - it references lib/suggestion-parser.mjs same as T026/T027, cannot be parallelized"

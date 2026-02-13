@@ -62,7 +62,7 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [X] T012 [P] Create suggestion parser utility in lib/suggestion-parser.mjs with YAML parsing and validation
 - [X] T013 [P] Create suggestion validator utility in lib/suggestion-validator.mjs with maintainability/security scoring
 - [X] T014 [P] Create backup manager utility in lib/backup-manager.mjs with automatic backup on write
-- [ ] T015 Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
+- [X] T015 Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
 - [X] T016 Create cache validator utility in lib/cache-validator.mjs with monthly validation
 - [X] T017 Define maintainability scoring algorithm in lib/suggestion-validator.mjs (commit recency, issue resolution, contributor activity, documentation quality)
 - [X] T018 Define security scoring algorithm in lib/suggestion-validator.mjs (CVEs, audit status, dependency health, code quality)
@@ -70,7 +70,7 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [X] T020 Implement warning marker logic in lib/suggestion-validator.mjs ([RISK] for mixed signals, [CAUTION] for borderline scores)
 - [X] T021 Implement backup creation function in lib/backup-manager.mjs with timestamp-based backup files
 - [X] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
-- [ ] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
+- [X] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)
 - [X] T024 Implement cache validation in lib/cache-validator.mjs (GitHub API, OSV API checks for last commit and CVEs)
 - [X] T025 Implement YAML schema validation in lib/suggestion-parser.mjs for ExplorationSession, Suggestion, SuggestionDecision entities
 - [X] T026 Create exploration session state manager in lib/suggestion-parser.mjs with state transition validation

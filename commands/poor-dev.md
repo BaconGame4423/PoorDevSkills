@@ -275,6 +275,7 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    **ポーリングループ** (FALLBACK_MODE 以外):
    ```
    ELAPSED = 0, IDLE = 0, LAST_SIZE = 0, DISPLAYED_PROGRESS = 0
+   OUTPUT_STARTED = false
 
    while true:
      (1) TaskOutput(task_id, block=false, timeout=1000)
@@ -282,6 +283,7 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
      (2) Read(output_file) で現在の出力サイズを確認
          → CURRENT_SIZE > LAST_SIZE の場合:
+            OUTPUT_STARTED = true
             IDLE = 0 (リセット — 出力が増加中)
             LAST_SIZE = CURRENT_SIZE
 
@@ -296,7 +298,9 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
          → CURRENT_SIZE == LAST_SIZE の場合:
             IDLE += POLL_INTERVAL
 
-     (3) IDLE >= IDLE_TIMEOUT → TaskStop(task_id)、タイムアウト扱い
+     (3) IF OUTPUT_STARTED AND IDLE >= IDLE_TIMEOUT → TaskStop(task_id)、タイムアウト扱い
+         # 出力が一度も始まっていない場合は IDLE_TIMEOUT を適用しない
+         # MAX_TIMEOUT のみが安全停止の上限として機能する
      (4) ELAPSED >= MAX_TIMEOUT → TaskStop(task_id)、安全停止
      (5) ELAPSED += POLL_INTERVAL、次のサイクルへ
    ```
@@ -309,6 +313,12 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    - タイムアウト値の事前予想が不要
 
 6b. **Rate limit detection** (dispatch が失敗した場合のみ。正常完了時はスキップ):
+
+   ⚠ **絶対禁止**: プロセス実行中に opencode ログを手動チェックして
+   レートリミットを判断してはならない。opencode は内部で指数バックオフ
+   リトライを行う。ログの "Usage limit" エラーはリトライ中の一時的な
+   記録であり、最終的な失敗を意味しない。
+   Rate limit detection はプロセスが completed/failed になった後のみ実行する。
 
    (1) ログからレートリミットを検出:
        ```bash

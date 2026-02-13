@@ -110,37 +110,24 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 
    ```markdown
    # Bug Report: [BUG SHORT NAME]
-
-   **Branch**: `[###-fix-bug-name]`
-   **Created**: [DATE]
-   **Status**: Investigating
+   **Branch**: `[###-fix-bug-name]` | **Created**: [DATE] | **Status**: Investigating
    **Input**: "$ARGUMENTS"
 
    ## Description
    [summary]
 
-   ## Expected Behavior
-   [expected]
-
-   ## Actual Behavior
-   [actual, with error messages if available]
+   ## Expected vs Actual
+   - Expected: [expected]
+   - Actual: [actual, with error messages if available]
 
    ## Steps to Reproduce
    1. [Step 1]
 
-   ## Frequency
-   [always / intermittent / specific conditions]
-
-   ## Environment
-   - **OS**: [e.g., Ubuntu 22.04]
-   - **Language/Runtime**: [e.g., Node.js 20.x]
-   - **Key Dependencies**: [e.g., React 18.2]
-
-   ## Since When
-   [onset timing, relation to recent changes]
-
-   ## Reproduction Results
-   **Status**: [Not Attempted / Reproduced / Could Not Reproduce]
+   ## Context
+   - Frequency: [always / intermittent / specific conditions]
+   - Environment: [OS, Language/Runtime, Key Dependencies]
+   - Since When: [onset timing]
+   - Reproduction: [Not Attempted / Reproduced / Could Not Reproduce]
    ```
 
    Fill what can be extracted from `$ARGUMENTS`. Leave unknowns as placeholders.
@@ -278,6 +265,16 @@ If not found → start from beginning.
 
 #### 5.3 Step Dispatch Loop
 
+**Pre-dispatch artifact check** (defense-in-depth):
+
+| Phase | Required artifacts in FEATURE_DIR |
+|-------|----------------------------------|
+| plan | spec.md |
+| tasks | plan.md, spec.md |
+| implement | spec.md, tasks.md |
+
+If required artifact is missing → `[ERROR: Missing ${artifact} for ${STEP}. Run preceding step first.]` → stop pipeline.
+
 For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
 - If STEP == "specify": → Section A2 (Specify Step Read-Only Override) を実行
@@ -363,46 +360,19 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
 6b. **Rate limit detection** (JSON サマリーの exit_code != 0 の場合のみ。正常完了時はスキップ):
 
-   ⚠ **絶対禁止**: プロセス実行中に opencode ログを手動チェックして
-   レートリミットを判断してはならない。opencode は内部で指数バックオフ
-   リトライを行う。ログの "Usage limit" エラーはリトライ中の一時的な
-   記録であり、最終的な失敗を意味しない。
-   Rate limit detection はプロセスが completed/failed になった後のみ実行する。
+   ⚠ **絶対禁止**: プロセス実行中に opencode ログを手動チェックしてレートリミットを判断してはならない。detection はプロセス completed/failed 後のみ。
 
-   (1) ログからレートリミットを検出:
+   (1) ログ検出:
        ```bash
        LATEST_LOG=$(ls -t ${OPENCODE_LOG_DIR}/*.log 2>/dev/null | head -1)
        RATE_LIMIT_COUNT=$(grep -c "Rate limit" "$LATEST_LOG" 2>/dev/null || echo 0)
        ```
 
-   (2) 判定フロー:
-
-       ```
-       dispatch 失敗
-            │
-            ├─ RATE_LIMIT_COUNT == 0
-            │   → 通常エラー。step 7 に進む（[ERROR: dispatch failed]）
-            │
-            └─ RATE_LIMIT_COUNT > 0 (レートリミット確認)
-                 │
-                 ├─ FALLBACK_MODEL が存在 かつ RESOLVED_MODEL != FALLBACK_MODEL
-                 │   → Report: "⚠ レートリミット検出 (${RESOLVED_MODEL})。${FALLBACK_MODEL} で再試行します。"
-                 │   → RESOLVED_MODEL = FALLBACK_MODEL
-                 │   → step 6 を再実行（同じポーリングループ付き）
-                 │   → 再実行結果:
-                 │        ├─ 正常完了 → step 7 に進む
-                 │        ├─ Rate limit 再検出 → パイプライン中断 (下記)
-                 │        └─ Rate limit なし → 通常エラー。step 7 に進む
-                 │
-                 └─ FALLBACK_MODEL なし、または fallback でもレートリミット
-                      → pipeline-state.json 更新:
-                        status: "rate-limited"
-                        pauseReason: "Rate limit: ${RESOLVED_MODEL}"
-                      → Report: "⏸ レートリミット検出: パイプラインを中断しました。`/poor-dev` で再開できます。"
-                      → Exit pipeline
-       ```
-
-   NOTE: opencode が内部リトライで成功した場合は介入不要。
+   (2) 判定:
+   - `RATE_LIMIT_COUNT == 0` → 通常エラー。step 7 に進む
+   - `RATE_LIMIT_COUNT > 0` かつ FALLBACK_MODEL あり → FALLBACK_MODEL で step 6 再実行
+     - 再実行成功 → step 7、再度 rate limit → パイプライン中断、rate limit なし → 通常エラー
+   - `RATE_LIMIT_COUNT > 0` かつ FALLBACK なし/fallback も rate limit → `status: "rate-limited"` でパイプライン中断
 7. **Output parsing** (JSON サマリーベース):
    - JSON.clarifications が非空:
      - INTERACTIVE_MODE = true → AskUserQuestion でリレー → 回答追加して再 dispatch
@@ -438,20 +408,12 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
 ##### A2. Specify Step (Read-Only Override)
 
-specify は他の Production Steps と異なり、読み取り専用で実行し、orchestrator が承認フロー後にファイルを作成する。
-
-1. **Read command**: Section A Step 1 と同じ
-2. **Strip sections**: Section A Step 2 と同じ
-3. **Prepend**: NON_INTERACTIVE_HEADER + READONLY_HEADER (see 5.4b)
-4. **Append context block**: Section A Step 4 と同じ
-5. **Resolve model**: Section A Step 5 と同じ
-6. **Dispatch** (読み取り専用 + アイドルベース適応ポーリング):
-   Section A step 6 と同じポーリング方式（進捗マーカー抽出 (2b) を含む）で dispatch。CLI ごとの差異:
-   - opencode: `opencode run --model ${RESOLVED_MODEL} --format json "$(cat /tmp/poor-dev-step.txt)"`
-   - claude: `cat /tmp/poor-dev-step.txt | claude -p --model ${RESOLVED_MODEL} --no-session-persistence --output-format text --disallowedTools "Edit,Write,Bash,NotebookEdit"`
-   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=<assembled prompt>)` (ポーリングループなし)
-
-   Note: `--disallowedTools` は `claude` CLI 時のみ適用。opencode 使用時は READONLY_HEADER のプロンプト制約で読み取り専用を担保。
+Section A steps 1-5 に従う。以下の差分を適用:
+- **Step 3**: NON_INTERACTIVE_HEADER に加え READONLY_HEADER (5.4b) も prepend
+- **Step 6 dispatch**: Section A step 6 と同じポーリング方式。CLI ごとの差異:
+   - opencode: 同じコマンド（READONLY_HEADER のプロンプト制約で読み取り専用を担保）
+   - claude: `--disallowedTools "Edit,Write,Bash,NotebookEdit"` を追加
+   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)` (ポーリングなし)
 7. **Output parse**:
    a. 1行目から `[BRANCH: ...]` マーカーを抽出 → SUGGESTED_BRANCH
    b. 残り全体をドラフト本文として保持
@@ -626,71 +588,11 @@ INTERACTIVE_MODE = false の場合に、確認が必要な箇所でパイプラ�
 
 #### 5.5 Error Recovery
 
-- **Step failure**: Pipeline stops immediately. All previously-produced artifacts are preserved in FEATURE_DIR.
-- **Resume**: Re-run `/poor-dev` → pipeline-state.json detected → resume from failed step.
-- **Manual override**: User can always run individual commands (`/poor-dev.plan`, `/poor-dev.specify`, etc.) directly, then re-run `/poor-dev` to resume the pipeline.
-- **Clarify skip**: clarify is intentionally excluded from the pipeline. specify already includes up to 3 clarification questions (Step 5 in specify). If more clarification is needed, user stops at the after-specify gate and runs `/poor-dev.clarify` manually.
-- **Conditional pause** (discovery-rebuild CONTINUE): Not an error. Pipeline is saved with `status: "paused"`. Re-running `/poor-dev` triggers Step 5.2 Case 2 resume options.
-- **Variant preservation**: Once a conditional step resolves a variant (e.g., bugfix-small), the variant is saved in pipeline-state.json. On resume, the resolved variant's continuation pipeline is used — the conditional step is NOT re-executed.
-- **Spec rejection**: specify の承認フローで棄却された場合、spec-draft.md が FEATURE_DIR に残る。
-  ユーザーが手動で `/poor-dev.specify` を実行して spec.md を作成後、`/poor-dev` で resume 可能。
-  resume 時は specify を completed として扱い、plan ステップから再開する。
-- **Rate limit**: dispatch 失敗時に opencode ログで "Rate limit" が確認された場合、
-  fallback_model が設定されていれば自動的にフォールバックモデルで再試行する。
-  フォールバックでもレートリミットの場合は `status: "rate-limited"` でパイプラインを中断。
-  再度 `/poor-dev` を実行すると中断ステップから再開可能。
-  opencode のログディレクトリ: `~/.local/share/opencode/log/`
-- **Idle timeout**: ポーリングで IDLE_TIMEOUT 秒間出力が増加しなかった場合、プロセスをキルしてタイムアウト扱い。
-  pipeline-state.json に `status: "error"`, `pauseReason: "idle timeout at ${STEP}"` を記録。
-
-### Dashboard Update
-
-Update living documents in `docs/`:
-
-1. `mkdir -p docs`
-2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
-   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
-   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
-3. Determine each feature's phase from latest artifact:
-   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
-4. Write `docs/progress.md`:
-   - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
-5. Write `docs/roadmap.md`:
-   - Header with timestamp
-   - Active features table (feature, phase, status, branch)
-   - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)
-
-### CLI Compatibility Guide
-
-#### ツール可用性マトリクス
-
-| ツール | Claude Code | OpenCode | 備考 |
-|--------|:-----------:|:--------:|------|
-| AskUserQuestion | ✅ | ❌ | 対話的確認。INTERACTIVE_MODE で分岐 |
-| EnterPlanMode / ExitPlanMode | ✅ | ❌ | NON_INTERACTIVE_HEADER で既に禁止 |
-| Task() | ✅ | ❌ | FALLBACK_MODE で代替 |
-| Bash (background) | ✅ | ✅ | poll-dispatch.sh で統一 |
-| Read / Write / Edit / Glob / Grep | ✅ | ✅ | |
-
-#### 新規 AskUserQuestion 追加時の規約
-
-AskUserQuestion を使用する全ての箇所で以下パターンを適用すること:
-
-```
-if INTERACTIVE_MODE:
-  AskUserQuestion: [質問と選択肢]
-  [回答に基づく分岐]
-else:
-  [成果物・状況を表示]
-  PAUSE_FOR_APPROVAL(type, step, display_content)  ← 確認必須の場合
-  または
-  [自動続行 + 警告表示]                              ← 自動で安全な場合
-```
-
-#### Handoff 規約
-
-- orchestrator (poor-dev.md) の handoff は `send: true` を使用しない
-- サブコマンドの handoff `send: true` は個別実行時の利便性のために維持可能
-- パイプラインで dispatch する際は frontmatter 全体を除去 + validation で担保
+- **Step failure**: Pipeline stops. Artifacts preserved in FEATURE_DIR. Re-run `/poor-dev` to resume.
+- **Manual override**: Run individual commands directly, then `/poor-dev` to resume pipeline.
+- **Clarify skip**: Excluded from pipeline. specify includes clarification. For more, use gate + `/poor-dev.clarify`.
+- **Conditional pause**: `status: "paused"` (not error). Re-run `/poor-dev` for Case 2 resume.
+- **Variant preservation**: Resolved variant saved in pipeline-state.json. Conditional step NOT re-executed on resume.
+- **Spec rejection**: spec-draft.md preserved. Run `/poor-dev.specify` manually, then `/poor-dev` resumes from plan.
+- **Rate limit**: Fallback model auto-retry → both limited → `status: "rate-limited"` → re-run to resume. Logs: `~/.local/share/opencode/log/`
+- **Idle timeout**: IDLE_TIMEOUT reached → kill process → `status: "error"` in pipeline-state.json.

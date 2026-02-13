@@ -89,112 +89,8 @@ Output progress marker:
 
 **Execute GLM4.7 as sub-agent** for exploration research:
 
-1. **Build exploration prompt** with NON_INTERACTIVE_HEADER:
-
-```markdown
-## Execution Mode: Non-Interactive
-
-You are running as a sub-agent in a pipeline. Follow these rules:
-- Do NOT use AskUserQuestion. Include questions as [NEEDS CLARIFICATION: question] markers.
-- Do NOT execute Gate Check or Dashboard Update sections.
-- Do NOT suggest handoff commands.
-- Focus on producing the required output artifacts (files).
-- If blocked, output [ERROR: description] and stop.
-- End with: files created/modified, any unresolved items.
-
-## Task: Exploration Research for Suggestion Phase
-
-You are GLM4.7, conducting exploration research for best practices, tools, libraries, and usage patterns.
-
-### Context
-- Feature specification: ${SPEC_FILE_PATH}
-- Feature description: ${EXTRACTED_FROM_SPEC}
-- Technology stack: ${DETECTED_STACK}
-
-### Research Objectives
-1. Identify relevant best practices for this feature type
-2. Research modern tools and libraries commonly used for this domain
-3. Find usage patterns and architectural approaches
-4. Compile sources with evidence (documentation, blog posts, GitHub repos)
-5. Assess maintainability and security of suggested tools/libraries
-
-### Research Process
-- Use WebFetch tool to research best practices documentation
-- Search for popular GitHub repositories in this domain
-- Analyze community adoption and maintenance activity
-- Check for known security issues in suggested tools
-- Compile findings with supporting evidence
-
-### Output Format
-
-Output findings in this exact YAML structure:
-
-\`\`\`yaml
-exploration_session:
-  id: <unique_session_id>
-  started_at: <ISO8601_timestamp>
-  completed_at: <ISO8601_timestamp>
-  status: completed|failed
-  findings_summary: <3-4 sentence summary>
-
-suggestions:
-  - id: <unique_id>
-    type: best_practice|tool|library|usage_pattern
-    name: <name>
-    description: <2-3 sentence description>
-    rationale: <why this is relevant to the feature>
-    maintainability_score: <0-100>
-    security_score: <0-100>
-    source_urls:
-      - <url_1>
-      - <url_2>
-    adoption_examples:
-      - <example_project_1>
-      - <example_project_2>
-    evidence:
-      - <evidence_point_1>
-      - <evidence_point_2>
-
-sources_consulted:
-  - <source_1_url>
-  - <source_2_url>
-\`\`\`
-
-### Maintainability Scoring (0-100)
-- 90-100: Very active (commits last 6mo, responsive maintainers, high issue resolution)
-- 70-89: Active (commits last 12mo, some maintainer activity)
-- 50-69: Moderate (commits last 18mo, limited activity)
-- 0-49: Low (no commits 18+mo, inactive maintainers)
-
-### Security Scoring (0-100)
-- 90-100: Secure (no known CVEs, recent security audit, high code quality)
-- 70-89: Mostly secure (no critical CVEs, some advisory, acceptable quality)
-- 50-69: Some concerns (non-critical CVEs, outdated dependencies)
-- 0-49: Risky (critical CVEs, no security audit, poor practices)
-
-### Threshold Rules
-- Exclude suggestions with maintainability_score < 50 OR security_score < 50
-- Flag suggestions with mixed scores (one low, one high) with [RISK] prefix
-
-### Completion Time
-You have 5 minutes (300 seconds) to complete this exploration. Prioritize quality over quantity.
-
-If unable to find relevant suggestions, output:
-\`\`\`yaml
-exploration_session:
-  status: completed
-  findings_summary: "No specific suggestions found. Feature appears to use standard patterns."
-suggestions: []
-\`\`\`
-
-If exploration fails:
-\`\`\`yaml
-exploration_session:
-  status: failed
-  findings_summary: "[ERROR: <description of failure>]"
-suggestions: []
-\`\`\`
-```
+1. **Build exploration prompt**:
+   Read `templates/suggest-exploration-prompt.md`, substitute `${SPEC_FILE_PATH}`, `${EXTRACTED_FROM_SPEC}`, `${DETECTED_STACK}` variables, and use as the exploration prompt.
 
 2. **Dispatch execution** following routing logic (MANDATORY):
 
@@ -522,160 +418,26 @@ Output final progress marker:
 [PROGRESS: Suggestion phase complete: ${SUGGESTION_COUNT} suggestions, ${ACCEPTED_COUNT} accepted, duration: ${TOTAL_ELAPSED_SECONDS}s]
 ```
 
-## Emergency Recovery
-
-When suggestion phase artifacts are corrupted, run recovery:
-
-### Usage
-```
-/poor-dev.suggest recover
-```
-
-### Recovery Process
-1. Check each artifact file for corruption:
-   - exploration-session.yaml
-   - suggestions.yaml
-   - suggestion-decisions.yaml
-2. For corrupted files:
-   a. Attempt restore from `.backups/` directory
-   b. If no backup available, reconstruct from remaining artifacts
-   c. If reconstruction fails, create fresh empty file
-3. Verify cross-file consistency:
-   - suggestions_generated_count matches suggestions.yaml length
-   - suggestion-decisions reference valid suggestion IDs
-4. Output recovery report with actions taken
-
-### Recovery Markers
-- `[PROGRESS: Recovery started for ${FEATURE_DIR}]`
-- `[PROGRESS: Recovered ${FILE} from backup]`
-- `[PROGRESS: Reconstructed ${FILE} from ${SOURCE}]`
-- `[PROGRESS: Recovery complete: ${ACTIONS_COUNT} actions taken]`
-
-## Manual Cache Refresh
-
-Manually trigger cache validation and refresh:
-
-### Usage
-```
-/poor-dev.suggest refresh-cache
-```
-
-### Refresh Process
-1. Read current cache from `.poor-dev/cache/exploration-cache.yaml`
-2. For each library in cache:
-   a. Check GitHub API for last commit date
-   b. Check OSV API for known vulnerabilities
-   c. Update maintainability_score and security_score
-   d. Tag stale libraries with [STALE] prefix
-3. Remove libraries with scores < 50
-4. Increment cache version
-5. Create backup before writing updated cache
-6. Output refresh report
-
-### Refresh Markers
-- `[PROGRESS: Cache refresh started: ${LIBRARY_COUNT} libraries]`
-- `[PROGRESS: Validated ${LIBRARY_NAME}: maintainability=${SCORE}, security=${SCORE}]`
-- `[PROGRESS: Cache refresh complete: ${UPDATED} updated, ${REMOVED} removed, ${STALE} stale]`
 
 ## Output Artifacts
 
-**Files Created**:
-1. `${FEATURE_DIR}/exploration-session.yaml` - Exploration session metadata
-2. `${FEATURE_DIR}/suggestions.yaml` - Filtered suggestions array
-3. `${FEATURE_DIR}/suggestion-decisions.yaml` - Developer decisions array
+**Files**: `${FEATURE_DIR}/exploration-session.yaml`, `suggestions.yaml`, `suggestion-decisions.yaml`
 
-**Progress Markers** (all prefixed with `[PROGRESS: ...]`):
-- `[PROGRESS: Initializing exploration session: ${ID}]`
-- `[PROGRESS: GLM4.7 exploration started: ${TASK_ID}]`
-- `[PROGRESS: Polling GLM4.7 exploration: ${ELAPSED}s elapsed]`
-- `[PROGRESS: GLM4.7 exploration completed: ${COUNT} suggestions]`
-- `[PROGRESS: Filtered suggestions: ${PASSED} passed, ${EXCLUDED} excluded]`
-- `[PROGRESS: Output files written: ...]`
-- `[PROGRESS: Suggestion phase complete: ...]`
+**Progress Markers**: All prefixed with `[PROGRESS: ...]` — session init, exploration start/poll/complete, filter results, file write, phase complete.
 
 ## Non-Interactive Execution Constraints
 
-**Mandatory for pipeline mode**:
-- Use NON_INTERACTIVE_HEADER in GLM4.7 prompt
-- Do NOT use AskUserQuestion at any point
-- Bypass QuestionTools for all user interactions
-- All decisions deferred to `pending` state
-- Progress markers MUST be output even in non-interactive mode
-- Timeout handling is MANDATORY (max 5 minutes)
-
-**Fallback behavior in non-interactive**:
-- Skip Tier 2 manual research fallback (requires user input)
-- Proceed directly to Tier 3 (continue without suggestions)
-- Log failure to `${FEATURE_DIR}/exploration-failures.log`
+Pipeline mode: NON_INTERACTIVE_HEADER applied (see poor-dev.md 5.4). All decisions deferred to `pending`. Progress markers mandatory. Timeout: max 5 minutes.
+Non-interactive fallback: skip Tier 2 (manual) → Tier 3 directly. Log to `${FEATURE_DIR}/exploration-failures.log`.
 
 ## Error Handling
 
-**GLM4.7 dispatch failure**:
-```
-[ERROR: Failed to dispatch GLM4.7 exploration: ${ERROR_MESSAGE}]
-→ Proceed to fallback (STEP 9)
-```
+All errors use `[ERROR: <type>: <message>]` format. Common error → action mapping:
 
-**GLM4.7 timeout**:
-```
-[ERROR: GLM4.7 exploration timeout after 300 seconds]
-→ Proceed to fallback (STEP 9)
-```
+| Error Type | Action |
+|-----------|--------|
+| dispatch failure, timeout, invalid YAML | → Proceed to fallback (STEP 9) |
+| API rate limit, network failure | → Exponential backoff (3 retries) → fallback (STEP 9) |
+| Missing spec.md, missing FEATURE_DIR | → Exit with error (fatal) |
+| Invalid config | → Fall back to built-in defaults, warn and continue |
 
-**Invalid YAML output**:
-```
-[ERROR: Invalid YAML from GLM4.7: ${PARSE_ERROR}]
-→ Proceed to fallback (STEP 9)
-```
-
-**Missing spec.md**:
-```
-[ERROR: spec.md not found in ${FEATURE_DIR}]
-→ Exit with error
-```
-
-**API rate limits** (GitHub/OSV):
-```
-[ERROR: API rate limit exceeded: ${API_NAME}]
-→ Apply exponential backoff (see suggestion-validator.mjs withRateLimit)
-→ If retries exhausted: proceed to fallback (STEP 9)
-```
-
-**Network connectivity failure**:
-```
-[ERROR: Network error accessing ${API_URL}: ${ERROR_MESSAGE}]
-→ Retry with exponential backoff (3 attempts)
-→ If all attempts fail: proceed to fallback (STEP 9)
-```
-
-**Empty feature directory**:
-```
-[ERROR: Feature directory ${FEATURE_DIR} does not exist]
-→ Exit with error
-```
-
-**Invalid configuration**:
-```
-[ERROR: Invalid config in .poor-dev/config.json: ${PARSE_ERROR}]
-→ Fall back to built-in defaults
-→ Log warning and continue
-```
-
-### Dashboard Update
-
-Update living documents in `docs/`:
-
-1. `mkdir -p docs`
-2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
-   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
-   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
-3. Determine each feature's phase from latest artifact:
-   Discovery → Specification → **Suggestion** → Planning → Tasks → Implementation → Review → Complete
-4. Write `docs/progress.md`:
-   - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
-5. Write `docs/roadmap.md`:
-   - Header with timestamp
-   - Active features table (feature, phase, status, branch)
-   - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)

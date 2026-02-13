@@ -133,21 +133,23 @@ PoorDevSkills が推奨する開発の流れは以下のとおりです。
 
 1. **仕様を作成する** — `/poor-dev.specify` で自然言語の機能説明から仕様書を生成します。ユーザーストーリー・受け入れ基準・非機能要件が構造化された spec.md が出力されます。曖昧な箇所があれば `/poor-dev.clarify` で質問を通じて仕様を精緻化できます。
 
-2. **技術計画を立てる** — `/poor-dev.plan` で仕様をもとにアーキテクチャ・技術選定・フェーズ分割を含む実装計画を作成します。
+2. **ベストプラクティスを調査する** — `/poor-dev.suggest` で仕様に基づきツール・ライブラリ・設計パターンのベストプラクティスを自動調査します。メンテナンス性・セキュリティのスコアリングでフィルタリングされた提案が suggestions.yaml に出力されます。
 
-3. **計画をレビューする** — `/poor-dev.planreview` で PM・リスク・価値・批判の 4 ペルソナが計画を多角的にレビューします。指摘があれば自動修正ループが走り、指摘ゼロになるまで繰り返します。
+3. **技術計画を立てる** — `/poor-dev.plan` で仕様と提案をもとにアーキテクチャ・技術選定・フェーズ分割を含む実装計画を作成します。
 
-4. **タスクに分解する** — `/poor-dev.tasks` で計画を実行可能な粒度のタスクに分解します。依存関係と優先度が明示された tasks.md が生成されます。
+4. **計画をレビューする** — `/poor-dev.planreview` で PM・リスク・価値・批判の 4 ペルソナが計画を多角的にレビューします。指摘があれば自動修正ループが走り、指摘ゼロになるまで繰り返します。
 
-5. **タスクをレビューする** — `/poor-dev.tasksreview` で TechLead・Senior・DevOps・Junior の 4 ペルソナがタスクの粒度・依存関係・実行可能性を検証します。
+5. **タスクに分解する** — `/poor-dev.tasks` で計画を実行可能な粒度のタスクに分解します。依存関係と優先度が明示された tasks.md が生成されます。
 
-6. **設計をレビューする（任意）** — 必要に応じて `/poor-dev.architecturereview` で Architect・Security・Performance・SRE の 4 ペルソナが SOLID 原則準拠・脆弱性・性能を検証します。
+6. **タスクをレビューする** — `/poor-dev.tasksreview` で TechLead・Senior・DevOps・Junior の 4 ペルソナがタスクの粒度・依存関係・実行可能性を検証します。
 
-7. **実装する** — `/poor-dev.implement` で tasks.md に従いタスクを順次実装します。
+7. **設計をレビューする（任意）** — 必要に応じて `/poor-dev.architecturereview` で Architect・Security・Performance・SRE の 4 ペルソナが SOLID 原則準拠・脆弱性・性能を検証します。
 
-8. **品質を検証する** — `/poor-dev.qualityreview` で品質ゲート（型チェック・リント・テスト）を実行した後、QA・TestDesign・Code・Security の 4 ペルソナ + 敵対的レビューでコード品質を検証します。
+8. **実装する** — `/poor-dev.implement` で tasks.md に従いタスクを順次実装します。
 
-9. **完了判定を行う** — `/poor-dev.phasereview` で完了基準・リグレッション・ドキュメントを最終確認し、デプロイ可能判定を行います。
+9. **品質を検証する** — `/poor-dev.qualityreview` で品質ゲート（型チェック・リント・テスト）を実行した後、QA・TestDesign・Code・Security の 4 ペルソナ + 敵対的レビューでコード品質を検証します。
+
+10. **完了判定を行う** — `/poor-dev.phasereview` で完了基準・リグレッション・ドキュメントを最終確認し、デプロイ可能判定を行います。
 
 ### バグを修正する
 
@@ -220,6 +222,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|------|
 | `/poor-dev.specify` | 機能仕様の作成 | spec.md |
 | `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
+| `/poor-dev.suggest` | ベストプラクティス調査・提案 | suggestions.yaml, exploration-session.yaml |
 | `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
 | `/poor-dev.investigate` | 原因不明の問題調査・分析 | 調査レポート + 次アクション推奨 |
 | `/poor-dev.plan` | 技術計画の作成 | plan.md |

@@ -301,10 +301,10 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 11 Tasks
 
-- [ ] T112 Verify jq installation on WSL 2 Ubuntu (sudo apt-get install jq) (success: jq --version returns version number)
-- [ ] T113 Test GLM4.7 dispatch on WSL 2 Ubuntu (success: GLM4.7 task completes successfully)
-- [ ] T114 Test API connectivity on WSL 2 Ubuntu (GitHub, OSV, npm) (success: all APIs return 200 OK)
-- [ ] T115 Test full suggestion phase execution on WSL 2 Ubuntu (success: suggestions.yaml generated without errors)
+- [X] T112 Verify jq installation on WSL 2 Ubuntu (sudo apt-get install jq) (success: jq --version returns version number)
+- [X] T113 Test GLM4.7 dispatch on WSL 2 Ubuntu (success: GLM4.7 task completes successfully)
+- [X] T114 Test API connectivity on WSL 2 Ubuntu (GitHub, OSV, npm) (success: all APIs return 200 OK)
+- [X] T115 Test full suggestion phase execution on WSL 2 Ubuntu (success: suggestions.yaml generated without errors)
 
 ---
 
@@ -316,22 +316,22 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 12 Tasks
 
-- [ ] T116 Create dependency verification test in tests/dependency-verification.test.mjs
-- [ ] T117 Create suggestion parser test in tests/suggestion-parser.test.mjs
-- [ ] T118 Create suggestion validator test in tests/suggestion-validator.test.mjs
-- [ ] T119 Create maintainability scoring test in tests/maintainability-scoring.test.mjs
-- [ ] T120 Create security scoring test in tests/security-scoring.test.mjs
-- [ ] T121 Create threshold filtering test in tests/threshold-filtering.test.mjs
-- [ ] T122 Create backup manager test in tests/backup-manager.test.mjs
-- [ ] T123 Create cache initializer test in tests/cache-initializer.test.mjs
-- [ ] T124 Create cache validator test in tests/cache-validator.test.mjs
-- [ ] T125 Create GLM4.7 exploration test in tests/glm47-exploration.test.mjs
-- [ ] T126 Create suggestion phase integration test in tests/suggestion-phase-integration.test.mjs
-- [ ] T127 Create API integration test in tests/api-integration.test.mjs (GitHub, OSV, npm)
-- [ ] T128 Create fallback mechanism test in tests/fallback.test.mjs
-- [ ] T129 Create corruption recovery test in tests/corruption-recovery.test.mjs
-- [ ] T130 Execute all test suites and verify pass rate >= 90%
-- [ ] T131 Fix any failing tests
+- [X] T116 Create dependency verification test in tests/dependency-verification.test.mjs
+- [X] T117 Create suggestion parser test in tests/suggestion-parser.test.mjs
+- [X] T118 Create suggestion validator test in tests/suggestion-validator.test.mjs
+- [X] T119 Create maintainability scoring test in tests/maintainability-scoring.test.mjs
+- [X] T120 Create security scoring test in tests/security-scoring.test.mjs
+- [X] T121 Create threshold filtering test in tests/threshold-filtering.test.mjs
+- [X] T122 Create backup manager test in tests/backup-manager.test.mjs
+- [X] T123 Create cache initializer test in tests/cache-initializer.test.mjs
+- [X] T124 Create cache validator test in tests/cache-validator.test.mjs
+- [X] T125 Create GLM4.7 exploration test in tests/glm47-exploration.test.mjs
+- [X] T126 Create suggestion phase integration test in tests/suggestion-phase-integration.test.mjs
+- [X] T127 Create API integration test in tests/api-integration.test.mjs (GitHub, OSV, npm)
+- [X] T128 Create fallback mechanism test in tests/fallback.test.mjs
+- [X] T129 Create corruption recovery test in tests/corruption-recovery.test.mjs
+- [X] T130 Execute all test suites and verify pass rate >= 90%
+- [X] T131 Fix any failing tests
 
 ---
 
@@ -343,20 +343,20 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 
 ### Phase 13 Tasks
 
-- [ ] T132 Add inline comments to complex code sections only (guidelines: document business logic, API integrations, scoring algorithms - NOT required per CLAUDE.md)
-- [ ] T133 Create quickstart guide in specs/008-add-bestpractice-suggest-phase/quickstart.md
-- [ ] T134 Document backup/recovery procedures in quickstart.md
-- [ ] T135 Document cache refresh procedures in quickstart.md
-- [ ] T136 Document escalation paths for failures in quickstart.md
-- [ ] T137 Document WSL 2 Ubuntu setup in quickstart.md
-- [ ] T138 Add structured logging to suggestion phase command in commands/poor-dev.suggest.md with duration tracking
-- [ ] T139 Improve error messages for common failure scenarios in commands/poor-dev.suggest.md
-- [ ] T140 Add completion summary to suggestion phase command in commands/poor-dev.suggest.md
-- [ ] T141 Review all progress markers for clarity and consistency
-- [ ] T142 Review all error markers for clarity and actionability
-- [ ] T143 Perform final code review and cleanup
-- [ ] T144 Create basic deploy documentation in specs/008-add-bestpractice-suggest-phase/deploy.md (manual deployment steps, feature branch deployment, testing verification)
-- [ ] T145 Verify all files follow existing code style conventions
+- [X] T132 Add inline comments to complex code sections only (guidelines: document business logic, API integrations, scoring algorithms - NOT required per CLAUDE.md)
+- [X] T133 Create quickstart guide in specs/008-add-bestpractice-suggest-phase/quickstart.md
+- [X] T134 Document backup/recovery procedures in quickstart.md
+- [X] T135 Document cache refresh procedures in quickstart.md
+- [X] T136 Document escalation paths for failures in quickstart.md
+- [X] T137 Document WSL 2 Ubuntu setup in quickstart.md
+- [X] T138 Add structured logging to suggestion phase command in commands/poor-dev.suggest.md with duration tracking
+- [X] T139 Improve error messages for common failure scenarios in commands/poor-dev.suggest.md
+- [X] T140 Add completion summary to suggestion phase command in commands/poor-dev.suggest.md
+- [X] T141 Review all progress markers for clarity and consistency
+- [X] T142 Review all error markers for clarity and actionability
+- [X] T143 Perform final code review and cleanup
+- [X] T144 Create basic deploy documentation in specs/008-add-bestpractice-suggest-phase/deploy.md (manual deployment steps, feature branch deployment, testing verification)
+- [X] T145 Verify all files follow existing code style conventions
 
 ---
 

@@ -1,10 +1,10 @@
 {
   "flow": "feature",
   "variant": null,
-  "completed": ["specify", "plan", "planreview", "tasks", "tasksreview"],
-  "current": "implement",
+  "completed": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement"],
+  "current": "architecturereview",
   "status": "active",
   "pauseReason": null,
   "condition": null,
-  "updated": "2026-02-12T18:10:00Z"
+  "updated": "2026-02-13T03:30:00Z"
 }

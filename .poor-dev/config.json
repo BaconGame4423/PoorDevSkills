@@ -1,6 +1,9 @@
 {
   "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" },
-  "overrides": {},
+  "overrides": {
+    "fixer": { "cli": "claude", "model": "sonnet" },
+    "phasereview": { "cli": "claude", "model": "haiku" }
+  },
   "gates": {},
   "polling": {
     "interval": 1,

@@ -169,22 +169,7 @@ Report:
 
 ### Dashboard Update
 
-Update living documents in `docs/`:
-
-1. `mkdir -p docs`
-2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
-   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
-   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
-3. Determine each feature's phase from latest artifact:
-   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
-4. Write `docs/progress.md`:
-   - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
-5. Write `docs/roadmap.md`:
-   - Header with timestamp
-   - Active features table (feature, phase, status, branch)
-   - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)
+Run: `node scripts/update-dashboard.mjs --command harvest`
 
 ## Operating Principles
 

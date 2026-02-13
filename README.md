@@ -28,6 +28,7 @@ GLM4.7 など安価だが品質にばらつきがある AI モデルで開発を
 - [レビューペルソナ詳細](#レビューペルソナ詳細)
 - [デュアルランタイム戦略](#デュアルランタイム戦略)
 - [リビングダッシュボード](#リビングダッシュボード)
+- [自動化スクリプト](#自動化スクリプト)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [ライセンス](#ライセンス)
 
@@ -321,6 +322,7 @@ opencode models
 ## リビングダッシュボード
 
 各コマンド完了時に `docs/` 配下のファイルが自動更新され、プロジェクト全体の進捗を常時把握できます。
+ダッシュボード更新は `scripts/update-dashboard.mjs` で決定論的に実行されるため、LLM のトークンを消費しません。
 
 | ファイル | 用途 | 対象読者 |
 |---------|------|---------|
@@ -337,6 +339,30 @@ watch cat docs/progress.md
 
 # ロードマップを監視
 watch cat docs/roadmap.md
+
+# 手動でダッシュボードを更新
+node scripts/update-dashboard.mjs
+```
+
+---
+
+## 自動化スクリプト
+
+`scripts/` ディレクトリには、LLM に委ねていた決定論的処理をスクリプト化したツールが含まれています。
+
+| スクリプト | 用途 |
+|-----------|------|
+| `scripts/update-dashboard.mjs` | `docs/progress.md` と `docs/roadmap.md` の更新（全コマンドから呼出） |
+| `scripts/gen-reviews.mjs` | 5 つのレビューコマンドをテンプレートから一括生成 |
+| `scripts/replace-dashboard-sections.mjs` | Dashboard Update セクションの一括置換（マイグレーション用） |
+
+### レビューコマンドの再生成
+
+レビューのルーティングロジックやフォーマットを変更する場合は、`scripts/gen-reviews.mjs` を編集してから再生成します。
+
+```bash
+node scripts/gen-reviews.mjs          # 5 つのレビューコマンドを再生成
+node scripts/gen-reviews.mjs --check  # 生成済みファイルが最新か確認
 ```
 
 ---

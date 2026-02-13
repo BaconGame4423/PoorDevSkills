@@ -17,7 +17,11 @@ handoffs:
 $ARGUMENTS
 ```
 
-## Quality Review Procedure (5 stages)
+## STEP 0: Config Resolution
+
+1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
+2. For each persona (`qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`) and for `review-fixer`, resolve config with priority: `overrides.<agent>` → `overrides.qualityreview` → `default`.
+3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**. This is MANDATORY — you MUST NOT substitute native execution when cross-CLI is required.
 
 ### STAGE 0: Quality Gates
 
@@ -37,13 +41,7 @@ After running gates, output a progress marker on its own line:
   `[REVIEW-PROGRESS: qualityreview [gates]: ${PASS}/${TOTAL} passed]`
 This marker MUST be output in all execution modes (interactive and Non-Interactive).
 
-### STAGE 0.5: Config Resolution
-
-1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
-2. For each persona (`qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`) and for `review-fixer`, resolve config with priority: `overrides.<agent>` → `overrides.qualityreview` → `default`.
-3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**. This is MANDATORY — you MUST NOT substitute native execution when cross-CLI is required.
-
-### STAGE 1-4: Review Loop
+## Review Loop
 
 Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
 
@@ -51,53 +49,31 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
   Personas: `qualityreview-qa`, `qualityreview-testdesign`, `qualityreview-code`, `qualityreview-security`.
   Instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-  **Execution routing** — MANDATORY dispatch per STAGE 0.5 resolution. DO NOT override with your own judgment.
-
-  ```
-  resolved_cli = config resolution from STAGE 0.5
-  current_cli  = runtime you are executing in ("claude" or "opencode")
-
-  IF resolved_cli == current_cli:
-    # Native execution
-    IF current_cli == "claude":
-      → Task(subagent_type="qualityreview-qa", model=<resolved model>, prompt="Review $ARGUMENTS. Output compact English YAML.")
-    ELSE:  # current_cli == "opencode"
-      → @qualityreview-qa  (if config model == session default)
-      → Bash: opencode run --model <model> --agent qualityreview-qa "Review $ARGUMENTS. Output compact English YAML."  (if different model)
-  ELSE:
-    # Cross-CLI — REQUIRED even if native feels more convenient
-    IF resolved_cli == "opencode":
-      → Bash: opencode run --model <model> --agent qualityreview-qa --format json "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
-    ELSE:  # resolved_cli == "claude"
-      → Bash: claude -p --model <model> --agent qualityreview-qa --no-session-persistence --output-format text "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
-  ```
-
-  **VIOLATION**: Using native Task/subagent when config resolves to a different CLI is a routing bug. Follow the tree above exactly.
+  **Execution routing** — follow `templates/review-routing-protocol.md`. Replace `<AGENT>` with each persona name and `<INSTRUCTION>` with the review instruction above.
 
   Run all 4 personas in parallel. Wait for all to complete.
 
-**STEP 2**: Run adversarial review, then aggregate all results. Count issues by severity (C/H/M/L).
+**STEP 2**: Aggregate all results. Count issues by severity (C/H/M/L).
   Adversarial judgments: APPROVED | NEEDS_CHANGES (add to issues) | HALLUCINATING (ignore).
   **3-strike rule**: Track adversarial rejections. After 3 strikes → abort and report failure.
 
 **STEP 2.5 Progress Report**:
-After aggregation, output structured progress markers on their own lines:
+After aggregation, output a structured progress marker on its own line:
   `[REVIEW-PROGRESS: qualityreview #${N}: ${ISSUE_COUNT} issues (C:${c} H:${h} M:${m} L:${l}) → ${ACTION}]`
   `[REVIEW-PROGRESS: qualityreview #${N}: adversarial ${JUDGMENT} (strike ${S}/3)]`
-Where N = iteration number, ACTION = "fixing..." (issues > 0) or "GO" (issues == 0), JUDGMENT = APPROVED/NEEDS_CHANGES/HALLUCINATING, S = current strike count.
-These markers MUST be output in all execution modes (interactive and Non-Interactive).
+Where N = iteration number, ACTION = "fixing..." (issues > 0) or "GO" (issues == 0).
+This marker MUST be output in all execution modes (interactive and Non-Interactive).
 
 **STEP 3**: Issues remain → STEP 4. Zero issues AND adversarial APPROVED/HALLUCINATING → done. 3 strikes → abort.
 
-**STEP 4**: Spawn `review-fixer` sub-agent with aggregated issues (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic as STEP 1). After fix → back to STEP 1.
+**STEP 4**: Spawn `review-fixer` sub-agent with aggregated issues (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic). After fix → back to STEP 1.
 
-### Progress Tracking
+Track issue count per iteration; verify decreasing trend.
 
-Record issue count per iteration.
-
-### Iteration Output
+## Output Format
 
 ```yaml
+# Iteration example:
 type: quality
 target: $ARGUMENTS
 n: 2
@@ -189,19 +165,4 @@ Determine FEATURE_DIR from `$ARGUMENTS` path.
 
 ### Dashboard Update
 
-Update living documents in `docs/`:
-
-1. `mkdir -p docs`
-2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
-   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
-   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
-3. Determine each feature's phase from latest artifact:
-   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
-4. Write `docs/progress.md`:
-   - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
-5. Write `docs/roadmap.md`:
-   - Header with timestamp
-   - Active features table (feature, phase, status, branch)
-   - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)
+Run: `node scripts/update-dashboard.mjs --command qualityreview`

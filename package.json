@@ -11,7 +11,8 @@
     "lib/",
     "commands/",
     "agents/",
-    "templates/"
+    "templates/",
+    "scripts/"
   ],
   "keywords": [
     "ai",

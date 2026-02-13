@@ -30,28 +30,7 @@ Loop STEP 1-4 until 0 issues. Safety: confirm with user after 10 iterations.
   Personas: `architecturereview-architect`, `architecturereview-security`, `architecturereview-performance`, `architecturereview-sre`.
   Instruction: "Review `$ARGUMENTS`. Output compact English YAML."
 
-  **Execution routing** — MANDATORY dispatch per STEP 0 resolution. DO NOT override with your own judgment.
-
-  ```
-  resolved_cli = config resolution from STEP 0
-  current_cli  = runtime you are executing in ("claude" or "opencode")
-
-  IF resolved_cli == current_cli:
-    # Native execution
-    IF current_cli == "claude":
-      → Task(subagent_type="architecturereview-architect", model=<resolved model>, prompt="Review $ARGUMENTS. Output compact English YAML.")
-    ELSE:  # current_cli == "opencode"
-      → @architecturereview-architect  (if config model == session default)
-      → Bash: opencode run --model <model> --agent architecturereview-architect "Review $ARGUMENTS. Output compact English YAML."  (if different model)
-  ELSE:
-    # Cross-CLI — REQUIRED even if native feels more convenient
-    IF resolved_cli == "opencode":
-      → Bash: opencode run --model <model> --agent architecturereview-architect --format json "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
-    ELSE:  # resolved_cli == "claude"
-      → Bash: claude -p --model <model> --agent architecturereview-architect --no-session-persistence --output-format text "Review $ARGUMENTS. Output compact English YAML." (run_in_background: true)
-  ```
-
-  **VIOLATION**: Using native Task/subagent when config resolves to a different CLI is a routing bug. Follow the tree above exactly.
+  **Execution routing** — follow `templates/review-routing-protocol.md`. Replace `<AGENT>` with each persona name and `<INSTRUCTION>` with the review instruction above.
 
   Run all 4 personas in parallel. Wait for all to complete.
 
@@ -65,7 +44,7 @@ This marker MUST be output in all execution modes (interactive and Non-Interacti
 
 **STEP 3**: Issues remain → STEP 4. Zero issues → done, output final result.
 
-**STEP 4**: Spawn `review-fixer` (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic as STEP 1). After fix → back to STEP 1.
+**STEP 4**: Spawn `review-fixer` sub-agent with aggregated issues (priority C→H→M→L) using resolved config for `review-fixer` (same routing logic). After fix → back to STEP 1.
 
 Track issue count per iteration; verify decreasing trend.
 
@@ -90,3 +69,7 @@ log:
   - {n: 6, issues: 0}
 next: /poor-dev.implement
 ```
+
+### Dashboard Update
+
+Run: `node scripts/update-dashboard.mjs --command architecturereview`

@@ -265,6 +265,12 @@ If not found → start from beginning.
 
 #### 5.3 Step Dispatch Loop
 
+⚠ **CRITICAL: Pipeline Step Integrity**
+- Each step MUST be dispatched as a separate sub-agent execution
+- NEVER skip steps, combine steps, or execute step logic inline
+- NEVER perform the work of a step yourself — always dispatch to the corresponding command
+- If a step fails, STOP. Do not skip to the next step.
+
 **Pre-dispatch artifact check** (defense-in-depth):
 
 | Phase | Required artifacts in FEATURE_DIR |
@@ -405,6 +411,14 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 - Each phase runs with `run_in_background: true`
 - Poll tasks.md for `[X]` markers to track progress
 - Report per-phase completion
+
+**Post-implement source protection check** (implement ステップ完了後に必ず実行):
+1. `git diff --name-only HEAD` で変更ファイル一覧を取得
+2. 以下のパターンに一致するファイルがあれば:
+   `agents/**`, `commands/**`, `lib/poll-dispatch.sh`, `.poor-dev/**`
+   → `git checkout HEAD -- <matched_files>` で復元
+   → `[WARNING: Protected files were modified by implement and restored: <file_list>]` を出力
+3. 一致なし → 何もしない（正常）
 
 ##### A2. Specify Step (Read-Only Override)
 
@@ -547,6 +561,8 @@ You are running as a sub-agent in a pipeline. Follow these rules:
 - Exception: You MUST output progress markers during execution:
   - Review steps: `[REVIEW-PROGRESS: ...]` markers between iterations
   - Production steps: `[PROGRESS: step-name phase/status description]` markers at key milestones
+- Do NOT modify files outside of FEATURE_DIR (specs/NNN-*/) and the project source being implemented.
+- NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
 - End with: files created/modified, any unresolved items.
 ```
 

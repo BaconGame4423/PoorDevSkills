@@ -4,31 +4,24 @@ handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
     prompt: Create a specification for this feature request
-    send: true
   - label: Bug Fix Investigation
     agent: poor-dev.bugfix
     prompt: Investigate and fix this bug report
-    send: true
   - label: Problem Investigation
     agent: poor-dev.investigate
     prompt: Investigate this problem or unknown issue
-    send: true
   - label: Roadmap Concept
     agent: poor-dev.concept
     prompt: Start roadmap concept exploration
-    send: true
   - label: Discovery Flow
     agent: poor-dev.discovery
     prompt: Start discovery flow for exploration and prototyping
-    send: true
   - label: Ask Question
     agent: poor-dev.ask
     prompt: Answer a question about the codebase
-    send: true
   - label: Generate Report
     agent: poor-dev.report
     prompt: Generate a project report
-    send: true
 ---
 
 ## User Input
@@ -42,6 +35,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Outline
 
 The text after the command **is** the user's request. Do not ask them to repeat it unless empty.
+
+### Flow Control Rule
+
+This command is the pipeline orchestrator. After classification (Step 1-4):
+- Pipeline flows (Feature, Bugfix, Roadmap, Discovery, Investigation) → proceed to **Step 5 Pipeline Orchestration**
+- Non-pipeline flows (Q&A, Documentation) → execute target skill directly in Step 4
+- Do NOT auto-transition to other agents via handoff frontmatter. Handoffs are UI metadata only.
 
 ### Step 1: Input Classification
 
@@ -102,7 +102,7 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 
 ### Step 4: Routing
 
-**4A Feature**: Report "Classified as feature: <summary>". Next: `/poor-dev.specify`
+**4A Feature**: Report "Classified as feature: <summary>". → Step 5 Pipeline Orchestration に進む
 
 **4B Bugfix**:
 1. Check `bug-patterns.md` for similar past patterns. If found, inform user.
@@ -144,18 +144,18 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
    ```
 
    Fill what can be extracted from `$ARGUMENTS`. Leave unknowns as placeholders.
-3. Report "Classified as bugfix: <summary>". Next: `/poor-dev.bugfix`
+3. Report "Classified as bugfix: <summary>". → Step 5 Pipeline Orchestration に進む
 
-**4C Roadmap**: Report "Classified as roadmap: <summary>". Next: `/poor-dev.concept`
+**4C Roadmap**: Report "Classified as roadmap: <summary>". → Step 5 Pipeline Orchestration に進む
 
-**4D Q&A**: Report "Classified as Q&A: <summary>". Next: `/poor-dev.ask`
+**4D Q&A**: Report "Classified as Q&A: <summary>". Execute `/poor-dev.ask` directly (non-pipeline).
 
-**4E Documentation**: Report "Classified as documentation: <summary>". Next: `/poor-dev.report`
+**4E Documentation**: Report "Classified as documentation: <summary>". Execute `/poor-dev.report` directly (non-pipeline).
 
-**4F Discovery**: Report "Classified as discovery: <summary>". Next: `/poor-dev.discovery`
+**4F Discovery**: Report "Classified as discovery: <summary>". → Step 5 Pipeline Orchestration に進む
 Discovery handles its own branch/directory creation.
 
-**4G Investigation**: Report "Classified as investigation: <summary>". Next: `/poor-dev.investigate`
+**4G Investigation**: Report "Classified as investigation: <summary>". → Step 5 Pipeline Orchestration に進む
 Investigation is a non-pipeline flow (read-only analysis). No branch/directory creation needed.
 
 ### Step 5: Pipeline Orchestration
@@ -178,6 +178,14 @@ MAX_TIMEOUT   = config.polling.max_timeout || config.dispatch_timeout || 600  (�
 If `opencode` is not available:
 - Display warning: "opencode が見つかりません。Claude Code (haiku) にフォールバックします"
 - Set FALLBACK_MODE = true (all dispatches use Task() with model=haiku)
+
+#### 5.0b CLI Capability Detection
+
+利用可能なツール一覧を確認し INTERACTIVE_MODE を判定:
+- AskUserQuestion ツールが利用可能 → INTERACTIVE_MODE = true
+- AskUserQuestion ツールが利用不可 → INTERACTIVE_MODE = false
+
+判定結果を表示: "INTERACTIVE_MODE: ${INTERACTIVE_MODE}"
 
 #### 5.1 Pipeline Selection
 
@@ -212,29 +220,59 @@ Check for `$FEATURE_DIR/pipeline-state.json`:
   "status": "active",
   "pauseReason": null,
   "condition": null,
+  "pendingApproval": null,
   "updated": "2026-02-12T10:30:00Z"
 }
 ```
 
-**Backward compatibility**: Existing pipeline-state.json without `variant`/`condition`/`status` fields → treat as linear pipeline with `status: "active"`, `variant: null`.
+**Schema notes**:
+- `status`: `"active"` | `"paused"` | `"rate-limited"` | `"error"` | `"stopped"` | `"awaiting-approval"`
+- `pendingApproval`: `null` | `{ "type": "spec-approval|gate|review-nogo|resume-paused", "step": "<step-name>" }`
+
+**Backward compatibility**: Existing pipeline-state.json without `variant`/`condition`/`status`/`pendingApproval` fields → treat as linear pipeline with `status: "active"`, `variant: null`, `pendingApproval: null`.
 
 If found:
 
-**Case 1: `status: "active"` (or absent)** → AskUserQuestion:
-- "前回は `${current}` ステップで中断しています。再開しますか？"
-  - "再開する（${current} から）" — skip completed steps
-  - "最初からやり直す" — delete pipeline-state.json, start fresh
+**Case 1: `status: "active"` (or absent)**:
+- INTERACTIVE_MODE = true → AskUserQuestion:
+  - "前回は `${current}` ステップで中断しています。再開しますか？"
+    - "再開する（${current} から）" — skip completed steps
+    - "最初からやり直す" — delete pipeline-state.json, start fresh
+- INTERACTIVE_MODE = false → 自動再開（再実行 = 続行意思）。skip completed steps.
 
-**Case 2: `status: "paused"`** (discovery-rebuild CONTINUE) → AskUserQuestion:
-- "前回のリビルド判定で CONTINUE（継続開発）となり、パイプラインが一時停止中です。"
-  - "リビルド判定を再実行する" — reset to rebuildcheck step, set status to "active"
-  - "harvest にスキップする（プロトタイプ完了とみなす）" — set completed to ["rebuildcheck"], current to "harvest", variant to "discovery-rebuild", status to "active"
-  - "探索を続行する（パイプライン終了）" — delete pipeline-state.json, exit
+**Case 2: `status: "paused"`** (discovery-rebuild CONTINUE):
+- INTERACTIVE_MODE = true → AskUserQuestion:
+  - "前回のリビルド判定で CONTINUE（継続開発）となり、パイプラインが一時停止中です。"
+    - "リビルド判定を再実行する" — reset to rebuildcheck step, set status to "active"
+    - "harvest にスキップする（プロトタイプ完了とみなす）" — set completed to ["rebuildcheck"], current to "harvest", variant to "discovery-rebuild", status to "active"
+    - "探索を続行する（パイプライン終了）" — delete pipeline-state.json, exit
+- INTERACTIVE_MODE = false → PAUSE_FOR_APPROVAL("resume-paused", current, status summary)
 
-**Case 3: `status: "rate-limited"`** → AskUserQuestion:
-- "前回は `${current}` ステップでレートリミットにより中断しました（${pauseReason}）。"
-  - "再開する（${current} から）" — set status to "active", resume from current
-  - "止める" — delete pipeline-state.json, exit
+**Case 3: `status: "rate-limited"`**:
+- INTERACTIVE_MODE = true → AskUserQuestion:
+  - "前回は `${current}` ステップでレートリミットにより中断しました（${pauseReason}）。"
+    - "再開する（${current} から）" — set status to "active", resume from current
+    - "止める" — delete pipeline-state.json, exit
+- INTERACTIVE_MODE = false → 自動再開（再試行）。set status to "active", resume from current.
+
+**Case 4: `status: "awaiting-approval"`**:
+- pendingApproval.type を読み取り
+- INTERACTIVE_MODE = true の場合:
+  - type に応じた AskUserQuestion を表示:
+    - spec-approval → "承認する / 修正指示付きで棄却 / 棄却する"
+    - gate → "進む / 修正する / 止める"
+    - review-nogo → "修正して再レビュー / 止める"
+    - resume-paused → Case 2 と同じ選択肢
+  - 回答に基づきパイプライン再開・修正・停止
+  - pendingApproval を null にクリア、status を "active" に更新
+- INTERACTIVE_MODE = false の場合:
+  - 再実行 = 暗黙の承認として扱う
+  - spec-approval → spec-draft.md を spec.md にコピーしてパイプライン続行
+  - gate → 自動続行
+  - review-nogo → 自動再レビュー
+  - resume-paused → 自動再開
+  - pendingApproval を null にクリア、status を "active" に更新
+  - 表示: "前回の承認待ちを自動承認しました（${type}）。パイプラインを続行します。"
 
 If not found → start from beginning.
 
@@ -249,7 +287,11 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 ##### A. Production Steps (plan, tasks, implement, harvest, bugfix)
 
 1. **Read command**: Read `commands/poor-dev.${STEP}.md`
-2. **Strip sections**: Remove `handoffs` frontmatter, "Gate Check" section, "Dashboard Update" section
+2. **Strip sections**:
+   a. **Frontmatter removal**: ファイル先頭の YAML frontmatter ブロック（最初の `---` から次の `---` まで）を完全に除去する。
+      部分的な除去は禁止（handoffs, description 等を個別に削除するのではなく、frontmatter 全体を除去）。
+   b. **Section removal**: "Gate Check" セクション、"Dashboard Update" セクションを除去。
+   c. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
 3. **Prepend**: NON_INTERACTIVE_HEADER (see 5.4)
 4. **Append context block**:
    ```
@@ -362,14 +404,28 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
    NOTE: opencode が内部リトライで成功した場合は介入不要。
 7. **Output parsing** (JSON サマリーベース):
-   - JSON.clarifications が非空 → AskUserQuestion でリレー → 回答追加して再 dispatch
+   - JSON.clarifications が非空:
+     - INTERACTIVE_MODE = true → AskUserQuestion でリレー → 回答追加して再 dispatch
+     - INTERACTIVE_MODE = false → マーカーを保持して自動続行
    - JSON.errors が非空 → stop pipeline, report error
    - JSON.timeout_type != "none" → タイムアウト報告
    - Verify expected output files exist (spec.md, plan.md, tasks.md etc.) via Glob
+7b. **Artifact display** (特定ステップ完了後のみ):
+
+   | STEP | 表示内容 |
+   |------|---------|
+   | plan | plan.md の Summary + Technical Context セクションを日本語で要約表示。詳細は plan.md 参照の旨を付記。 |
+   | specify | (A2 Step 11 で仕様サマリーを既に表示するため不要) |
+
+   表示後の動作は既存の Gate Check (Step 8) に委譲。
+   plan 表示のために独自の確認ポイントは追加しない（既存の gates.after-plan で制御可能）。
 8. **Gate check**: Read `.poor-dev/config.json` gates. If `gates.after-${STEP}` is true:
-   - AskUserQuestion: "進む / 修正する / 止める"
-   - "修正する" → user can manually run `/poor-dev.${STEP}`, then re-run `/poor-dev` to resume
-   - "止める" → save pipeline-state.json, exit
+   - INTERACTIVE_MODE = true → AskUserQuestion: "進む / 修正する / 止める"
+     - "修正する" → user can manually run `/poor-dev.${STEP}`, then re-run `/poor-dev` to resume
+     - "止める" → save pipeline-state.json, exit
+   - INTERACTIVE_MODE = false:
+     - ゲート有効時 → PAUSE_FOR_APPROVAL("gate", STEP, step summary)
+     - ゲート無効時 → 自動続行
 9. **Update pipeline-state.json**: Add STEP to `completed`, set `current` to next step
 10. **Progress report**: "Step N/M: ${STEP} complete"
 
@@ -406,8 +462,8 @@ specify は他の Production Steps と異なり、読み取り専用で実行し
 9. **Write draft**: FEATURE_DIR/spec-draft.md にドラフト本文を書き出し
 10. **[NEEDS CLARIFICATION] 解決**:
     - spec-draft.md 内の `[NEEDS CLARIFICATION: ...]` マーカーを全て抽出
-    - 各マーカーについて AskUserQuestion（オプション表形式で質問を中継）
-    - 回答で spec-draft.md 内の該当マーカーを置換
+    - INTERACTIVE_MODE = true → 各マーカーについて AskUserQuestion（オプション表形式で質問を中継）→ 回答で spec-draft.md 内の該当マーカーを置換
+    - INTERACTIVE_MODE = false → マーカーを残す（仕様承認の一時停止中にユーザーが確認・手動解決）
 11. **ユーザー承認**:
     - spec-draft.md の内容を以下の日本語整形フォーマットでユーザーに表示する（原文ファイルはそのまま保持）:
 
@@ -436,11 +492,12 @@ specify は他の Production Steps と異なり、読み取り専用で実行し
 
     - 各項目は spec-draft.md から抽出し、orchestrator が日本語に翻訳・要約する
     - 詳細が必要な場合はユーザーが spec-draft.md を直接参照できる旨を注記する
-    - AskUserQuestion:
+    - INTERACTIVE_MODE = true → AskUserQuestion:
       - "承認する" → `cp spec-draft.md spec.md && rm spec-draft.md`、パイプライン続行
       - "修正指示付きで棄却" → ユーザーの自由記述を spec-draft.md 末尾に `## Feedback` として追記 → パイプライン停止
       - "棄却する" → パイプライン停止（spec-draft.md はそのまま保存）
-    - 停止時: pipeline-state.json に `status: "stopped"`, `pauseReason: "spec rejected"` を記録
+      - 停止時: pipeline-state.json に `status: "stopped"`, `pauseReason: "spec rejected"` を記録
+    - INTERACTIVE_MODE = false → 仕様サマリーを表示 → PAUSE_FOR_APPROVAL("spec-approval", "specify", summary)
 12. **Validation**: 承認後、spec.md に対して checklists/requirements.md を生成（orchestrator がインラインで実行）
 13. **Gate check + pipeline-state.json update**: Section A Step 8-9 と同じ
 
@@ -452,7 +509,10 @@ persona spawn → aggregation → fixer → loop until convergence.
 ブラックボックス dispatch + シェルスクリプトベースポーリング + JSON サマリーによる verdict 抽出。
 
 1. **Read command**: Read `commands/poor-dev.${STEP}.md`
-2. **Strip**: `handoffs` frontmatter only (review commands manage their own flow)
+2. **Strip sections**:
+   a. **Frontmatter removal**: ファイル先頭の YAML frontmatter ブロック（最初の `---` から次の `---` まで）を完全に除去する。
+      部分的な除去は禁止（handoffs, description 等を個別に削除するのではなく、frontmatter 全体を除去）。
+   b. **Validation**: 組み立て済みプロンプトに `handoffs:` または `send:` 文字列が残っていないことを確認。残っている場合はエラー停止。
 3. **Prepend**: NON_INTERACTIVE_HEADER
 4. **Append context block**: FEATURE_DIR, BRANCH, target_file (resolved by variant — see Section A step 4 table; e.g., plan.md for planreview, fix-plan.md for bugfix-small planreview)
 5. **Resolve model**: Same config resolution as production steps, using CATEGORY=`${STEP}`
@@ -463,8 +523,12 @@ persona spawn → aggregation → fixer → loop until convergence.
 6b. **Rate limit detection**: Section A step 6b と同じフローを適用。JSON サマリーの exit_code != 0 の場合のみ検出・フォールバック・パイプライン中断を行う。
 7. **Verdict extraction**: JSON サマリーの verdict フィールドを確認:
    - "GO" → proceed to next step
-   - "CONDITIONAL" → AskUserQuestion: "レビュー結果は CONDITIONAL です。進めますか？ / 修正しますか？"
-   - "NO-GO" → AskUserQuestion: "レビューが NO-GO を返しました。修正して再レビューしますか？ / 止めますか？"
+   - "CONDITIONAL":
+     - INTERACTIVE_MODE = true → AskUserQuestion: "レビュー結果は CONDITIONAL です。進めますか？ / 修正しますか？"
+     - INTERACTIVE_MODE = false → 警告表示のみで自動続行
+   - "NO-GO":
+     - INTERACTIVE_MODE = true → AskUserQuestion: "レビューが NO-GO を返しました。修正して再レビューしますか？ / 止めますか？"
+     - INTERACTIVE_MODE = false → レビュー結果表示 → PAUSE_FOR_APPROVAL("review-nogo", STEP, verdict)
    - null → stop pipeline, report error
 8. **Gate check + pipeline-state.json update**: Same as production steps
 
@@ -539,6 +603,27 @@ You have READ-ONLY tool access (Edit, Write, Bash, NotebookEdit are disabled).
 - Do NOT attempt to create branches, directories, or files.
 ```
 
+#### 5.4c PAUSE_FOR_APPROVAL(type, step, display_content)
+
+INTERACTIVE_MODE = false の場合に、確認が必要な箇所でパイプラインを一時停止するメカニズム。
+
+1. **成果物の表示**: display_content をユーザーに出力（仕様サマリー、プラン概要、レビュー結果等）
+2. **pipeline-state.json 更新**:
+   ```json
+   {
+     "status": "awaiting-approval",
+     "pauseReason": "${type} at ${step}",
+     "pendingApproval": { "type": "${type}", "step": "${step}" }
+   }
+   ```
+3. **ユーザーへのメッセージ**:
+   "⏸ 承認待ちで一時停止しました（${type}）。"
+   "成果物を確認後、`/poor-dev` を再実行すると承認して続行します。"
+   "パイプラインを中止するには pipeline-state.json を削除してください。"
+4. **パイプライン終了**
+
+**設計意図**: 再実行 = 暗黙の承認。ユーザーが成果物を確認し、問題なければ再実行する。問題があれば成果物を手動編集してから再実行するか、パイプラインを破棄する。
+
 #### 5.5 Error Recovery
 
 - **Step failure**: Pipeline stops immediately. All previously-produced artifacts are preserved in FEATURE_DIR.
@@ -576,3 +661,36 @@ Update living documents in `docs/`:
    - Active features table (feature, phase, status, branch)
    - Completed features table
    - Upcoming section (from concept.md/goals.md/milestones.md if present)
+
+### CLI Compatibility Guide
+
+#### ツール可用性マトリクス
+
+| ツール | Claude Code | OpenCode | 備考 |
+|--------|:-----------:|:--------:|------|
+| AskUserQuestion | ✅ | ❌ | 対話的確認。INTERACTIVE_MODE で分岐 |
+| EnterPlanMode / ExitPlanMode | ✅ | ❌ | NON_INTERACTIVE_HEADER で既に禁止 |
+| Task() | ✅ | ❌ | FALLBACK_MODE で代替 |
+| Bash (background) | ✅ | ✅ | poll-dispatch.sh で統一 |
+| Read / Write / Edit / Glob / Grep | ✅ | ✅ | |
+
+#### 新規 AskUserQuestion 追加時の規約
+
+AskUserQuestion を使用する全ての箇所で以下パターンを適用すること:
+
+```
+if INTERACTIVE_MODE:
+  AskUserQuestion: [質問と選択肢]
+  [回答に基づく分岐]
+else:
+  [成果物・状況を表示]
+  PAUSE_FOR_APPROVAL(type, step, display_content)  ← 確認必須の場合
+  または
+  [自動続行 + 警告表示]                              ← 自動で安全な場合
+```
+
+#### Handoff 規約
+
+- orchestrator (poor-dev.md) の handoff は `send: true` を使用しない
+- サブコマンドの handoff `send: true` は個別実行時の利便性のために維持可能
+- パイプラインで dispatch する際は frontmatter 全体を除去 + validation で担保

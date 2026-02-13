@@ -254,16 +254,17 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
    | (default) | plan.md |
    | bugfix-small | fix-plan.md |
 5. **Resolve model**: Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {}, "polling": { "interval": 1, "idle_timeout": 120, "max_timeout": 600 } }`. Check `overrides.${STEP}` → `default`. Extract cli + model.
-6. **Dispatch** (アイドルベース適応ポーリング):
+6. **Dispatch** (シェルスクリプトベースポーリング):
 
-   **起動**: Bash(run_in_background: true) で dispatch。プロンプトは /tmp/poor-dev-step.txt に書き出し済み。
+   **起動**: プロンプトは /tmp/poor-dev-step.txt に書き出し済み。
+   dispatch コマンドを /tmp/poor-dev-cmd.sh に Write ツールで書き出す（変数は展開済みの値を埋め込む）:
    - If OPENCODE_AVAILABLE and resolved cli == "opencode":
-     ```bash
-     opencode run --model ${RESOLVED_MODEL} --format json "$(cat /tmp/poor-dev-step.txt)"
+     ```
+     opencode run --model <RESOLVED_MODEL> --format json "$(cat /tmp/poor-dev-step.txt)"
      ```
    - If OPENCODE_AVAILABLE and resolved cli == "claude":
-     ```bash
-     cat /tmp/poor-dev-step.txt | claude -p --model ${RESOLVED_MODEL} --no-session-persistence --output-format text
+     ```
+     cat /tmp/poor-dev-step.txt | claude -p --model <RESOLVED_MODEL> --no-session-persistence --output-format text
      ```
    - If FALLBACK_MODE:
      ```
@@ -271,49 +272,39 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
      ```
      (FALLBACK_MODE はタイムアウト不要 — Task() は内部で管理。ポーリングループをスキップ)
 
-   → task_id と output_file パスを取得
-
-   **ポーリングループ** (FALLBACK_MODE 以外):
+   **実行** (FALLBACK_MODE 以外):
    ```
-   ELAPSED = 0, IDLE = 0, LAST_SIZE = 0, DISPLAYED_PROGRESS = 0
-   OUTPUT_STARTED = false
+   OUTPUT_FILE = /tmp/poor-dev-output-${STEP}.txt
+   PROGRESS_FILE = /tmp/poor-dev-progress-${STEP}.txt
+
+   Bash(run_in_background: true):
+     lib/poll-dispatch.sh /tmp/poor-dev-cmd.sh ${OUTPUT_FILE} ${PROGRESS_FILE} ${IDLE_TIMEOUT} ${MAX_TIMEOUT}
+   → task_id を取得
+   ```
+
+   **軽量ポーリング** (進捗リレー付き):
+   ```
+   DISPLAYED = 0
 
    while true:
-     (1) TaskOutput(task_id, block=false, timeout=1000)
-         → status が completed/failed → ループ終了
+     TaskOutput(task_id, block=false, timeout=5000)
+       → completed/failed → break
 
-     (2) Read(output_file) で現在の出力サイズを確認
-         → CURRENT_SIZE > LAST_SIZE の場合:
-            OUTPUT_STARTED = true
-            IDLE = 0 (リセット — 出力が増加中)
-            LAST_SIZE = CURRENT_SIZE
-
-            (2b) 進捗マーカー抽出:
-              - output_file から `[PROGRESS: ...]` パターンを検索
-              - opencode --format json の場合: NDJSON の各行から
-                result/text フィールドを抽出して検索
-              - 全マーカーを抽出し、DISPLAYED_PROGRESS 以降の
-                新規マーカーのみユーザーにリレー表示
-              - DISPLAYED_PROGRESS を更新して二重表示を防止
-
-         → CURRENT_SIZE == LAST_SIZE の場合:
-            IDLE += POLL_INTERVAL
-
-     (3) IF OUTPUT_STARTED AND IDLE >= IDLE_TIMEOUT → TaskStop(task_id)、タイムアウト扱い
-         # 出力が一度も始まっていない場合は IDLE_TIMEOUT を適用しない
-         # MAX_TIMEOUT のみが安全停止の上限として機能する
-     (4) ELAPSED >= MAX_TIMEOUT → TaskStop(task_id)、安全停止
-     (5) ELAPSED += POLL_INTERVAL、次のサイクルへ
+     Read(PROGRESS_FILE)
+       → DISPLAYED 以降の新規マーカーのみユーザーにリレー表示
+       → DISPLAYED を更新
    ```
+   ※ TaskOutput の timeout=5000 が実質的な sleep 代替（5秒間ブロック）
+   ※ progress_file は数行のマーカーのみ。1サイクルあたり: ~20B (status) + ~数行 (マーカー)
 
-   **結果**: プロセス完了時の output_file 全文を取得 → step 7 (Output parsing) へ
+   **完了時**: TaskOutput → JSON サマリー (~200B) を取得
 
    **設計意図**:
-   - 出力が増え続ける限り無期限に待機（MAX_TIMEOUT まで）
-   - 出力が止まって IDLE_TIMEOUT 秒経過 → プロセスがハングと判断
-   - タイムアウト値の事前予想が不要
+   - ポーリングループ・タイムアウト監視・マーカー抽出は全て lib/poll-dispatch.sh 内で実行
+   - オーケストレーターのコンテキストには軽量な進捗マーカーと最終JSONサマリーのみが入る
+   - output_file 全文はオーケストレーターのコンテキストに入らない（ディスク上に保持）
 
-6b. **Rate limit detection** (dispatch が失敗した場合のみ。正常完了時はスキップ):
+6b. **Rate limit detection** (JSON サマリーの exit_code != 0 の場合のみ。正常完了時はスキップ):
 
    ⚠ **絶対禁止**: プロセス実行中に opencode ログを手動チェックして
    レートリミットを判断してはならない。opencode は内部で指数バックオフ
@@ -355,10 +346,11 @@ For each STEP in PIPELINE (skipping already-completed steps if resuming):
        ```
 
    NOTE: opencode が内部リトライで成功した場合は介入不要。
-7. **Output parsing**:
-   - `[NEEDS CLARIFICATION: ...]` → AskUserQuestion to relay question → re-dispatch with answer appended
-   - `[ERROR: ...]` → stop pipeline, report error
-   - Verify expected output files exist (spec.md, plan.md, tasks.md etc.)
+7. **Output parsing** (JSON サマリーベース):
+   - JSON.clarifications が非空 → AskUserQuestion でリレー → 回答追加して再 dispatch
+   - JSON.errors が非空 → stop pipeline, report error
+   - JSON.timeout_type != "none" → タイムアウト報告
+   - Verify expected output files exist (spec.md, plan.md, tasks.md etc.) via Glob
 8. **Gate check**: Read `.poor-dev/config.json` gates. If `gates.after-${STEP}` is true:
    - AskUserQuestion: "進む / 修正する / 止める"
    - "修正する" → user can manually run `/poor-dev.${STEP}`, then re-run `/poor-dev` to resume
@@ -442,32 +434,23 @@ specify は他の Production Steps と異なり、読み取り専用で実行し
 Reviews are dispatched as **black-box orchestrators**. The review command internally handles:
 persona spawn → aggregation → fixer → loop until convergence.
 
-ブラックボックス dispatch + アイドルベース適応ポーリング + 進捗マーカー抽出。
+ブラックボックス dispatch + シェルスクリプトベースポーリング + JSON サマリーによる verdict 抽出。
 
 1. **Read command**: Read `commands/poor-dev.${STEP}.md`
 2. **Strip**: `handoffs` frontmatter only (review commands manage their own flow)
 3. **Prepend**: NON_INTERACTIVE_HEADER
 4. **Append context block**: FEATURE_DIR, BRANCH, target_file (resolved by variant — see Section A step 4 table; e.g., plan.md for planreview, fix-plan.md for bugfix-small planreview)
 5. **Resolve model**: Same config resolution as production steps, using CATEGORY=`${STEP}`
-6. **Dispatch**: Section A step 6 と同じアイドルベース適応ポーリング。
-   ただしレビュー用の追加処理 (6c) をポーリングループ内で実行。
+6. **Dispatch**: Section A step 6 と同じシェルスクリプトベースポーリング。
+   進捗マーカー（`[REVIEW-PROGRESS: ...]`）は poll-dispatch.sh が自動抽出し progress_file に書き出す。
+   オーケストレーターは progress_file を Read して新規マーカーのみリレー表示する。
 
-   **ポーリングループ内の step (2) で毎サイクル実行**:
-
-   6c. **進捗マーカー抽出**:
-   - output_file を Read で取得した出力内容から `[REVIEW-PROGRESS: ...]` パターンを検索
-   - opencode --format json の場合: NDJSON の各行から `{"result":"..."}` の result フィールド、
-     または `{"type":"text","text":"..."}` の text フィールドを抽出してテキスト内を検索
-   - 前回チェック以降に新しいマーカーが見つかったらユーザーにリレー表示:
-     例: `"planreview #1: 4 issues (M:2, L:2) → fixing..."`
-   - DISPLAYED_MARKERS カウンタで二重表示を防止
-
-6b. **Rate limit detection**: Section A step 6b と同じフローを適用。dispatch 失敗時のレートリミット検出・フォールバック・パイプライン中断を行う。
-7. **Verdict extraction**: プロセス完了後の全出力から verdict を抽出:
-   - `v: GO` → proceed to next step
-   - `v: CONDITIONAL` → AskUserQuestion: "レビュー結果は CONDITIONAL です。進めますか？ / 修正しますか？"
-   - `v: NO-GO` → AskUserQuestion: "レビューが NO-GO を返しました。修正して再レビューしますか？ / 止めますか？"
-   - Verdict not found or error → stop pipeline, report error
+6b. **Rate limit detection**: Section A step 6b と同じフローを適用。JSON サマリーの exit_code != 0 の場合のみ検出・フォールバック・パイプライン中断を行う。
+7. **Verdict extraction**: JSON サマリーの verdict フィールドを確認:
+   - "GO" → proceed to next step
+   - "CONDITIONAL" → AskUserQuestion: "レビュー結果は CONDITIONAL です。進めますか？ / 修正しますか？"
+   - "NO-GO" → AskUserQuestion: "レビューが NO-GO を返しました。修正して再レビューしますか？ / 止めますか？"
+   - null → stop pipeline, report error
 8. **Gate check + pipeline-state.json update**: Same as production steps
 
 ##### C. Conditional Steps (bugfix, rebuildcheck)

@@ -1,5 +1,5 @@
 ---
-description: Intake user input and route to the appropriate flow: feature, bugfix, roadmap, discovery, Q&A, or documentation.
+description: Intake user input and route to the appropriate flow: feature, bugfix, investigation, roadmap, discovery, Q&A, or documentation.
 handoffs:
   - label: Feature Specification
     agent: poor-dev.specify
@@ -8,6 +8,10 @@ handoffs:
   - label: Bug Fix Investigation
     agent: poor-dev.bugfix
     prompt: Investigate and fix this bug report
+    send: true
+  - label: Problem Investigation
+    agent: poor-dev.investigate
+    prompt: Investigate this problem or unknown issue
     send: true
   - label: Roadmap Concept
     agent: poor-dev.concept
@@ -46,15 +50,17 @@ Analyze `$ARGUMENTS` through a 3-stage process.
 **1a. Intent Detection**: Classify by what the user wants to accomplish:
 - **Feature**: user wants to add, create, or implement new functionality
 - **Bugfix**: user reports an error, crash, broken behavior, or regression
+- **Investigation**: user wants to investigate a problem, understand behavior, or find root cause without assuming it's a bug
 - **Roadmap**: user wants to plan strategy, define vision, or explore concepts at project level
 - **Discovery**: user wants to prototype, explore ideas, rebuild existing code, or "just try something"
 - **Q&A**: user asks a question about the codebase or architecture
 - **Documentation**: user requests a report, summary, or document generation
 
-**Priority rule**: Feature / Bugfix / Roadmap / Discovery signals take precedence over Q&A / Documentation. Example: "How do I implement X?" → Feature (not Q&A), because the intent is implementation.
+**Priority rule**: Feature / Bugfix / Investigation / Roadmap / Discovery signals take precedence over Q&A / Documentation. Example: "How do I implement X?" → Feature (not Q&A), because the intent is implementation.
 
 **1b. Contextual Analysis** (when intent is ambiguous):
 - Problem description ("X happens", "X doesn't work") → bugfix
+- Investigation signal ("why does X happen", "investigate X", "something seems off") → investigation
 - Desired state ("I want X", "add X") → feature
 - Planning/strategy ("plan for X", "strategy") → roadmap
 - Exploration ("try X", "prototype", "rebuild", "vibe coding") → discovery
@@ -69,14 +75,16 @@ Analyze `$ARGUMENTS` through a 3-stage process.
 If confidence is Medium or below, ask user to choose:
 1. "機能リクエスト（新機能・拡張）"
 2. "バグ報告（既存機能の不具合・異常動作）"
-3. "ロードマップ・戦略策定（プロジェクト企画段階）"
-4. "探索・プロトタイプ（まず作って学ぶ / 既存コードを整理して再構築）"
-5. "質問・ドキュメント作成（パイプライン不要）"
-6. "もう少し詳しく説明する"
+3. "調査（原因不明の問題・挙動の理解）"
+4. "ロードマップ・戦略策定（プロジェクト企画段階）"
+5. "探索・プロトタイプ（まず作って学ぶ / 既存コードを整理して再構築）"
+6. "質問・ドキュメント作成（パイプライン不要）"
+7. "もう少し詳しく説明する"
 
-If "もう少し詳しく" → re-classify. If option 5 → follow-up: ask/report.
+If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/report.
 
 **Non-pipeline shortcut**: Q&A / Documentation → skip Step 3, go to Step 4D/4E.
+**Investigation shortcut**: → skip Step 3, go to Step 4G (no branch/directory creation needed).
 **Discovery shortcut**: → skip Step 3, go to Step 4F (branch handled by `/poor-dev.discovery`).
 
 ### Step 3: Branch & Directory Creation (pipeline flows only)
@@ -147,6 +155,9 @@ If "もう少し詳しく" → re-classify. If option 5 → follow-up: ask/repor
 **4F Discovery**: Report "Classified as discovery: <summary>". Next: `/poor-dev.discovery`
 Discovery handles its own branch/directory creation.
 
+**4G Investigation**: Report "Classified as investigation: <summary>". Next: `/poor-dev.investigate`
+Investigation is a non-pipeline flow (read-only analysis). No branch/directory creation needed.
+
 ### Step 5: Pipeline Orchestration
 
 After routing is complete, automatically orchestrate the full pipeline for the classified flow.
@@ -178,13 +189,14 @@ Based on the classification from Step 1:
 | Bugfix | `bugfix → [CONDITIONAL]` |
 | Bugfix (small) | `bugfix → planreview(fix-plan.md) → implement → qualityreview → phasereview` |
 | Bugfix (large) | `bugfix → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
+| Investigation | `investigate` (single step, read-only) |
 | Roadmap | `concept → goals → milestones → roadmap` |
 | Discovery-init | `discovery` (single step) |
 | Discovery-rebuild | `rebuildcheck → [CONDITIONAL]` |
 | Discovery-rebuild (REBUILD) | `rebuildcheck → harvest → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
 | Discovery-rebuild (CONTINUE) | `rebuildcheck` (pipeline pauses) |
 
-For single-step pipelines (discovery-init): dispatch that step and return. No pipeline-state tracking needed.
+For single-step pipelines (investigation, discovery-init): dispatch that step and return. No pipeline-state tracking needed.
 For conditional pipelines (bugfix, discovery-rebuild): dispatch the first step, then use Section C to resolve the variant and determine the continuation pipeline.
 
 #### 5.2 Resume Detection

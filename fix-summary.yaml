@@ -1,0 +1,72 @@
+fixed:
+  - id: TR-001
+    desc: "Updated Total Tasks from 67 to 145 to match actual task count"
+  - id: TR-003
+    desc: "Added [P] parallelizable markers to Phase 2 tasks T017-T027 as they work in different utilities"
+  - id: TR-008
+    desc: "Enhanced T055 and T060 with REST API integration patterns (GitHub API endpoints, OSV API endpoints)"
+  - id: TR-009
+    desc: "Clarified T048 GLM4.7 dispatch mechanism by adding 'use Bash tool with gh CLI' specification"
+  - id: TR-011
+    desc: "Enhanced T034 and T035 with specific visualization details (colored badges/progress bars for scores, side-by-side comparison)"
+  - id: TR-019
+    desc: "Added FR-010 reference to Phase 7 goal to explicitly link fallback requirement to implementation"
+  - id: TR-020
+    desc: "Changed MVP acceptance criteria from pre-checked [x] to unchecked [ ] (lines 479-488)"
+  - id: TR-021
+    desc: "Changed Format Validation from pre-filled ✅ to unchecked [ ] (lines 493-498)"
+  - id: TR-022
+    desc: "Updated Phase 6 header from 'User Story 4 (P1)' to 'User Story 4 (P2)' to match spec.md priority"
+  - id: TR-031
+    desc: "Added default values to T051 polling interval (30s default, idle_timeout: 300s, max_timeout: 900s)"
+  - id: TR-015
+    desc: "Added CI/CD pipeline, deployment procedures, and monitoring infrastructure to Post-MVP deferrals section"
+rejected:
+  - id: TR-002
+    reason: "Tasks T113-T115 ARE present at lines 305-307 - issue is incorrect"
+  - id: TR-004
+    reason: "Cannot add scoring formulas as they are not specified in spec.md - out of scope"
+  - id: TR-005
+    reason: "Maintainability scoring metrics ARE defined in T056-T059 (last commit date, resolved/total issues, active contributors, README/docs) - issue is incorrect"
+  - id: TR-006
+    reason: "Backup recovery IS implemented in T022 (rollback capability) and T097 (restore from backup) - issue is incorrect"
+  - id: TR-007
+    reason: "Cache validation/update execution order is an implementation detail, not a spec requirement - out of scope"
+  - id: TR-010
+    reason: "Performance baseline testing not required by spec.md - out of scope"
+  - id: TR-012
+    reason: "[LIMITED_KNOWLEDGE] tag behavior not specified in spec.md - out of scope"
+  - id: TR-013
+    reason: "Cache relevance keyword matching algorithm is an implementation detail - out of scope"
+  - id: TR-014
+    reason: "Orphan state recovery not specified in spec.md or spec.md requirements - out of scope"
+  - id: TR-016
+    reason: "CI/CD pipeline not required by spec.md - deferred to Post-MVP"
+  - id: TR-017
+    reason: "Deployment process not required by spec.md - deferred to Post-MVP"
+  - id: TR-018
+    reason: "Infrastructure tasks (T001-T011) are sufficient for MVP scope as defined in spec.md"
+  - id: TR-023
+    reason: "Task granularity is appropriate for implementation scope - cannot reduce without dropping features"
+  - id: TR-024
+    reason: "T054 (WebFetch test) is correctly placed in Phase 4 as it's testing GLM4.7 sub-agent functionality"
+  - id: TR-025
+    reason: "Task complexity is appropriate - decomposition notes would increase line count beyond acceptable limits"
+  - id: TR-026
+    reason: "T012 (parser utility) and T026-T027 (session state/decision recorder) serve different purposes - not duplication"
+  - id: TR-027
+    reason: "Phase 3 tasks are NOT parallelizable - all in same file with dependencies - adding [P] would be incorrect"
+  - id: TR-028
+    reason: "Phase 4 partial parallelization is correct - agent definition (T040-T047) must complete before dispatch (T048-T054)"
+  - id: TR-029
+    reason: "Phase 5 validation dependencies are correctly reflected - adding decomposition notes would exceed line limits"
+  - id: TR-030
+    reason: "WSL 2 testing completeness is verified by T112-T116 - artifact verification is implementation detail"
+  - id: TR-032
+    reason: "Error marker format is defined as [ERROR: description] - sufficient for spec requirements"
+  - id: TR-033
+    reason: "Progress marker format is defined as [PROGRESS: step-name description] - sufficient for spec requirements"
+  - id: TR-034
+    reason: "Performance measurement tracked by SC-005 (5-minute completion time) - tracking infrastructure is Post-MVP"
+remaining: []
+delta_lines: +2

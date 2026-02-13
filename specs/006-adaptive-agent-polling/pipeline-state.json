@@ -1,0 +1,10 @@
+{
+  "flow": "feature",
+  "variant": null,
+  "completed": ["specify", "plan"],
+  "current": "planreview",
+  "status": "paused",
+  "pauseReason": "planreview timeout - fixes applied but no final verdict. User chose to stop.",
+  "condition": null,
+  "updated": "2026-02-12T12:45:00Z"
+}

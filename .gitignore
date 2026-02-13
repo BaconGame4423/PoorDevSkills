@@ -1,3 +1,4 @@
 .opencode/node_modules/
+node_modules/
 .tmp-test-*
 .poor-dev-version

@@ -1,0 +1,10 @@
+{
+  "flow": "feature",
+  "variant": null,
+  "completed": ["specify", "plan"],
+  "current": "planreview",
+  "status": "active",
+  "pauseReason": null,
+  "condition": null,
+  "updated": "2026-02-12T00:00:00Z"
+}

@@ -1,6 +1,11 @@
 {
   "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" },
-  "overrides": {},
+  "overrides": {
+    "suggest": {
+      "cli": "opencode",
+      "model": "zai-coding-plan/glm-4.7"
+    }
+  },
   "gates": {},
   "polling": {
     "interval": 1,

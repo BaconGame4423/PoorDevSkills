@@ -174,7 +174,7 @@ Based on the classification from Step 1:
 
 | Classification | Pipeline |
 |---------------|----------|
-| Feature | `specify → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
+| Feature | `specify → suggest → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
 | Bugfix | `bugfix → [CONDITIONAL]` |
 | Bugfix (small) | `bugfix → planreview(fix-plan.md) → implement → qualityreview → phasereview` |
 | Bugfix (large) | `bugfix → plan → planreview → tasks → tasksreview → implement → architecturereview → qualityreview → phasereview` |
@@ -231,6 +231,7 @@ If not found → start from beginning.
 For each STEP in PIPELINE (skipping already-completed steps if resuming):
 
 - If STEP == "specify": → Section A2 (Specify Step Read-Only Override) を実行
+- If STEP == "plan": Check `${FEATURE_DIR}/suggestions.yaml` exists (verify suggest phase completed). If missing, warn but continue (suggestions are optional).
 - Otherwise: → Section A (通常 Production Steps) / B / C を実行
 
 ##### A. Production Steps (plan, tasks, implement, harvest, bugfix)

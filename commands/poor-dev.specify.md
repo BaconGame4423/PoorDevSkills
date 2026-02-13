@@ -1,6 +1,10 @@
 ---
 description: Create or update the feature specification from a natural language feature description.
 handoffs:
+  - label: Get Best Practice Suggestions
+    agent: poor-dev.suggest
+    prompt: Research best practices and suggestions for this feature
+    send: true
   - label: Build Technical Plan
     agent: poor-dev.plan
     prompt: Create a plan for the spec. I am building with...
@@ -66,7 +70,7 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
      ```
      Wait for user responses, update spec, re-validate.
 
-6. Report: branch name, spec path, checklist results, readiness for `/poor-dev.clarify` or `/poor-dev.plan`.
+6. Report: branch name, spec path, checklist results, readiness for `/poor-dev.suggest` (next phase) or `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
 
 ## Spec Template
 

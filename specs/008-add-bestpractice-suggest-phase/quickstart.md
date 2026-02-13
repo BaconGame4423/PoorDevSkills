@@ -245,6 +245,119 @@ When run as part of an automated pipeline:
 [PROGRESS: Non-interactive mode - decisions deferred to later phase]
 ```
 
+## Backup and Recovery Procedures
+
+### Automatic Backups
+
+All YAML state files are automatically backed up before any write operation:
+
+```bash
+# Backup location
+specs/008-add-bestpractice-suggest-phase/.backups/
+
+# Files backed up
+- exploration-session-<timestamp>.yaml
+- suggestions-<timestamp>.yaml
+- suggestion-decisions-<timestamp>.yaml
+```
+
+**Backup naming**: `<filename>-<ISO8601_timestamp>.yaml` (e.g., `suggestions-20260212T103045Z.yaml`)
+
+**Retention**: Last 5 backups retained, older than 7 days removed automatically
+
+### Manual Recovery
+
+If a YAML file becomes corrupted:
+
+```bash
+# Run recovery command
+/poor-dev.suggest recover
+
+# Recovery process:
+# 1. Detects corrupted files
+# 2. Restores from most recent backup
+# 3. If no backup, reconstructs from related files
+# 4. Verifies cross-file consistency
+```
+
+**Manual restoration from specific backup**:
+
+```bash
+# List available backups
+ls -lt specs/008-add-bestpractice-suggest-phase/.backups/
+
+# Copy specific backup to restore
+cp specs/008-add-bestpractice-suggest-phase/.backups/suggestions-20260212T103045Z.yaml \
+   specs/008-add-bestpractice-suggest-phase/suggestions.yaml
+```
+
+### Common Corruption Scenarios
+
+**Scenario 1: suggestion-decisions.yaml corrupted**
+- Recovery automatically rebuilds from suggestions.yaml
+- All decisions reset to `pending`
+- Re-run decision collection to restore choices
+
+**Scenario 2: suggestions.yaml corrupted**
+- Restores from `.backups/` directory
+- If no backup: uses exploration-session.yaml to determine suggestion count
+- May require re-running suggest phase
+
+**Scenario 3: exploration-session.yaml corrupted**
+- Restores from backup
+- If no backup: cannot recover session metadata
+- Re-run suggest phase to create new session
+
+## Cache Refresh Procedures
+
+### Automatic Cache Validation
+
+Cache is validated monthly based on `last_updated` timestamp:
+
+```yaml
+# .poor-dev/cache/exploration-cache.yaml
+version: "1.0.0"
+last_updated: "2026-02-12T10:00:00Z"
+categories:
+  testing_frameworks:
+    - name: Jest
+      maintainability_score: 92
+      security_score: 95
+```
+
+**Freshness check**: If `last_updated` is >= 30 days old, cache is considered stale
+
+### Manual Cache Refresh
+
+Force refresh to update all library scores:
+
+```bash
+/poor-dev.suggest refresh-cache
+
+# Refresh process:
+# 1. Reads current cache
+# 2. Checks GitHub API for last commit dates
+# 3. Checks OSV API for vulnerabilities
+# 4. Updates maintainability/security scores
+# 5. Tags stale libraries with [STALE] prefix
+# 6. Removes libraries with scores < 50
+# 7. Creates backup before writing updated cache
+```
+
+**When to refresh**:
+- Monthly (automatic based on freshness check)
+- After major security announcements
+- When library recommendations seem outdated
+- Before starting critical features
+
+**Cache refresh output**:
+```
+[PROGRESS: Cache refresh started: 45 libraries]
+[PROGRESS: Validated Jest: maintainability=92, security=95]
+[PROGRESS: Validated Mocha: maintainability=88, security=90]
+[PROGRESS: Cache refresh complete: 42 updated, 3 removed, 1 stale]
+```
+
 ## Troubleshooting
 
 ### Issue: GLM4.7 Exploration Fails
@@ -299,6 +412,183 @@ When run as part of an automated pipeline:
 **Solution**:
 - Run `/poor-dev.suggest` without pipeline flags for interactive mode
 - Or review and decide later when viewing `suggestions.yaml`
+
+## Escalation Paths for Failures
+
+### Level 1: Retry with Increased Timeout
+
+If suggestion phase times out during complex research:
+
+```json
+// Edit .poor-dev/config.json
+{
+  "polling": {
+    "max_timeout": 600  // Increase from 300s to 10 minutes
+  }
+}
+```
+
+Then re-run: `/poor-dev.suggest specs/008-add-bestpractice-suggest-phase`
+
+### Level 2: Model Fallback
+
+If GLM4.7 is unavailable or consistently failing:
+
+```json
+// Edit .poor-dev/config.json
+{
+  "overrides": {
+    "suggest": {
+      "model": "claude-3-opus-20240229"  // Fallback to Claude Opus
+    }
+  }
+}
+```
+
+Note: Research quality may differ between models.
+
+### Level 3: Manual Research Mode
+
+If automated exploration fails repeatedly:
+
+1. Skip automated exploration
+2. Use manual suggestion addition (STEP 8b in command contract)
+3. Provide your own research findings:
+   ```yaml
+   - id: <generate UUID>
+     type: library
+     name: "Your Library"
+     description: "..."
+     rationale: "..."
+     maintainability_score: 85
+     security_score: 90
+     source: "manual"
+   ```
+
+### Level 4: Continue Without Suggestions
+
+If no suggestions are needed or research is blocked:
+
+```bash
+# Accept empty suggestion set
+/poor-dev.suggest specs/008-add-bestpractice-suggest-phase
+
+# When prompted "No suggestions found", select:
+# [ ] Continue without suggestions
+
+# Or manually create empty files:
+echo '[]' > specs/008-add-bestpractice-suggest-phase/suggestions.yaml
+echo '[]' > specs/008-add-bestpractice-suggest-phase/suggestion-decisions.yaml
+```
+
+### Level 5: Skip Suggestion Phase
+
+For standard features not requiring specialized tools:
+
+```bash
+# Go directly to planning
+/poor-dev.plan specs/008-add-bestpractice-suggest-phase/spec.md
+
+# Planning phase will proceed without suggestion context
+```
+
+### Escalation Decision Tree
+
+```
+GLM4.7 Timeout
+  ↓
+[L1] Retry with increased timeout (600s)
+  ↓ (if still fails)
+[L2] Switch to Claude Opus model
+  ↓ (if unavailable)
+[L3] Manual research mode
+  ↓ (if blocked)
+[L4] Continue without suggestions
+  ↓ (if unnecessary)
+[L5] Skip suggestion phase entirely
+```
+
+## WSL 2 Ubuntu Setup Notes
+
+### Prerequisites
+
+Ensure required tools are installed in WSL 2 Ubuntu:
+
+```bash
+# Check Node.js (for .mjs modules)
+node --version  # Should be >= 18.0.0
+
+# Check curl (for API calls)
+which curl
+
+# Check opencode or claude CLI
+which opencode
+which claude
+```
+
+### WSL 2 Specific Configuration
+
+```json
+// .poor-dev/config.json
+{
+  "default": {
+    "cli": "opencode",  // Recommended for WSL 2
+    "model": "zai-coding-plan/glm-4.7"
+  },
+  "polling": {
+    "interval": 2,       // Slightly longer due to WSL overhead
+    "idle_timeout": 150,
+    "max_timeout": 360
+  }
+}
+```
+
+### File System Performance
+
+WSL 2 has slower I/O for Windows file system paths. Store project in WSL native file system:
+
+```bash
+# Good: WSL native (fast)
+/home/bacon/DevSkills/
+
+# Avoid: Windows file system via /mnt/c (slow)
+/mnt/c/Users/bacon/DevSkills/
+```
+
+### Network Access
+
+Ensure WSL 2 has internet access for GitHub and OSV APIs:
+
+```bash
+# Test GitHub API
+curl -I https://api.github.com
+
+# Test OSV API
+curl -I https://api.osv.dev
+
+# If blocked, check Windows firewall settings
+```
+
+### Common WSL 2 Issues
+
+**Issue**: `node: command not found`
+```bash
+# Install Node.js via nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source ~/.bashrc
+nvm install 18
+```
+
+**Issue**: API timeouts in WSL 2
+- Increase timeout values in config
+- Check DNS resolution: `cat /etc/resolv.conf`
+- Restart WSL: `wsl --shutdown` (from Windows PowerShell)
+
+**Issue**: Permission errors on .mjs files
+```bash
+# Ensure execute permissions
+chmod +x lib/*.mjs
+```
 
 ## Configuration
 

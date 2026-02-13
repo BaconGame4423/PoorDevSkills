@@ -494,12 +494,17 @@ Output: `[PROGRESS: Continuing without suggestions]`
 
 ## STEP 10: Completion and Reporting
 
-Generate final summary:
+Generate final summary with duration tracking:
 
 ```yaml
 type: suggest
 feature_dir: ${FEATURE_DIR}
 exploration_session_id: ${EXPLORATION_SESSION_ID}
+duration:
+  total_seconds: ${TOTAL_ELAPSED_SECONDS}
+  exploration_seconds: ${EXPLORATION_ELAPSED_SECONDS}
+  started_at: ${STARTED_AT_ISO8601}
+  completed_at: ${COMPLETED_AT_ISO8601}
 suggestions:
   total: ${SUGGESTION_COUNT}
   accepted: ${ACCEPTED_COUNT}
@@ -514,7 +519,7 @@ next: /poor-dev.plan
 
 Output final progress marker:
 ```
-[PROGRESS: Suggestion phase complete: ${SUGGESTION_COUNT} suggestions, ${ACCEPTED_COUNT} accepted]
+[PROGRESS: Suggestion phase complete: ${SUGGESTION_COUNT} suggestions, ${ACCEPTED_COUNT} accepted, duration: ${TOTAL_ELAPSED_SECONDS}s]
 ```
 
 ## Emergency Recovery
@@ -627,6 +632,33 @@ Manually trigger cache validation and refresh:
 ```
 [ERROR: spec.md not found in ${FEATURE_DIR}]
 → Exit with error
+```
+
+**API rate limits** (GitHub/OSV):
+```
+[ERROR: API rate limit exceeded: ${API_NAME}]
+→ Apply exponential backoff (see suggestion-validator.mjs withRateLimit)
+→ If retries exhausted: proceed to fallback (STEP 9)
+```
+
+**Network connectivity failure**:
+```
+[ERROR: Network error accessing ${API_URL}: ${ERROR_MESSAGE}]
+→ Retry with exponential backoff (3 attempts)
+→ If all attempts fail: proceed to fallback (STEP 9)
+```
+
+**Empty feature directory**:
+```
+[ERROR: Feature directory ${FEATURE_DIR} does not exist]
+→ Exit with error
+```
+
+**Invalid configuration**:
+```
+[ERROR: Invalid config in .poor-dev/config.json: ${PARSE_ERROR}]
+→ Fall back to built-in defaults
+→ Log warning and continue
 ```
 
 ### Dashboard Update

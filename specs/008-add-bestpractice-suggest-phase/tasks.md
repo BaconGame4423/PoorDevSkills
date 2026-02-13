@@ -64,10 +64,10 @@ Every task follows this format: `- [ ] [TaskID] [P?] [Story?] Description with f
 - [X] T014 [P] Create backup manager utility in lib/backup-manager.mjs with automatic backup on write
 - [ ] T015 Create cache initializer utility in lib/cache-initializer.mjs with pre-seeded data
 - [X] T016 Create cache validator utility in lib/cache-validator.mjs with monthly validation
-- [ ] T017 Define maintainability scoring algorithm in lib/suggestion-validator.mjs (commit recency, issue resolution, contributor activity, documentation quality)
-- [ ] T018 Define security scoring algorithm in lib/suggestion-validator.mjs (CVEs, audit status, dependency health, code quality)
-- [ ] T019 Implement threshold filtering logic in lib/suggestion-validator.mjs (maintainability >= 50 AND security >= 50)
-- [ ] T020 Implement warning marker logic in lib/suggestion-validator.mjs ([RISK] for mixed signals, [CAUTION] for borderline scores)
+- [X] T017 Define maintainability scoring algorithm in lib/suggestion-validator.mjs (commit recency, issue resolution, contributor activity, documentation quality)
+- [X] T018 Define security scoring algorithm in lib/suggestion-validator.mjs (CVEs, audit status, dependency health, code quality)
+- [X] T019 Implement threshold filtering logic in lib/suggestion-validator.mjs (maintainability >= 50 AND security >= 50)
+- [X] T020 Implement warning marker logic in lib/suggestion-validator.mjs ([RISK] for mixed signals, [CAUTION] for borderline scores)
 - [X] T021 Implement backup creation function in lib/backup-manager.mjs with timestamp-based backup files
 - [X] T022 Implement backup recovery function in lib/backup-manager.mjs with rollback capability
 - [ ] T023 Implement cache pre-seeding in lib/cache-initializer.mjs (authentication, database, api, logging, testing categories)

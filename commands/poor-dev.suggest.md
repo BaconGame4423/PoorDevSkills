@@ -399,6 +399,57 @@ ${ADOPTION_EXAMPLES}
 - Update `suggestion-decisions.yaml` with each decision
 - Optional reason field for rejected suggestions
 
+## STEP 8b: Manual Suggestion Addition
+
+Allow developers to add custom suggestions not automatically discovered by GLM4.7.
+
+**Non-Interactive Mode**:
+- Output: `[NEEDS CLARIFICATION: Do you want to add manual suggestions?]`
+- Skip manual suggestion collection (requires user interaction)
+
+**Interactive Mode**:
+1. **Prompt for manual addition**:
+   ```
+   Do you want to add custom suggestions not found by GLM4.7? (yes/no)
+   ```
+
+2. **Collect manual suggestion input**:
+   For each manual suggestion, collect:
+   ```yaml
+   - id: <auto-generate UUID>
+     type: best_practice|tool|library|usage_pattern
+     name: <suggestion name>
+     description: <2-3 sentence description>
+     rationale: <why this is relevant to the feature>
+     maintainability_score: <0-100>
+     security_score: <0-100>
+     source: "manual"
+     source_urls:
+       - <optional URLs>
+     adoption_examples:
+       - <optional examples>
+     evidence:
+       - <optional evidence>
+   ```
+
+3. **Validate manual suggestions**:
+   - Apply same threshold rules as GLM4.7 suggestions (maintainability >= 50, security >= 50)
+   - Add [RISK] or [CAUTION] prefixes based on score patterns
+   - Exclude suggestions that fail thresholds
+
+4. **Append to suggestions.yaml**:
+   - Manual suggestions are appended to the existing suggestions array
+   - Each manual suggestion has `source: "manual"` field to distinguish from GLM4.7 suggestions
+
+5. **Update counts**:
+   - Update `exploration-session.yaml` with new total suggestion count
+   - Include manual suggestions in decision collection (STEP 8)
+
+**Output progress marker**:
+```
+[PROGRESS: Manual suggestions added: ${MANUAL_COUNT} (total now: ${TOTAL_COUNT})]
+```
+
 ## STEP 9: Fallback Handling
 
 If GLM4.7 exploration fails or times out:
@@ -465,6 +516,61 @@ Output final progress marker:
 ```
 [PROGRESS: Suggestion phase complete: ${SUGGESTION_COUNT} suggestions, ${ACCEPTED_COUNT} accepted]
 ```
+
+## Emergency Recovery
+
+When suggestion phase artifacts are corrupted, run recovery:
+
+### Usage
+```
+/poor-dev.suggest recover
+```
+
+### Recovery Process
+1. Check each artifact file for corruption:
+   - exploration-session.yaml
+   - suggestions.yaml
+   - suggestion-decisions.yaml
+2. For corrupted files:
+   a. Attempt restore from `.backups/` directory
+   b. If no backup available, reconstruct from remaining artifacts
+   c. If reconstruction fails, create fresh empty file
+3. Verify cross-file consistency:
+   - suggestions_generated_count matches suggestions.yaml length
+   - suggestion-decisions reference valid suggestion IDs
+4. Output recovery report with actions taken
+
+### Recovery Markers
+- `[PROGRESS: Recovery started for ${FEATURE_DIR}]`
+- `[PROGRESS: Recovered ${FILE} from backup]`
+- `[PROGRESS: Reconstructed ${FILE} from ${SOURCE}]`
+- `[PROGRESS: Recovery complete: ${ACTIONS_COUNT} actions taken]`
+
+## Manual Cache Refresh
+
+Manually trigger cache validation and refresh:
+
+### Usage
+```
+/poor-dev.suggest refresh-cache
+```
+
+### Refresh Process
+1. Read current cache from `.poor-dev/cache/exploration-cache.yaml`
+2. For each library in cache:
+   a. Check GitHub API for last commit date
+   b. Check OSV API for known vulnerabilities
+   c. Update maintainability_score and security_score
+   d. Tag stale libraries with [STALE] prefix
+3. Remove libraries with scores < 50
+4. Increment cache version
+5. Create backup before writing updated cache
+6. Output refresh report
+
+### Refresh Markers
+- `[PROGRESS: Cache refresh started: ${LIBRARY_COUNT} libraries]`
+- `[PROGRESS: Validated ${LIBRARY_NAME}: maintainability=${SCORE}, security=${SCORE}]`
+- `[PROGRESS: Cache refresh complete: ${UPDATED} updated, ${REMOVED} removed, ${STALE} stale]`
 
 ## Output Artifacts
 

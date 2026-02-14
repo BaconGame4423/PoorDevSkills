@@ -187,8 +187,10 @@ Bash(run_in_background) で完了監視ポーリング（最大 120 分）。
 質問自動応答ポリシー: 常に最初の選択肢を選択（全 combo 共通 = 公平性担保）。
 複数質問は1サイクル1質問ずつ処理。opencode のみ対応、claude CLI は今後追加。
 
-Permission required 自動承認ポリシー: ベンチマーク環境ではすべて「Allow always」で承認する。
-opencode のサンドボックスがベンチマーク外ディレクトリ（DevSkills/lib 等）へのアクセスを求めるのは正常動作。
+Permission required スマート承認ポリシー:
+- DevSkills プロジェクトルート配下のパス → 「Allow always」で自動承認
+- プロジェクト外パス → `BENCH_PERMISSION_SUSPICIOUS` を出力、承認しない（Claude Code が判断）
+- パス抽出失敗 → `BENCH_PERMISSION_PARSE_FAILED` を出力、承認しない（保守的挙動）
 操作手順: Right（Allow always に移動）→ Enter → Enter（Confirm）。
 注意: Tab は opencode のモード切替（agents タブ等）になるため絶対に使わない。
 
@@ -209,6 +211,9 @@ ANSWER_COOLDOWN=30
 LAST_PERM_TIME=0
 PERM_COOLDOWN=15
 
+PROJECT_ROOT="$(pwd)"
+HOME_DIR="$HOME"
+
 while [ $ELAPSED -lt $TIMEOUT ]; do
   sleep 10; ELAPSED=$((ELAPSED + 10)); CHECK=$((CHECK + 1))
 
@@ -219,30 +224,54 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
 
   PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
 
-  # Permission required 自動承認（クールダウン付き）
-  # opencode のサンドボックス権限ダイアログを検知し「Allow always」で承認する
+  # Permission required スマート承認（クールダウン付き）
+  # プロジェクトルート配下のパスのみ「Allow always」で承認する
+  # プロジェクト外パスは承認せず Claude Code に判断を委譲する
   # Tab はモード切替になるため使用禁止。左右矢印キーでオプション選択する
   if [ -n "$PERMISSION_PATTERN" ]; then
     SINCE_PERM=$((ELAPSED - LAST_PERM_TIME))
     if [ $SINCE_PERM -ge $PERM_COOLDOWN ]; then
       if echo "$PANE_CONTENT" | grep -q "$PERMISSION_PATTERN"; then
-        echo "[${ELAPSED}s] Permission required detected"
-        # Right arrow → "Allow always" に移動 → Enter で選択
-        tmux send-keys -t $TARGET Right
-        sleep 0.5
-        tmux send-keys -t $TARGET Enter
-        sleep 1
-        # "Allow always" 選択後に Confirm/Cancel ダイアログが表示される → Enter で Confirm
-        CONFIRM_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-        if echo "$CONFIRM_CONTENT" | grep -q "Confirm"; then
-          tmux send-keys -t $TARGET Enter
-          sleep 0.5
-          echo "[${ELAPSED}s] Permission approved (Allow always + Confirm)"
+        # ← 行からパスを抽出（~/... or /... 形式）
+        PERM_PATH=$(echo "$PANE_CONTENT" | grep '←' | sed -n 's/.*[[:space:]]\([~\/][^[:space:]]*\)[[:space:]]*$/\1/p' | head -1)
+
+        IS_SAFE=false
+        if [ -n "$PERM_PATH" ]; then
+          # チルダ展開
+          RESOLVED_PATH="${PERM_PATH/#\~/$HOME_DIR}"
+          # .. トラバーサルは拒否
+          if echo "$RESOLVED_PATH" | grep -q '\.\.'; then
+            echo "[${ELAPSED}s] BENCH_PERMISSION_SUSPICIOUS: path contains '..': $PERM_PATH"
+          elif echo "$RESOLVED_PATH" | grep -q "^${PROJECT_ROOT}/"; then
+            IS_SAFE=true
+          elif [ "$RESOLVED_PATH" = "$PROJECT_ROOT" ]; then
+            IS_SAFE=true
+          else
+            echo "[${ELAPSED}s] BENCH_PERMISSION_SUSPICIOUS: outside project root: $PERM_PATH"
+          fi
         else
-          echo "[${ELAPSED}s] Permission approved (direct)"
+          echo "[${ELAPSED}s] BENCH_PERMISSION_PARSE_FAILED: could not extract path from Permission dialog"
         fi
+
+        if [ "$IS_SAFE" = true ]; then
+          echo "[${ELAPSED}s] Permission required detected (safe: $PERM_PATH)"
+          # Right arrow → "Allow always" に移動 → Enter で選択
+          tmux send-keys -t $TARGET Right
+          sleep 0.5
+          tmux send-keys -t $TARGET Enter
+          sleep 1
+          # "Allow always" 選択後に Confirm/Cancel ダイアログが表示される → Enter で Confirm
+          CONFIRM_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+          if echo "$CONFIRM_CONTENT" | grep -q "Confirm"; then
+            tmux send-keys -t $TARGET Enter
+            sleep 0.5
+            echo "[${ELAPSED}s] Permission approved (Allow always + Confirm)"
+          else
+            echo "[${ELAPSED}s] Permission approved (direct)"
+          fi
+        fi
+
         LAST_PERM_TIME=$ELAPSED
-        # Permission 処理直後はペイン内容が変化しているので次のチェックをスキップ
         continue
       fi
     fi

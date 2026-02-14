@@ -1,0 +1,234 @@
+# ============================================================
+# benchLLM レビューテンプレート
+# ============================================================
+# 使い方:
+#   cp _templates/benchmark-review.yaml <dir>.review.yaml
+#   各セクションを記入し、scoring で総合スコアを算出する
+# ============================================================
+
+meta:
+  directory: ""                    # e.g. m2.5_all
+  model_config:
+    primary: ""                    # e.g. MiniMax M2.5
+    secondary: ""                  # orchestrator+sub構成の場合
+    role: ""                       # solo | orch+sub
+  reviewer: ""
+  review_date: ""                  # YYYY-MM-DD
+  status: ""                       # completed | in-progress | planreview | initial
+
+# ============================================================
+# 1. Process Adherence (プロセス遵守) - 15%
+# ============================================================
+# DevSkillsワークフロー各段階の遵守を評価
+# stages: specify → plan → planreview → tasks → tasksreview →
+#         implement → qualityreview → phasereview
+process:
+  stages:
+    specify:
+      completed: false
+      artifacts: []                # e.g. [spec.md]
+      notes: ""
+    plan:
+      completed: false
+      artifacts: []
+      notes: ""
+    planreview:
+      completed: false
+      artifacts: []
+      notes: ""
+    tasks:
+      completed: false
+      artifacts: []
+      notes: ""
+    tasksreview:
+      completed: false
+      artifacts: []
+      notes: ""
+    implement:
+      completed: false
+      artifacts: []
+      notes: ""
+    qualityreview:
+      completed: false
+      artifacts: []
+      notes: ""
+    phasereview:
+      completed: false
+      artifacts: []
+      notes: ""
+  stages_completed: 0              # out of 8
+  score: 0                         # 0-100
+  notes: ""
+
+# ============================================================
+# 2. Code Quality (コード品質) - 25%
+# ============================================================
+# severity: C=Critical, H=High, M=Medium, L=Low
+code_quality:
+  issues: []
+  # - id: CQ-001
+  #   severity: H
+  #   category: bug | security | structure | style
+  #   location: "file:line"
+  #   description: ""
+  #   impact: ""
+  #   suggestion: ""
+  strengths: []
+  score: 0                         # 0-100
+  notes: ""
+
+# ============================================================
+# 3. Completeness (完全性) - 25%
+# ============================================================
+# FR-001 ~ FR-013: 機能要件チェック
+completeness:
+  requirements:
+    FR-001:
+      name: "インタラクティブ関数グラフ表示"
+      status: ""                   # pass | partial | fail | bug
+      notes: ""
+    FR-002:
+      name: "数式入力フィールド"
+      status: ""
+      notes: ""
+    FR-003:
+      name: "リアルタイムグラフ更新"
+      status: ""
+      notes: ""
+    FR-004:
+      name: "自動ズーム/スケール"
+      status: ""
+      notes: ""
+    FR-005:
+      name: "軸ラベルとグリッド線"
+      status: ""
+      notes: ""
+    FR-006:
+      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      status: ""
+      notes: ""
+    FR-007:
+      name: "微分（導関数）の計算と表示"
+      status: ""
+      notes: ""
+    FR-008:
+      name: "導関数のグラフ重畳表示"
+      status: ""
+      notes: ""
+    FR-009:
+      name: "カーソル追従ツールチップ (x, f(x), f'(x))"
+      status: ""
+      notes: ""
+    FR-010:
+      name: "接線表示"
+      status: ""
+      notes: ""
+    FR-011:
+      name: "レスポンシブデザイン"
+      status: ""
+      notes: ""
+    FR-012:
+      name: "エラーハンドリング（不正入力）"
+      status: ""
+      notes: ""
+    FR-013:
+      name: "プリセット関数ボタン"
+      status: ""
+      notes: ""
+  passed: 0
+  partial: 0
+  failed: 0
+  bugged: 0
+  score: 0                         # 0-100
+  notes: ""
+
+# ============================================================
+# 4. UX / Visual Quality - 15%
+# ============================================================
+# 各項目 1-5 のスコア
+ux:
+  visual_design:
+    score: 0
+    notes: ""
+  responsive:
+    score: 0
+    notes: ""
+  usability:
+    score: 0
+    notes: ""
+  error_feedback:
+    score: 0
+    notes: ""
+  accessibility:
+    score: 0
+    notes: ""
+  average: 0                       # auto: mean of above scores
+  score: 0                         # 0-100 (average * 20)
+  notes: ""
+
+# ============================================================
+# 5. Constitution Compliance (憲章準拠) - 10%
+# ============================================================
+# DevSkills憲章の関連原則チェック
+constitution:
+  principles:
+    III_review_driven_quality:
+      compliant: false
+      notes: ""
+    V_incremental_delivery:
+      compliant: false
+      notes: ""
+    VIII_verification_gates:
+      compliant: false
+      notes: ""
+    X_documentation_as_code:
+      compliant: false
+      notes: ""
+  compliant_count: 0               # out of 4
+  score: 0                         # 0-100
+  notes: ""
+
+# ============================================================
+# 6. Efficiency (効率) - 10%
+# ============================================================
+efficiency:
+  wall_clock_seconds: 0
+  session_count: 0
+  output_lines: 0
+  output_bytes: 0
+  lines_per_second: 0
+  files_created: 0
+  score: 0                         # 0-100 (相対評価、初回は基準値)
+  notes: ""
+
+# ============================================================
+# 総合スコア
+# ============================================================
+# score = process(15%) + code_quality(25%) + completeness(25%)
+#       + ux(15%) + constitution(10%) + efficiency(10%)
+scoring:
+  weights:
+    process: 0.15
+    code_quality: 0.25
+    completeness: 0.25
+    ux: 0.15
+    constitution: 0.10
+    efficiency: 0.10
+  component_scores:
+    process: 0
+    code_quality: 0
+    completeness: 0
+    ux: 0
+    constitution: 0
+    efficiency: 0
+  total: 0                         # 0-100 weighted
+  grade: ""                        # A (90+), B (75+), C (60+), D (40+), F (<40)
+
+# ============================================================
+# サマリ
+# ============================================================
+summary:
+  strengths: []
+  weaknesses: []
+  critical_issues: []
+  recommendations: []

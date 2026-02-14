@@ -1,0 +1,48 @@
+{
+  "task": {
+    "name": "関数ビジュアライザー",
+    "description": "微分機能付きインタラクティブ数学ツール",
+    "requirements": [
+      { "id": "FR-001", "name": "インタラクティブ関数グラフ表示" },
+      { "id": "FR-002", "name": "数式入力フィールド" },
+      { "id": "FR-003", "name": "リアルタイムグラフ更新" },
+      { "id": "FR-004", "name": "自動ズーム/スケール" },
+      { "id": "FR-005", "name": "軸ラベルとグリッド線" },
+      { "id": "FR-006", "name": "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)" },
+      { "id": "FR-007", "name": "微分（導関数）の計算と表示" },
+      { "id": "FR-008", "name": "導関数のグラフ重畳表示" },
+      { "id": "FR-009", "name": "カーソル追従ツールチップ (x, f(x), f'(x))" },
+      { "id": "FR-010", "name": "接線表示" },
+      { "id": "FR-011", "name": "レスポンシブデザイン" },
+      { "id": "FR-012", "name": "エラーハンドリング（不正入力）" },
+      { "id": "FR-013", "name": "プリセット関数ボタン" }
+    ],
+    "process_stages": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement", "qualityreview", "phasereview"]
+  },
+  "models": {
+    "m2.5": {
+      "display_name": "MiniMax M2.5",
+      "cli": "opencode",
+      "model_id": "opencode/minimax-m2.5-free"
+    },
+    "glm5": {
+      "display_name": "GLM-5",
+      "cli": "opencode",
+      "model_id": "zai-coding-plan/glm-5"
+    },
+    "claude": {
+      "display_name": "Claude",
+      "cli": "claude",
+      "model_id": "opus",
+      "fallback_model": "haiku"
+    }
+  },
+  "combinations": [
+    { "dir_name": "m2.5_all",             "orchestrator": "m2.5",   "sub_agent": "m2.5"   },
+    { "dir_name": "glm5_all",             "orchestrator": "glm5",   "sub_agent": "glm5"   },
+    { "dir_name": "claude_all",           "orchestrator": "claude",  "sub_agent": "claude"  },
+    { "dir_name": "claude_glm5_sub",      "orchestrator": "claude",  "sub_agent": "glm5"   },
+    { "dir_name": "claude_m2.5_sub",      "orchestrator": "claude",  "sub_agent": "m2.5"   },
+    { "dir_name": "m2.5_orch_glm5_sub",   "orchestrator": "m2.5",   "sub_agent": "glm5"   }
+  ]
+}

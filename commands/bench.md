@@ -122,7 +122,7 @@ PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。�
 BEFORE=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
 # paste-buffer 送信
 tmux set-buffer -b bench "$PROMPT"
-tmux paste-buffer -t $TARGET -b bench -d
+tmux paste-buffer -p -t $TARGET -b bench -d
 tmux send-keys -t $TARGET Enter
 sleep 2
 # 送信後のペイン内容を比較
@@ -133,7 +133,8 @@ fi
 ```
 
 `tmux send-keys -l` は Bubbletea TUI に UTF-8 マルチバイト文字（日本語）を送信できない。
-`set-buffer` + `paste-buffer` は tmux のペーストメカニズムを使うため UTF-8 を正しく扱える。
+`set-buffer` + `paste-buffer -p` は tmux の bracketed paste メカニズムを使うため UTF-8 を正しく扱える。
+`-p` は Bubbletea の bracketed paste mode に対応（これがないと UTF-8 マルチバイトが分断される）。
 `-b bench` で名前付きバッファを使用、`-d` でペースト後にバッファを削除。
 
 ユーザーに通知:

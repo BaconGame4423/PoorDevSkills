@@ -50,7 +50,7 @@ fi
 jval() { jq -r "$1" "$CONFIG"; }
 
 # --- スキャフォールドホワイトリスト ---
-SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs")
+SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules")
 SCAFFOLD_LINKS=("commands" "lib")
 SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version" "CLAUDE.md" "AGENTS.md")
 
@@ -507,29 +507,33 @@ collect_and_summarize() {
   echo -e "${BOLD}============================================================${NC}"
   echo ""
 
-  # 成果物一覧
+  # 成果物一覧（再帰検索）
   echo -e "${CYAN}--- 成果物 ---${NC}"
   for artifact in spec.md plan.md tasks.md review-log.yaml poordev-analysis.yaml; do
-    if [[ -f "$TARGET_DIR/$artifact" ]]; then
-      echo -e "  ${GREEN}[x]${NC} $artifact"
+    local found
+    found=$(find "$TARGET_DIR" -name "$artifact" -not -path '*/_runs/*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    if [[ -n "$found" ]]; then
+      local relpath="${found#$TARGET_DIR/}"
+      echo -e "  ${GREEN}[x]${NC} $artifact ($relpath)"
     else
       echo -e "  ${RED}[ ]${NC} $artifact"
     fi
   done
   echo ""
 
-  # ファイル統計
+  # ファイル統計（再帰検索）
   echo -e "${CYAN}--- ファイル統計 ---${NC}"
   local file_count=0
   local total_lines=0
-  for f in "$TARGET_DIR"/*.html "$TARGET_DIR"/*.js "$TARGET_DIR"/*.css "$TARGET_DIR"/*.ts "$TARGET_DIR"/*.py; do
+  while IFS= read -r f; do
     [[ -f "$f" ]] || continue
     file_count=$((file_count + 1))
     local lines
     lines=$(wc -l < "$f")
     total_lines=$((total_lines + lines))
-    printf "  %-40s %6d lines\n" "$(basename "$f")" "$lines"
-  done
+    local relpath="${f#$TARGET_DIR/}"
+    printf "  %-40s %6d lines\n" "$relpath" "$lines"
+  done < <(find "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/*' 2>/dev/null | sort)
   echo "  合計: ${file_count} ファイル, ${total_lines} 行"
   echo ""
 

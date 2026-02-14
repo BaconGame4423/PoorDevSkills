@@ -52,23 +52,17 @@ echo "Source files: $total_files"
 # Lines and bytes for main output files
 echo ""
 echo "Output files:"
-for f in "$DIR_PATH"/*.html "$DIR_PATH"/*.js "$DIR_PATH"/*.css "$DIR_PATH"/*.ts "$DIR_PATH"/*.py; do
-    [ -f "$f" ] || continue
-    lines=$(wc -l < "$f")
-    bytes=$(wc -c < "$f")
-    name=$(basename "$f")
-    printf "  %-40s %6d lines  %8d bytes\n" "$name" "$lines" "$bytes"
-done
-
 total_output_lines=0
 total_output_bytes=0
-for f in "$DIR_PATH"/*.html "$DIR_PATH"/*.js "$DIR_PATH"/*.css "$DIR_PATH"/*.ts "$DIR_PATH"/*.py; do
+while IFS= read -r f; do
     [ -f "$f" ] || continue
     lines=$(wc -l < "$f")
     bytes=$(wc -c < "$f")
+    relpath="${f#$DIR_PATH/}"
+    printf "  %-40s %6d lines  %8d bytes\n" "$relpath" "$lines" "$bytes"
     total_output_lines=$((total_output_lines + lines))
     total_output_bytes=$((total_output_bytes + bytes))
-done
+done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/*' 2>/dev/null | sort)
 echo ""
 echo "Total output: $total_output_lines lines, $total_output_bytes bytes"
 
@@ -78,10 +72,12 @@ echo "Total output: $total_output_lines lines, $total_output_bytes bytes"
 echo ""
 echo "--- Pipeline State ---"
 
-# Check for DevSkills artifacts
+# Check for DevSkills artifacts (recursive search)
 for artifact in spec.md plan.md tasks.md review-log.yaml; do
-    if [ -f "$DIR_PATH/$artifact" ]; then
-        echo "  [x] $artifact"
+    found=$(find "$DIR_PATH" -name "$artifact" -not -path '*/_runs/*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    if [ -n "$found" ]; then
+        relpath="${found#$DIR_PATH/}"
+        echo "  [x] $artifact ($relpath)"
     else
         echo "  [ ] $artifact"
     fi
@@ -130,27 +126,27 @@ echo "--- Timing Estimation ---"
 if [ -d "$DIR_PATH/.git" ]; then
     first_ts=$(git -C "$DIR_PATH" log --all --reverse --format='%at' 2>/dev/null | head -1)
 else
-    # Fallback: use oldest output file modification time
+    # Fallback: use oldest output file modification time (recursive)
     earliest_mod=""
-    for f in "$DIR_PATH"/*.html "$DIR_PATH"/*.js "$DIR_PATH"/*.css "$DIR_PATH"/*.ts "$DIR_PATH"/*.py; do
+    while IFS= read -r f; do
         [ -f "$f" ] || continue
         mod=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null)
         if [ -z "$earliest_mod" ] || [ "$mod" -lt "$earliest_mod" ]; then
             earliest_mod=$mod
         fi
-    done
+    done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null)
     first_ts="${earliest_mod:-}"
 fi
 
-# Get latest modification time of output files
+# Get latest modification time of output files (recursive)
 latest_mod=0
-for f in "$DIR_PATH"/*.html "$DIR_PATH"/*.js "$DIR_PATH"/*.css "$DIR_PATH"/*.ts "$DIR_PATH"/*.py; do
+while IFS= read -r f; do
     [ -f "$f" ] || continue
     mod=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null)
     if [ "$mod" -gt "$latest_mod" ]; then
         latest_mod=$mod
     fi
-done
+done < <(find "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/_runs/*' 2>/dev/null)
 
 if [ -n "$first_ts" ] && [ "$latest_mod" -gt 0 ]; then
     wall_clock=$((latest_mod - first_ts))

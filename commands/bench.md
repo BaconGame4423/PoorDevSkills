@@ -248,15 +248,27 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
 
     # TUI アイドル検知（pipeline-state.json が生成されないケースの完了検知）
     # 最初の 120 秒はモデル起動中の誤検知を防ぐためスキップ
+    # TUI idle + 成果物 mtime の両方を確認して誤検知を防ぐ
     if [ $ELAPSED -ge 120 ]; then
+      TUI_IDLE=false
       PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
       if [ "$ORCH_CLI" = "opencode" ]; then
-        if echo "$PANE_CONTENT" | grep -q "Ask anything"; then
-          echo "BENCH_TUI_IDLE: <combo>"; exit 0
-        fi
+        echo "$PANE_CONTENT" | grep -q "Ask anything" && TUI_IDLE=true
       else
-        if echo "$PANE_CONTENT" | grep -q "^>"; then
-          echo "BENCH_TUI_IDLE: <combo>"; exit 0
+        echo "$PANE_CONTENT" | grep -q "^>" && TUI_IDLE=true
+      fi
+
+      if [ "$TUI_IDLE" = true ]; then
+        # 成果物の存在 + mtime チェック（.gitignore より新しいファイルがあるか）
+        HAS_OUTPUT=false
+        if [ -f "$COMBO_DIR/.gitignore" ]; then
+          OUTPUT_FILES=$(find "$COMBO_DIR" \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -newer "$COMBO_DIR/.gitignore" -not -path '*/_runs/*' -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -1)
+          [ -n "$OUTPUT_FILES" ] && HAS_OUTPUT=true
+        fi
+        if [ "$HAS_OUTPUT" = true ]; then
+          echo "BENCH_TUI_IDLE: <combo> (output files confirmed)"; exit 0
+        else
+          echo "[${ELAPSED}s] TUI idle but no output files yet, continuing..."
         fi
       fi
     fi

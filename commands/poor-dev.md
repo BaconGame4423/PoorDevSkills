@@ -89,15 +89,13 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 ### Step 3: Branch & Directory Creation (pipeline flows only)
 
 1. Generate short name (2-4 words): action-noun for features, `fix-` prefix for bugs. Preserve technical terms.
-2. Create feature branch:
+2. Execute:
    ```bash
-   git fetch --all --prune
+   RESULT=$(bash lib/branch-setup.sh <short-name>)
    ```
-   Find highest number N across remote branches, local branches, specs directories. Use N+1.
-   ```bash
-   git checkout -b NNN-short-name
-   mkdir -p specs/NNN-short-name
-   ```
+3. Parse JSON result:
+   - `BRANCH` = `.branch`
+   - `FEATURE_DIR` = `.feature_dir`
 
 ### Step 4: Routing
 
@@ -136,47 +134,32 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
 
 #### 5A. Specify Step (read-only dispatch)
 
-1. Read `commands/poor-dev.specify.md`
-2. Strip YAML frontmatter (first `---` to next `---`). Validate no `handoffs:` remains.
-3. Prepend NON_INTERACTIVE_HEADER + READONLY_HEADER:
-   ```markdown
-   ## Mode: NON_INTERACTIVE (pipeline sub-agent)
-   - No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
-   - No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
-   - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
-   - If blocked → [ERROR: description] and stop
-   - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
-   - Git 操作制限: commit は許可、push は絶対に禁止（git push, git push origin 等すべて）
-   - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
-   - End with: files created/modified, unresolved items
-
-   ## Read-Only Execution Mode
-   You have READ-ONLY tool access (Edit, Write, Bash, NotebookEdit are disabled).
-   - Output the spec draft as plain markdown text in your response.
-   - First line MUST be: `[BRANCH: suggested-short-name]`
-   - The rest of your output is the spec draft content (using the Spec Template).
-   - Include `[NEEDS CLARIFICATION: question]` markers inline as needed (max 3).
-   - Do NOT attempt to create branches, directories, or files.
+1. Compose prompt:
+   ```bash
+   echo "$ARGUMENTS" > /tmp/poor-dev-input-$$.txt
+   bash lib/compose-prompt.sh commands/poor-dev.specify.md /tmp/poor-dev-specify-$$.txt \
+     --header non_interactive --header readonly \
+     --context input=/tmp/poor-dev-input-$$.txt
    ```
-4. Append: `$ARGUMENTS` (full original user input) as context
-5. Resolve model: `bash lib/config-resolver.sh specify .poor-dev/config.json`
-6. Dispatch with polling (same pattern as pipeline):
-   - opencode/claude/FALLBACK dispatch → poll-dispatch.sh → JSON summary
-   - If cli=claude: add `--disallowedTools "Edit,Write,Bash,NotebookEdit"`
-   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)`
-7. Parse output:
+2. Dispatch:
+   ```bash
+   bash lib/dispatch-step.sh specify "$(pwd)" /tmp/poor-dev-specify-$$.txt
+   ```
+   JSON summary returned on stdout. If cli=claude: add `--disallowedTools "Edit,Write,Bash,NotebookEdit"`.
+   FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)`
+3. Parse output (`/tmp/poor-dev-output-specify-*.txt`):
    - Extract `[BRANCH: ...]` → SUGGESTED_BRANCH
    - Remaining = draft body
    - `[ERROR: ...]` → stop
-8. Branch + FEATURE_DIR:
+4. Branch + FEATURE_DIR:
    - Already on feature branch → FEATURE_DIR known, skip
    - On main → create branch from SUGGESTED_BRANCH + `mkdir -p FEATURE_DIR`
-9. Write `FEATURE_DIR/spec-draft.md`
-10. **[NEEDS CLARIFICATION] resolution**:
+5. Write `FEATURE_DIR/spec-draft.md` (AI reads output file + writes via Write tool)
+6. **[NEEDS CLARIFICATION] resolution**:
     - Extract all `[NEEDS CLARIFICATION: ...]` markers from spec-draft.md
     - INTERACTIVE_MODE = true → AskUserQuestion per marker → replace in spec-draft.md
     - INTERACTIVE_MODE = false → keep markers (user resolves during approval pause)
-11. **User approval**:
+7. **User approval**:
     Display spec-draft.md as 日本語要約:
     ```
     ## 仕様ドラフト: [機能名の日本語訳]
@@ -194,27 +177,26 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
       - "修正指示付きで棄却" → feedback 追記 → 停止
       - "棄却する" → 停止 (spec-draft.md 保存)
     - INTERACTIVE_MODE = false → 表示 → PAUSE_FOR_APPROVAL("spec-approval", "specify", summary)
-12. Validation: 承認後 spec.md → checklists/requirements.md 生成
+8. Validation: 承認後 spec.md → checklists/requirements.md 生成
 
 #### 5B. Pipeline Dispatch (remaining steps)
 
-specify 完了後、残りパイプラインを sub-agent として dispatch:
+specify 完了後、残りパイプラインを `pipeline-runner.sh` で実行:
 
-1. Read `commands/poor-dev.pipeline.md`, strip frontmatter
-2. Prepend NON_INTERACTIVE_HEADER
-3. Append 以下の classification JSON をプロンプト末尾にインラインで付加:
-   ```json
-   {
-     "flow": "${FLOW}",
-     "feature_dir": "${FEATURE_DIR}",
-     "branch": "${BRANCH}",
-     "summary": "${FEATURE_SUMMARY}",
-     "interactive_mode": ${INTERACTIVE_MODE},
-     "completed": ["specify"],
-     "arguments": "${ORIGINAL_ARGUMENTS}"
-   }
-   ```
-4. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
-   `bash lib/config-resolver.sh plan .poor-dev/config.json`
-5. Dispatch via opencode/claude/Task() with polling
-6. Poll until completion → relay progress → display result
+```bash
+bash lib/pipeline-runner.sh \
+  --flow "${FLOW}" \
+  --feature-dir "${FEATURE_DIR}" \
+  --branch "${BRANCH}" \
+  --project-dir "$(pwd)" \
+  --completed specify \
+  --summary "${FEATURE_SUMMARY}"
+```
+
+exit code で分岐:
+- `0`: 全完了 → 結果を報告
+- `1`: エラー → エラーを報告
+- `2`: NO-GO → AI がユーザーに報告・対話
+- `3`: rate-limit → 再実行を案内
+
+stdout は JSONL 形式で各ステップの進捗を出力する。

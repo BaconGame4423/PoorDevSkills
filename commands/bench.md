@@ -44,16 +44,48 @@ ORCH_MODEL=$(jq -r --arg o "$ORCH" '.models[$o].model_id' benchmarks/benchmarks.
 ./benchmarks/run-benchmark.sh --clean <combo>
 ```
 
-## Step 5: 右 tmux ペインリセット
+## Step 5: ベンチペイン作成（マルチペイン対応）
 
 ```bash
-# 現在のペイン以外をすべて閉じる
+BENCH_STATE="/tmp/bench-active-panes.json"
+[ ! -f "$BENCH_STATE" ] && echo '{}' > "$BENCH_STATE"
+
 CURRENT=$(tmux display-message -p '#{pane_id}')
-for p in $(tmux list-panes -F '#{pane_id}' | grep -v "$CURRENT"); do
-  tmux kill-pane -t "$p" 2>/dev/null || true
+
+# 既存ベンチペインの検証（死んだペインを除去）
+VALID_PANES=()
+for combo_key in $(jq -r 'keys[]' "$BENCH_STATE" 2>/dev/null); do
+  PANE_ID=$(jq -r --arg k "$combo_key" '.[$k].pane_id' "$BENCH_STATE")
+  if tmux list-panes -F '#{pane_id}' 2>/dev/null | grep -q "^${PANE_ID}$"; then
+    VALID_PANES+=("$PANE_ID")
+  else
+    jq --arg k "$combo_key" 'del(.[$k])' "$BENCH_STATE" > "${BENCH_STATE}.tmp" \
+      && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
+  fi
 done
-# 新規ペインを作成
-TARGET=$(tmux split-window -h -P -F '#{pane_id}' -l 50%)
+
+# 同一 combo 重複チェック
+if jq -e --arg c "<combo>" '.[$c]' "$BENCH_STATE" >/dev/null 2>&1; then
+  echo "ERROR: <combo> は既に実行中です"
+  # ユーザーにエラー通知して中断
+fi
+
+# ペイン作成
+if [ ${#VALID_PANES[@]} -eq 0 ]; then
+  # ベンチペインなし → 既存の右ペインを削除 → 水平分割
+  for p in $(tmux list-panes -F '#{pane_id}' | grep -v "$CURRENT"); do
+    tmux kill-pane -t "$p" 2>/dev/null || true
+  done
+  TARGET=$(tmux split-window -h -P -F '#{pane_id}' -l 50%)
+else
+  # ベンチペインあり → 既存ベンチペインを垂直分割（上下）
+  TARGET=$(tmux split-window -v -t "${VALID_PANES[0]}" -P -F '#{pane_id}')
+fi
+
+# ペインを状態ファイルに登録
+jq --arg c "<combo>" --arg p "$TARGET" \
+  '.[$c] = {"pane_id": $p}' \
+  "$BENCH_STATE" > "${BENCH_STATE}.tmp" && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
 ```
 
 ## Step 6: CLI 起動
@@ -158,29 +190,45 @@ Bash(run_in_background) で完了監視ポーリング（最大 120 分）。
 COMBO_DIR="benchmarks/<combo>"
 TIMEOUT=7200; ELAPSED=0; CHECK=0
 
-# CLI に応じた質問検知パターン（現在 opencode のみ対応）
 if [ "$ORCH_CLI" = "opencode" ]; then
   QUESTION_PATTERN="esc dismiss"
 else
-  QUESTION_PATTERN=""  # claude CLI: 未対応（パターン未検証）
+  QUESTION_PATTERN=""
 fi
+
+LAST_ANSWER_TIME=0
+ANSWER_COOLDOWN=30
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
   sleep 10; ELAPSED=$((ELAPSED + 10)); CHECK=$((CHECK + 1))
 
-  # --- 質問ダイアログ自動応答（10秒ごと、パターン設定時のみ） ---
+  # ペイン存在確認
+  if ! tmux list-panes -F '#{pane_id}' 2>/dev/null | grep -q "$TARGET"; then
+    echo "BENCH_PANE_LOST: <combo>"; exit 1
+  fi
+
+  # 質問自動応答（クールダウン付き）
   if [ -n "$QUESTION_PATTERN" ]; then
-    PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-    if echo "$PANE_CONTENT" | grep -q "$QUESTION_PATTERN"; then
-      echo "[${ELAPSED}s] Question detected, auto-selecting first option"
-      tmux send-keys -t $TARGET Up Up Up Enter
-      sleep 1
-      tmux send-keys -t $TARGET Tab
-      sleep 2
+    SINCE_LAST=$((ELAPSED - LAST_ANSWER_TIME))
+    if [ $SINCE_LAST -ge $ANSWER_COOLDOWN ]; then
+      PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+      if echo "$PANE_CONTENT" | grep -q "$QUESTION_PATTERN"; then
+        BEFORE_HASH=$(echo "$PANE_CONTENT" | md5sum | cut -d' ' -f1)
+        echo "[${ELAPSED}s] Question detected, sending Enter"
+        tmux send-keys -t $TARGET Enter
+        sleep 3
+        AFTER_HASH=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum | cut -d' ' -f1)
+        if [ "$BEFORE_HASH" != "$AFTER_HASH" ]; then
+          echo "[${ELAPSED}s] Question answered (content changed)"
+          LAST_ANSWER_TIME=$ELAPSED
+        else
+          echo "[${ELAPSED}s] WARNING: content unchanged after Enter"
+        fi
+      fi
     fi
   fi
 
-  # --- pipeline-state.json チェック（60秒ごと） ---
+  # pipeline-state.json チェック（60秒ごと）
   if [ $((CHECK % 6)) -eq 0 ]; then
     STATE_FILE=$(find "$COMBO_DIR" -name "pipeline-state.json" 2>/dev/null | head -1)
     if [ -n "$STATE_FILE" ]; then
@@ -211,6 +259,17 @@ echo "BENCH_TIMEOUT: <combo>"
 ```
 
 メトリクス収集 + PoorDevSkills 分析 + `.bench-complete` マーカー作成。
+
+ベンチペイン状態のクリーンアップ:
+
+```bash
+BENCH_STATE="/tmp/bench-active-panes.json"
+if [ -f "$BENCH_STATE" ]; then
+  jq --arg c "<combo>" 'del(.[$c])' "$BENCH_STATE" > "${BENCH_STATE}.tmp" \
+    && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
+  [ "$(jq 'length' "$BENCH_STATE" 2>/dev/null)" = "0" ] && rm -f "$BENCH_STATE"
+fi
+```
 
 ユーザーに完了を通知し、`/bench --results <combo>` で結果確認を案内する。
 

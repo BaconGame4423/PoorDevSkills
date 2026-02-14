@@ -321,26 +321,20 @@ run_pipeline() {
     attempt=$((attempt + 1))
     info "パイプライン実行 (attempt $attempt/$max_retries)"
 
-    # プロンプトをファイルに書き出し
-    local prompt_file="/tmp/poor-dev-bench-prompt-$$.txt"
-    echo "$prompt" > "$prompt_file"
-
-    # CLI に応じた非対話実行
+    # CLI に応じた非対話実行（プロンプトは直接渡す）
     if [[ "$ORCH_CLI" == "claude" ]]; then
       (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
         --model "$ORCH_MODEL" \
         --output-format text \
-        < "$prompt_file" \
+        <<< "$prompt" \
         > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
     else
       (cd "$TARGET_DIR" && opencode run \
         --model "$ORCH_MODEL" \
         --format json \
-        "$(cat "$prompt_file")" \
+        "$prompt" \
         > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
     fi
-
-    rm -f "$prompt_file"
 
     # pipeline-state.json で完了判定
     local state_file="$TARGET_DIR/.poor-dev/pipeline-state.json"
@@ -382,9 +376,9 @@ run_pipeline() {
 analyze_poordev() {
   info "=== PoorDevSkills 分析フェーズ ==="
 
-  # 分析プロンプト構築
-  local analysis_prompt_file="/tmp/poor-dev-analysis-prompt-$$.txt"
-  cat > "$analysis_prompt_file" <<'ANALYSIS_EOF'
+  # 分析プロンプト構築（変数に直接格納）
+  local analysis_prompt
+  analysis_prompt=$(cat <<'ANALYSIS_EOF'
 このディレクトリは PoorDevSkills パイプラインのベンチマーク実行結果です。
 成果物を分析し、PoorDevSkills 自体の問題点と改善案を特定してください。
 
@@ -441,21 +435,20 @@ summary:
   quick_wins: []      # すぐ修正できる改善 3 件
   strategic: []       # 中長期的な改善提案
 ANALYSIS_EOF
+  )
 
-  # 分析実行（同じ CLI/モデル）
+  # 分析実行（同じ CLI/モデル、プロンプトは直接渡す）
   if [[ "$ORCH_CLI" == "claude" ]]; then
     (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
       --model "$ORCH_MODEL" \
       --output-format text \
-      < "$analysis_prompt_file") || warn "分析フェーズ失敗"
+      <<< "$analysis_prompt") || warn "分析フェーズ失敗"
   else
     (cd "$TARGET_DIR" && opencode run \
       --model "$ORCH_MODEL" \
       --format json \
-      "$(cat "$analysis_prompt_file")") || warn "分析フェーズ失敗"
+      "$analysis_prompt") || warn "分析フェーズ失敗"
   fi
-
-  rm -f "$analysis_prompt_file"
 
   # 結果確認
   if [[ -f "$TARGET_DIR/poordev-analysis.yaml" ]]; then

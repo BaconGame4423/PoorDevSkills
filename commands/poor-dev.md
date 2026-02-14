@@ -199,7 +199,9 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
 
 specify 完了後、残りパイプラインを sub-agent として dispatch:
 
-1. Write ツールで `/tmp/poor-dev-classification.json` に classification JSON を書き込む（mkdir 不要）:
+1. Read `commands/poor-dev.pipeline.md`, strip frontmatter
+2. Prepend NON_INTERACTIVE_HEADER
+3. Append 以下の classification JSON をプロンプト末尾にインラインで付加:
    ```json
    {
      "flow": "${FLOW}",
@@ -211,10 +213,7 @@ specify 完了後、残りパイプラインを sub-agent として dispatch:
      "arguments": "${ORIGINAL_ARGUMENTS}"
    }
    ```
-2. Read `commands/poor-dev.pipeline.md`, strip frontmatter
-3. Prepend NON_INTERACTIVE_HEADER
-4. Append classification JSON as context
-5. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
+4. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
    `bash lib/config-resolver.sh plan .poor-dev/config.json`
-6. Dispatch via opencode/claude/Task() with polling
-7. Poll until completion → relay progress → display result
+5. Dispatch via opencode/claude/Task() with polling
+6. Poll until completion → relay progress → display result

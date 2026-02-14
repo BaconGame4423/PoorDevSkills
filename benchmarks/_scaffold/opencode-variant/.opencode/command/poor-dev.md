@@ -146,6 +146,7 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
    - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
    - If blocked → [ERROR: description] and stop
    - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
+   - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
    - End with: files created/modified, unresolved items
 
    ## Read-Only Execution Mode
@@ -198,7 +199,9 @@ After routing to a pipeline flow, orchestrate the specify step directly, then di
 
 specify 完了後、残りパイプラインを sub-agent として dispatch:
 
-1. Write classification JSON to `/tmp/poor-dev-classification.json`:
+1. Read `commands/poor-dev.pipeline.md`, strip frontmatter
+2. Prepend NON_INTERACTIVE_HEADER
+3. Append 以下の classification JSON をプロンプト末尾にインラインで付加:
    ```json
    {
      "flow": "${FLOW}",
@@ -210,10 +213,7 @@ specify 完了後、残りパイプラインを sub-agent として dispatch:
      "arguments": "${ORIGINAL_ARGUMENTS}"
    }
    ```
-2. Read `commands/poor-dev.pipeline.md`, strip frontmatter
-3. Prepend NON_INTERACTIVE_HEADER
-4. Append classification JSON as context
-5. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
+4. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
    `bash lib/config-resolver.sh plan .poor-dev/config.json`
-6. Dispatch via opencode/claude/Task() with polling
+5. Dispatch via opencode/claude/Task() with polling
 7. Poll until completion → relay progress → display result

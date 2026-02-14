@@ -4,7 +4,7 @@
 # ============================================================
 # Usage:
 #   ./benchmarks/run-benchmark.sh <combo> [version]
-#       セットアップ + opencode 起動 + 完了後にメトリクス収集
+#       セットアップ + CLI自動検出 + 非対話パイプライン実行 + 分析 + メトリクス収集
 #
 #   ./benchmarks/run-benchmark.sh --collect <combo>
 #       メトリクス収集のみ
@@ -53,12 +53,15 @@ if [[ "${1:-}" == "--collect" ]]; then
   COMBO="${2:-}"
 elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   echo "Usage:"
-  echo "  $0 <combo> [version]    セットアップ + opencode 起動 + メトリクス収集"
+  echo "  $0 <combo> [version]    セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
   echo "  $0 --collect <combo>    メトリクス収集のみ"
   echo ""
   echo "Arguments:"
-  echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all)"
+  echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all, claude_all)"
   echo "  version  PoorDevSkills バージョン (デフォルト: package.json の version)"
+  echo ""
+  echo "利用可能な組み合わせ:"
+  jq -r '.combinations[] | "  \(.dir_name)\t(\(.orchestrator)/\(.sub_agent))"' "$CONFIG"
   exit 0
 else
   COMBO="${1:-}"
@@ -81,6 +84,18 @@ if [[ -z "$COMBO_INDEX" ]]; then
   jq -r '.combinations[].dir_name' "$CONFIG" | sed 's/^/  /'
   exit 1
 fi
+
+# --- CLI 自動検出 ---
+ORCH=$(jval ".combinations[$COMBO_INDEX].orchestrator")
+ORCH_CLI=$(jval ".models[\"$ORCH\"].cli")
+ORCH_MODEL=$(jval ".models[\"$ORCH\"].model_id")
+
+if ! command -v "$ORCH_CLI" &>/dev/null; then
+  err "$ORCH_CLI が見つかりません（combo $COMBO に必要）"
+  exit 1
+fi
+
+info "CLI: $ORCH_CLI / モデル: $ORCH_MODEL"
 
 # --- バージョン解決 ---
 if [[ -z "$VERSION" ]]; then
@@ -183,6 +198,162 @@ setup_environment() {
 }
 
 # ============================================================
+# run_pipeline: 非対話パイプライン実行（auto-resume 対応）
+# ============================================================
+run_pipeline() {
+  local prompt="$1"
+  local max_retries=5
+  local attempt=0
+
+  while [[ $attempt -lt $max_retries ]]; do
+    attempt=$((attempt + 1))
+    info "パイプライン実行 (attempt $attempt/$max_retries)"
+
+    # プロンプトをファイルに書き出し
+    local prompt_file="/tmp/poor-dev-bench-prompt-$$.txt"
+    echo "$prompt" > "$prompt_file"
+
+    # CLI に応じた非対話実行
+    if [[ "$ORCH_CLI" == "claude" ]]; then
+      (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
+        --model "$ORCH_MODEL" \
+        --output-format text \
+        < "$prompt_file" \
+        > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
+    else
+      (cd "$TARGET_DIR" && opencode run \
+        --model "$ORCH_MODEL" \
+        --format json \
+        "$(cat "$prompt_file")" \
+        > "$TARGET_DIR/.bench-output.txt" 2>&1) || true
+    fi
+
+    rm -f "$prompt_file"
+
+    # pipeline-state.json で完了判定
+    local state_file="$TARGET_DIR/.poor-dev/pipeline-state.json"
+    if [[ ! -f "$state_file" ]]; then
+      warn "pipeline-state.json が見つかりません。パイプライン未開始の可能性"
+      break
+    fi
+
+    local status
+    status=$(jq -r '.status // "unknown"' "$state_file")
+
+    case "$status" in
+      completed)
+        ok "パイプライン完了"
+        return 0
+        ;;
+      awaiting-approval|paused|rate-limited)
+        info "ステータス: $status → 自動リトライ"
+        # 同じプロンプトで再投入（Step 3 Resume Detection が auto-approve）
+        ;;
+      error)
+        warn "パイプラインエラー。成果物を保持して続行"
+        return 1
+        ;;
+      *)
+        info "ステータス: $status"
+        break
+        ;;
+    esac
+  done
+
+  warn "最大リトライ到達。部分的な成果物で分析を続行"
+  return 1
+}
+
+# ============================================================
+# analyze_poordev: PoorDevSkills 分析フェーズ
+# ============================================================
+analyze_poordev() {
+  info "=== PoorDevSkills 分析フェーズ ==="
+
+  # 分析プロンプト構築
+  local analysis_prompt_file="/tmp/poor-dev-analysis-prompt-$$.txt"
+  cat > "$analysis_prompt_file" <<'ANALYSIS_EOF'
+このディレクトリは PoorDevSkills パイプラインのベンチマーク実行結果です。
+成果物を分析し、PoorDevSkills 自体の問題点と改善案を特定してください。
+
+## 分析対象ファイル（存在するものを全て読んでください）
+- spec.md, plan.md, tasks.md, review-log.yaml
+- *.html, *.js, *.css, *.ts, *.py（生成コード）
+- .poor-dev/pipeline-state.json
+- git log --oneline --all（Bash で実行）
+
+## 評価観点
+
+### A. ワークフロー全体
+1. パイプライン遵守: 各ステップが正しく実行されたか
+2. 情報欠落: ステップ間で引き渡されるべき情報の欠落
+3. 手戻り/ボトルネック: 不要な再実行や停滞
+4. レビュー有効性: レビュー指摘の適切さと修正反映
+5. 成果物一貫性: spec→plan→tasks→code の論理的整合
+
+### B. コマンド/テンプレート品質
+1. コマンドの指示は明確だったか（.opencode/command/ 内を参照可能）
+2. テンプレートのフォーマットは適切か
+3. NON_INTERACTIVE_HEADER の制約は理解しやすいか
+4. 不足/曖昧な指示箇所
+5. 改善すべきコマンド/テンプレートと修正案
+
+### C. モデル適合性
+1. 特に難しかったステップとその理由
+2. プロンプトの長さ・複雑さの適切さ
+3. コンテキストウィンドウ制約への抵触
+4. モデルティア設定の最適化提案
+5. fallback_model の切り替えは適切だったか
+
+## 出力
+poordev-analysis.yaml を作成してください:
+
+workflow:
+  pipeline_adherence: { completed_steps: [], skipped_steps: [], notes: "" }
+  information_flow: { gaps: [], notes: "" }
+  bottlenecks: { issues: [], notes: "" }
+  review_effectiveness: { useful_fixes: 0, noise_fixes: 0, notes: "" }
+
+commands:
+  issues: []  # { command: "", severity: H/M/L, description: "", suggestion: "" }
+  strengths: []
+
+model_fit:
+  difficult_steps: []  # { step: "", reason: "", suggestion: "" }
+  prompt_issues: []
+  context_window_pressure: { worst_step: "", estimated_tokens: 0, notes: "" }
+  tier_recommendations: {}
+
+summary:
+  top_issues: []      # 最重要の問題 3 件
+  quick_wins: []      # すぐ修正できる改善 3 件
+  strategic: []       # 中長期的な改善提案
+ANALYSIS_EOF
+
+  # 分析実行（同じ CLI/モデル）
+  if [[ "$ORCH_CLI" == "claude" ]]; then
+    (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
+      --model "$ORCH_MODEL" \
+      --output-format text \
+      < "$analysis_prompt_file") || warn "分析フェーズ失敗"
+  else
+    (cd "$TARGET_DIR" && opencode run \
+      --model "$ORCH_MODEL" \
+      --format json \
+      "$(cat "$analysis_prompt_file")") || warn "分析フェーズ失敗"
+  fi
+
+  rm -f "$analysis_prompt_file"
+
+  # 結果確認
+  if [[ -f "$TARGET_DIR/poordev-analysis.yaml" ]]; then
+    ok "分析完了: poordev-analysis.yaml"
+  else
+    warn "poordev-analysis.yaml が生成されませんでした"
+  fi
+}
+
+# ============================================================
 # collect_and_summarize: メトリクス収集 + サマリ出力
 # ============================================================
 collect_and_summarize() {
@@ -233,7 +404,7 @@ collect_and_summarize() {
 
   # 成果物一覧
   echo -e "${CYAN}--- 成果物 ---${NC}"
-  for artifact in spec.md plan.md tasks.md review-log.yaml; do
+  for artifact in spec.md plan.md tasks.md review-log.yaml poordev-analysis.yaml; do
     if [[ -f "$TARGET_DIR/$artifact" ]]; then
       echo -e "  ${GREEN}[x]${NC} $artifact"
     else
@@ -289,10 +460,13 @@ collect_and_summarize() {
     echo ""
   fi
 
-  # レビューファイルの案内
+  # 次のステップ
   echo -e "${CYAN}--- 次のステップ ---${NC}"
-  echo "  1. $review_file を記入してレビューを完了"
-  echo "  2. poor-dev benchmark compare で COMPARISON.md を更新"
+  if [[ -f "$TARGET_DIR/poordev-analysis.yaml" ]]; then
+    echo "  1. poordev-analysis.yaml を確認"
+  fi
+  echo "  2. $review_dir/${COMBO}.review.yaml を記入してレビューを完了"
+  echo "  3. poor-dev benchmark compare で COMPARISON.md を更新"
   echo ""
   echo -e "${BOLD}============================================================${NC}"
 }
@@ -314,37 +488,28 @@ fi
 # --- フル実行モード ---
 START_TS=$(date +%s)
 
-# 1) 環境セットアップ
+# Phase 1: 環境セットアップ
 setup_environment
 
-# 2) プロンプト構築
+# Phase 2: プロンプト構築
 PROMPT=$(build_prompt)
 
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${BOLD}  opencode をインタラクティブに起動します${NC}"
+echo -e "${BOLD}  非対話パイプライン実行: $COMBO${NC}"
+echo -e "${BOLD}  CLI: $ORCH_CLI / モデル: $ORCH_MODEL${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
-echo -e "${YELLOW}以下のプロンプトを opencode に入力してください:${NC}"
-echo ""
-echo -e "${GREEN}────────────────────────────────────────${NC}"
-echo "$PROMPT"
-echo -e "${GREEN}────────────────────────────────────────${NC}"
-echo ""
-echo -e "${CYAN}手順:${NC}"
-echo "  1. opencode 起動後、上記プロンプトをコピー＆ペースト"
-echo "  2. QuestionTool（承認ゲート）が出たら承認"
-echo "  3. パイプライン完走後、opencode を /exit で終了"
-echo ""
-info "opencode を起動中..."
-echo ""
 
-# 3) opencode インタラクティブ起動
-(cd "$TARGET_DIR" && opencode)
+# Phase 3: パイプライン実行
+run_pipeline "$PROMPT"
 
-# 4) opencode 終了後: メトリクス収集 + サマリ
-echo ""
-info "opencode が終了しました。メトリクス収集を開始..."
-echo ""
-
+# Phase 4: メトリクス収集
 collect_and_summarize "$START_TS"
+
+# Phase 5: PoorDevSkills 分析
+analyze_poordev
+
+# Phase 6: 完了マーカー
+date +%s > "$TARGET_DIR/.bench-complete"
+ok "ベンチマーク全工程完了: $COMBO"

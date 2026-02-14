@@ -34,7 +34,7 @@ fi
 : > "$PROGRESS_FILE"
 
 # Execute command (stdout/stderr → output_file)
-bash "$COMMAND_FILE" > "$OUTPUT_FILE" 2>&1 &
+env -u CLAUDECODE bash "$COMMAND_FILE" > "$OUTPUT_FILE" 2>&1 &
 PID=$!
 
 ELAPSED=0

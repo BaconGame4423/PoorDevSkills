@@ -49,10 +49,108 @@ fi
 # --- JSON ヘルパー ---
 jval() { jq -r "$1" "$CONFIG"; }
 
+# --- スキャフォールドホワイトリスト ---
+SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs")
+SCAFFOLD_LINKS=("commands" "lib")
+SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version")
+
+_is_scaffold() {
+  local base="$1"
+  local s
+  for s in "${SCAFFOLD_DIRS[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  for s in "${SCAFFOLD_LINKS[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  for s in "${SCAFFOLD_FILES[@]}"; do [[ "$base" == "$s" ]] && return 0; done
+  return 1
+}
+
+# ============================================================
+# has_existing_run: 既存ランの有無を判定
+# ============================================================
+has_existing_run() {
+  local dir="$1"
+  [[ -f "$dir/.bench-complete" ]] && return 0
+  [[ -f "$dir/.bench-output.txt" ]] && return 0
+  [[ -f "$dir/.poor-dev/pipeline-state.json" ]] && return 0
+
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    return 0
+  done
+  return 1
+}
+
+# ============================================================
+# archive_run: 既存ランを _runs/<timestamp>/ にアーカイブ
+# ============================================================
+archive_run() {
+  local dir="$1"
+  local ts
+  ts=$(date +%Y%m%d-%H%M%S)
+  local archive="$dir/_runs/$ts"
+  mkdir -p "$archive"
+
+  # .poor-dev 内の生成物
+  [[ -f "$dir/.poor-dev/pipeline-state.json" ]] && mv "$dir/.poor-dev/pipeline-state.json" "$archive/"
+
+  # スキャフォールド以外を移動
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    mv "$item" "$archive/"
+  done
+
+  # git log 保存
+  if [[ -d "$dir/.git" ]]; then
+    git -C "$dir" log --oneline --all > "$archive/_git-log.txt" 2>/dev/null || true
+  fi
+
+  # _runs/ を .gitignore に追記
+  if ! grep -qx '_runs/' "$dir/.gitignore" 2>/dev/null; then
+    echo '_runs/' >> "$dir/.gitignore"
+  fi
+
+  echo "$archive"
+}
+
+# ============================================================
+# clean_run: 生成物を削除してクリーン状態にする（冪等）
+# ============================================================
+clean_run() {
+  local dir="$1"
+
+  # .poor-dev 内の生成物
+  rm -f "$dir/.poor-dev/pipeline-state.json"
+
+  # スキャフォールド以外を削除
+  local item base
+  for item in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$item" || -L "$item" ]] || continue
+    base=$(basename "$item")
+    _is_scaffold "$base" && continue
+    rm -rf "$item"
+  done
+
+  # git commit
+  if [[ -d "$dir/.git" ]]; then
+    ( cd "$dir"
+      if [[ -n "$(git status --porcelain)" ]]; then
+        git add -A && git commit -q -m "clean state for new benchmark run"
+      fi
+    )
+  fi
+}
+
 # --- 引数解析 ---
 COLLECT_ONLY=false
 SETUP_ONLY=false
 POST_ONLY=false
+ARCHIVE_ONLY=false
+CLEAN_ONLY=false
 COMBO=""
 VERSION=""
 
@@ -60,12 +158,16 @@ case "${1:-}" in
   --collect) COLLECT_ONLY=true; COMBO="${2:-}" ;;
   --setup)   SETUP_ONLY=true;   COMBO="${2:-}"; VERSION="${3:-}" ;;
   --post)    POST_ONLY=true;    COMBO="${2:-}" ;;
+  --archive) ARCHIVE_ONLY=true; COMBO="${2:-}" ;;
+  --clean)   CLEAN_ONLY=true;   COMBO="${2:-}" ;;
   --help|-h)
     echo "Usage:"
     echo "  $0 <combo> [version]       セットアップ + 非対話パイプライン実行 + 分析 + メトリクス収集"
     echo "  $0 --setup <combo> [ver]   環境セットアップのみ"
     echo "  $0 --post <combo>          ポスト処理のみ（分析 + メトリクス + 完了マーカー）"
     echo "  $0 --collect <combo>       メトリクス収集のみ"
+    echo "  $0 --archive <combo>       既存ランを _runs/ にアーカイブ"
+    echo "  $0 --clean <combo>         生成物を削除してクリーン状態にする"
     echo ""
     echo "Arguments:"
     echo "  combo    ベンチマーク組み合わせ名 (e.g. glm5_all, m2.5_all, claude_all)"
@@ -511,6 +613,32 @@ if [[ "$POST_ONLY" == true ]]; then
   analyze_poordev
   date +%s > "$TARGET_DIR/.bench-complete"
   ok "ポスト処理完了: $COMBO"
+  exit 0
+fi
+
+if [[ "$ARCHIVE_ONLY" == true ]]; then
+  # --archive モード: 既存ランをアーカイブ
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  if has_existing_run "$TARGET_DIR"; then
+    ARCHIVE_PATH=$(archive_run "$TARGET_DIR")
+    ok "アーカイブ完了: $ARCHIVE_PATH"
+  else
+    info "アーカイブ対象なし: $COMBO"
+  fi
+  exit 0
+fi
+
+if [[ "$CLEAN_ONLY" == true ]]; then
+  # --clean モード: 生成物を削除してクリーン状態に
+  if [[ ! -d "$TARGET_DIR" ]]; then
+    err "ディレクトリが見つかりません: $TARGET_DIR"
+    exit 1
+  fi
+  clean_run "$TARGET_DIR"
+  ok "クリーン完了: $COMBO"
   exit 0
 fi
 

@@ -35,11 +35,13 @@ ORCH_CLI=$(jq -r --arg o "$ORCH" '.models[$o].cli' benchmarks/benchmarks.json)
 ORCH_MODEL=$(jq -r --arg o "$ORCH" '.models[$o].model_id' benchmarks/benchmarks.json)
 ```
 
-## Step 4: 前回状態クリア
+## Step 4: 前回ラン状態の保存 + クリーン
+
+既存のベンチマーク成果物があればアーカイブ（`_runs/<timestamp>/`）してからクリーンな状態にする。
 
 ```bash
-rm -f benchmarks/<combo>/.bench-complete
-find benchmarks/<combo> -name "pipeline-state.json" -delete 2>/dev/null || true
+./benchmarks/run-benchmark.sh --archive <combo>
+./benchmarks/run-benchmark.sh --clean <combo>
 ```
 
 ## Step 5: 右 tmux ペインリセット

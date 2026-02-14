@@ -42,16 +42,16 @@ rm -f benchmarks/<combo>/.bench-complete
 find benchmarks/<combo> -name "pipeline-state.json" -delete 2>/dev/null || true
 ```
 
-## Step 5: 右 tmux ペイン検出
+## Step 5: 右 tmux ペインリセット
 
 ```bash
-# 現在のペイン以外を取得
+# 現在のペイン以外をすべて閉じる
 CURRENT=$(tmux display-message -p '#{pane_id}')
-TARGET=$(tmux list-panes -F '#{pane_id}' | grep -v "$CURRENT" | head -1)
-# なければ作成
-if [ -z "$TARGET" ]; then
-  TARGET=$(tmux split-window -h -P -F '#{pane_id}' -l 50%)
-fi
+for p in $(tmux list-panes -F '#{pane_id}' | grep -v "$CURRENT"); do
+  tmux kill-pane -t "$p" 2>/dev/null || true
+done
+# 新規ペインを作成
+TARGET=$(tmux split-window -h -P -F '#{pane_id}' -l 50%)
 ```
 
 ## Step 6: CLI 起動

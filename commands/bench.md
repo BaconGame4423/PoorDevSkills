@@ -181,10 +181,16 @@ fi
 Bash(run_in_background) で完了監視ポーリング（最大 120 分）。
 
 - 10 秒間隔: TUI 質問ダイアログの自動応答（`esc dismiss` パターン検知 → 1番目を選択）
+- 10 秒間隔: opencode Permission required ダイアログの自動承認（「Allow always」→「Confirm」）
 - 60 秒間隔: pipeline-state.json の完了/エラー判定
 
 質問自動応答ポリシー: 常に最初の選択肢を選択（全 combo 共通 = 公平性担保）。
 複数質問は1サイクル1質問ずつ処理。opencode のみ対応、claude CLI は今後追加。
+
+Permission required 自動承認ポリシー: ベンチマーク環境ではすべて「Allow always」で承認する。
+opencode のサンドボックスがベンチマーク外ディレクトリ（DevSkills/lib 等）へのアクセスを求めるのは正常動作。
+操作手順: Right（Allow always に移動）→ Enter → Enter（Confirm）。
+注意: Tab は opencode のモード切替（agents タブ等）になるため絶対に使わない。
 
 ```bash
 COMBO_DIR="benchmarks/<combo>"
@@ -192,12 +198,16 @@ TIMEOUT=7200; ELAPSED=0; CHECK=0
 
 if [ "$ORCH_CLI" = "opencode" ]; then
   QUESTION_PATTERN="esc dismiss"
+  PERMISSION_PATTERN="Permission required"
 else
   QUESTION_PATTERN=""
+  PERMISSION_PATTERN=""
 fi
 
 LAST_ANSWER_TIME=0
 ANSWER_COOLDOWN=30
+LAST_PERM_TIME=0
+PERM_COOLDOWN=15
 
 while [ $ELAPSED -lt $TIMEOUT ]; do
   sleep 10; ELAPSED=$((ELAPSED + 10)); CHECK=$((CHECK + 1))
@@ -207,11 +217,41 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     echo "BENCH_PANE_LOST: <combo>"; exit 1
   fi
 
+  PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+
+  # Permission required 自動承認（クールダウン付き）
+  # opencode のサンドボックス権限ダイアログを検知し「Allow always」で承認する
+  # Tab はモード切替になるため使用禁止。左右矢印キーでオプション選択する
+  if [ -n "$PERMISSION_PATTERN" ]; then
+    SINCE_PERM=$((ELAPSED - LAST_PERM_TIME))
+    if [ $SINCE_PERM -ge $PERM_COOLDOWN ]; then
+      if echo "$PANE_CONTENT" | grep -q "$PERMISSION_PATTERN"; then
+        echo "[${ELAPSED}s] Permission required detected"
+        # Right arrow → "Allow always" に移動 → Enter で選択
+        tmux send-keys -t $TARGET Right
+        sleep 0.5
+        tmux send-keys -t $TARGET Enter
+        sleep 1
+        # "Allow always" 選択後に Confirm/Cancel ダイアログが表示される → Enter で Confirm
+        CONFIRM_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+        if echo "$CONFIRM_CONTENT" | grep -q "Confirm"; then
+          tmux send-keys -t $TARGET Enter
+          sleep 0.5
+          echo "[${ELAPSED}s] Permission approved (Allow always + Confirm)"
+        else
+          echo "[${ELAPSED}s] Permission approved (direct)"
+        fi
+        LAST_PERM_TIME=$ELAPSED
+        # Permission 処理直後はペイン内容が変化しているので次のチェックをスキップ
+        continue
+      fi
+    fi
+  fi
+
   # 質問自動応答（クールダウン付き）
   if [ -n "$QUESTION_PATTERN" ]; then
     SINCE_LAST=$((ELAPSED - LAST_ANSWER_TIME))
     if [ $SINCE_LAST -ge $ANSWER_COOLDOWN ]; then
-      PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
       if echo "$PANE_CONTENT" | grep -q "$QUESTION_PATTERN"; then
         BEFORE_HASH=$(echo "$PANE_CONTENT" | md5sum | cut -d' ' -f1)
         echo "[${ELAPSED}s] Question detected, sending Enter"

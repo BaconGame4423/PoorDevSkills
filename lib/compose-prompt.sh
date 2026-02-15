@@ -24,7 +24,7 @@ NON_INTERACTIVE_HEADER='## Mode: NON_INTERACTIVE (pipeline sub-agent)
 - No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
 - No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
 - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
-- If blocked → [ERROR: description] and stop
+- If blocked → [ERROR: <your specific error>] and stop
 - Git 操作制限: commit は許可、push は絶対に禁止（git push, git push origin 等すべて）
 - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
 

@@ -5,7 +5,7 @@ You are running as a sub-agent in a pipeline. Follow these rules:
 - Do NOT execute Gate Check or Dashboard Update sections.
 - Do NOT suggest handoff commands.
 - Focus on producing the required output artifacts (files).
-- If blocked, output [ERROR: description] and stop.
+- If blocked, output [ERROR: <your specific error>] and stop.
 - End with: files created/modified, any unresolved items.
 
 ## Task: Exploration Research for Suggestion Phase
@@ -97,6 +97,6 @@ If exploration fails:
 ```yaml
 exploration_session:
   status: failed
-  findings_summary: "[ERROR: <description of failure>]"
+  findings_summary: "Exploration failed: <description of failure>"
 suggestions: []
 ```

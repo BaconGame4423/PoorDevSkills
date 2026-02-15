@@ -14,7 +14,7 @@ You are running as a sub-agent in a pipeline. Follow these rules:
 - Do NOT execute Gate Check or Dashboard Update sections.
 - Do NOT suggest handoff commands.
 - Focus on producing the required output artifacts (YAML output).
-- If blocked, output [ERROR: description] and stop.
+- If blocked, output [ERROR: <your specific error>] and stop.
 - End with: structured YAML output containing exploration session and suggestions.
 
 ## Role
@@ -268,7 +268,7 @@ exploration_session:
   started_at: "<ISO8601>"
   completed_at: "<ISO8601>"
   status: failed
-  findings_summary: "[ERROR: <description of failure, e.g., 'WebFetch unavailable', 'Unable to access sources', 'Timeout exceeded'>]"
+  findings_summary: "Exploration failed: <description of failure, e.g., 'WebFetch unavailable', 'Unable to access sources', 'Timeout exceeded'>"
 
 suggestions: []
 

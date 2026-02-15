@@ -108,7 +108,12 @@ fi
 VERDICT=$(tail -80 "$OUTPUT_FILE" | grep -oP '^v: \K(GO|CONDITIONAL|NO-GO)' | tail -1 || true)
 
 # Use subshells to avoid pipefail issues when grep finds no matches
+# Filter template false positives: instruction text "[ERROR: description]" and
+# YAML example placeholders containing angle brackets "<...>"
 ERRORS_RAW=$(grep -oP '\[ERROR: [^\]]*\]' "$OUTPUT_FILE" 2>/dev/null || true)
+if [ -n "$ERRORS_RAW" ]; then
+  ERRORS_RAW=$(echo "$ERRORS_RAW" | grep -vE '<[^>]+>|^\[ERROR: description\]$' || true)
+fi
 if [ -n "$ERRORS_RAW" ]; then
   ERRORS=$(echo "$ERRORS_RAW" | jq -R -s 'split("\n") | map(select(. != ""))')
 else
@@ -116,6 +121,9 @@ else
 fi
 
 CLARIFICATIONS_RAW=$(grep -oP '\[NEEDS CLARIFICATION: [^\]]*\]' "$OUTPUT_FILE" 2>/dev/null || true)
+if [ -n "$CLARIFICATIONS_RAW" ]; then
+  CLARIFICATIONS_RAW=$(echo "$CLARIFICATIONS_RAW" | grep -vE '<[^>]+>|^\[NEEDS CLARIFICATION: question\]$' || true)
+fi
 if [ -n "$CLARIFICATIONS_RAW" ]; then
   CLARIFICATIONS=$(echo "$CLARIFICATIONS_RAW" | jq -R -s 'split("\n") | map(select(. != ""))')
 else

@@ -9,7 +9,7 @@
   "gates": {},
   "polling": {
     "interval": 1,
-    "idle_timeout": 120,
+    "idle_timeout": 300,
     "max_timeout": 600
   },
   "protected_files": [

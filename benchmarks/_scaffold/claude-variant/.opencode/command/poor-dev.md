@@ -89,10 +89,10 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 
 パイプラインフロー (feature/bugfix/roadmap/discovery/investigation) の場合:
 
-**bash ツールで以下を実行すること（テキストとして出力しない）:**
+**3a. セットアップ** — bash ツールで以下を実行すること（テキストとして出力しない）:
 
 ```bash
-bash lib/intake.sh --flow <分類結果> --project-dir "$(pwd)" << 'INPUTEOF'
+bash lib/intake.sh --setup-only --flow <分類結果> --project-dir "$(pwd)" << 'INPUTEOF'
 <User Input セクションのテキストをここにコピー>
 INPUTEOF
 ```
@@ -100,15 +100,25 @@ INPUTEOF
 `<分類結果>` は Step 1 の分類結果に置換する（feature, bugfix, investigation, roadmap, discovery）。
 `<User Input セクションのテキストをここにコピー>` は上記 User Input セクションの内容をそのまま貼り付ける。
 
-intake.sh はブランチ作成後、パイプライン全体（specify を含む全ステップ）をバックグラウンドで起動し即座に終了する。
-stdout の JSONL から結果を読み取り、ユーザーに以下を報告:
-- feature_dir のパス
-- パイプラインがバックグラウンドで実行中であること（specify から開始）
-- 進捗は `pipeline-state.json` で確認可能であること
+JSON 出力から `feature_dir` と `branch` を取得する。
 
-exit code 非0 の場合はエラーを報告して終了。
+**3b. ステップ順次実行** — 以下のコマンドを繰り返し実行する。
+毎回 bash ツールで実行すること（テキストとして出力しない）:
 
-**禁止事項**: lib/ 内のスクリプトを直接呼び出したり読んだりしないこと。intake.sh 以外のスクリプトは使わない。
+```bash
+bash lib/pipeline-runner.sh --next --flow <FLOW> --feature-dir <FEATURE_DIR> --branch <BRANCH> --project-dir "$(pwd)" --summary "<User Input の1行要約>"
+```
+
+各実行で1ステップが完了する。
+
+**ループ判定（出力テキストで判断）:**
+- 出力に `pipeline_complete` が含まれる → **全完了。最終結果を報告して終了。**
+- 出力に `step_complete` が含まれる → **完了したステップを1行報告し、同じコマンドを再実行。**
+- exit code が 0 以外 → **エラー。出力を確認しユーザーに報告して停止。**
+
+pipeline-state.json が完了済みステップを自動記録するため、再実行すると次のステップから始まる。
+
+**禁止事項**: lib/ 内のスクリプトを直接読んだり修正しないこと。上記コマンド以外のスクリプトは使わない。
 
 非パイプラインフローの場合:
 - Q&A → `/poor-dev.ask` コマンドを実行

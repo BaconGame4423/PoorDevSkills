@@ -2,7 +2,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Usage: intake.sh --flow <flow> --project-dir <dir> [--input-file <file>]
+# Usage: intake.sh --flow <flow> --project-dir <dir> [--input-file <file>] [--setup-only]
 #
 # Reads user input from stdin (heredoc) or --input-file, then:
 #   1. Generates short-name from input text
@@ -19,12 +19,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLOW=""
 INPUT_FILE=""
 PROJECT_DIR=""
+SETUP_ONLY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --flow)        FLOW="$2"; shift 2 ;;
     --input-file)  INPUT_FILE="$2"; shift 2 ;;
     --project-dir) PROJECT_DIR="$2"; shift 2 ;;
+    --setup-only)  SETUP_ONLY=true; shift ;;
     *)             echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -84,6 +86,13 @@ echo '{"event":"branch_created","branch":"'"$BRANCH"'","feature_dir":"'"$FEATURE
 # --- 3. Save input to feature directory ---
 
 cp "$TEMP_INPUT" "$FD/input.txt" && rm -f "$TEMP_INPUT"
+
+# --- 3b. Setup-only mode: return JSON and exit ---
+
+if [[ "$SETUP_ONLY" == "true" ]]; then
+  echo '{"event":"setup_complete","feature_dir":"'"$FEATURE_DIR"'","branch":"'"$BRANCH"'","flow":"'"$FLOW"'"}'
+  exit 0
+fi
 
 # --- 4. Pipeline runner (background) ---
 #

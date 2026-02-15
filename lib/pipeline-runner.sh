@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Usage: pipeline-runner.sh --flow <flow> --feature-dir <dir> --branch <branch> --project-dir <dir> [--completed step1,step2] [--summary "feature summary"]
+# Usage: pipeline-runner.sh --flow <flow> --feature-dir <dir> --branch <branch> --project-dir <dir> [--completed step1,step2] [--summary "feature summary"] [--next]
 #
 # Runs the full pipeline sequentially, dispatching each step via dispatch-step.sh.
 #
@@ -8,6 +8,13 @@ set -euo pipefail
 # exit code: 0=all complete, 1=error, 2=NO-GO pause, 3=rate-limit
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Cleanup trap ---
+
+cleanup_temp_files() {
+  rm -f /tmp/poor-dev-result-*-$$.json 2>/dev/null || true
+}
+trap cleanup_temp_files EXIT INT TERM
 
 # --- Parse arguments ---
 
@@ -18,6 +25,7 @@ PROJECT_DIR=""
 COMPLETED_CSV=""
 SUMMARY=""
 INPUT_FILE=""
+NEXT_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --completed)  COMPLETED_CSV="$2"; shift 2 ;;
     --summary)    SUMMARY="$2";     shift 2 ;;
     --input-file) INPUT_FILE="$2";  shift 2 ;;
+    --next)       NEXT_MODE=true;   shift ;;
     --resume)     shift ;;  # no-op: resume is automatic via pipeline-state.json
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -400,24 +409,35 @@ CTX_EOF
     bash "$SCRIPT_DIR/compose-prompt.sh" "${compose_args[@]}"
 
     # --- Dispatch ---
-    local result=""
-    result=$(bash "$SCRIPT_DIR/dispatch-step.sh" "implement" "$project_dir" "$prompt_file" "$IDLE_TIMEOUT" "$MAX_TIMEOUT" 2>&1) || {
+    local impl_result_file="/tmp/poor-dev-result-implement-phase${phase_num}-$$.json"
+    bash "$SCRIPT_DIR/dispatch-step.sh" "implement" "$project_dir" "$prompt_file" \
+      "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$impl_result_file" || {
       local dispatch_exit=$?
+      local result=""
+      if [[ -f "$impl_result_file" ]]; then
+        result=$(cat "$impl_result_file")
+      fi
+      : "${result:={}}"
+      rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" "$impl_result_file" 2>/dev/null || true
+
       local rate_count
       rate_count=$(check_rate_limit)
       if [[ "$rate_count" -gt 0 ]]; then
         bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$fd" "rate-limited" "Rate limit at implement phase $phase_num" > /dev/null
         echo "{\"phase\":$phase_num,\"status\":\"rate-limited\",\"rate_limit_count\":$rate_count}"
-        rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
         exit 3
       fi
       echo "{\"phase\":$phase_num,\"status\":\"error\",\"exit_code\":$dispatch_exit,\"result\":$(echo "$result" | jq -R -s '.')}"
-      rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
       exit 1
     }
 
-    # Cleanup temp files
-    rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" 2>/dev/null || true
+    # Read result from file + cleanup temp files
+    local result=""
+    if [[ -f "$impl_result_file" ]]; then
+      result=$(cat "$impl_result_file")
+    fi
+    : "${result:={}}"
+    rm -f "$prompt_file" "$phase_ctx" "$pipeline_ctx" "$impl_result_file" 2>/dev/null || true
 
     # Post-phase source protection
     local protection_result
@@ -439,7 +459,20 @@ CTX_EOF
 # Main dispatch loop
 # ============================================================
 
-PIPELINE_STEPS=$(get_pipeline_steps "$FLOW") || exit 1
+# Resolve pipeline steps: prefer saved pipeline in state file, fallback to flow default
+PIPELINE_STEPS=""
+if [[ -f "$STATE_FILE" ]]; then
+  PIPELINE_TYPE=$(jq -r '.pipeline | type' "$STATE_FILE" 2>/dev/null || echo "null")
+  if [[ "$PIPELINE_TYPE" == "array" ]]; then
+    PIPELINE_LEN=$(jq -r '.pipeline | length' "$STATE_FILE" 2>/dev/null || echo "0")
+    if [[ "$PIPELINE_LEN" -gt 0 ]]; then
+      PIPELINE_STEPS=$(jq -r '.pipeline[]' "$STATE_FILE" 2>/dev/null | tr '\n' ' ' || true)
+    fi
+  fi
+fi
+if [[ -z "$PIPELINE_STEPS" ]]; then
+  PIPELINE_STEPS=$(get_pipeline_steps "$FLOW") || exit 1
+fi
 
 # Initialize pipeline state
 STEPS_JSON=$(echo "$PIPELINE_STEPS" | tr ' ' '\n' | jq -R . | jq -s .)
@@ -449,6 +482,27 @@ fi
 
 STEP_COUNT=0
 TOTAL_STEPS=$(echo "$PIPELINE_STEPS" | wc -w)
+
+# --next: restrict to the next incomplete step only
+if [[ "$NEXT_MODE" == "true" ]]; then
+  FOUND_NEXT=false
+  NEXT_STEP_NUM=0
+  for CANDIDATE in $PIPELINE_STEPS; do
+    NEXT_STEP_NUM=$((NEXT_STEP_NUM + 1))
+    if [[ -z "${COMPLETED_SET[$CANDIDATE]:-}" ]]; then
+      PIPELINE_STEPS="$CANDIDATE"
+      STEP_COUNT=$((NEXT_STEP_NUM - 1))
+      FOUND_NEXT=true
+      break
+    fi
+  done
+  if [[ "$FOUND_NEXT" != "true" ]]; then
+    # All steps completed
+    bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "completed" > /dev/null 2>&1 || true
+    echo '{"status":"pipeline_complete","flow":"'"$FLOW"'","steps_completed":'"$TOTAL_STEPS"'}'
+    exit 0
+  fi
+fi
 
 for STEP in $PIPELINE_STEPS; do
   STEP_COUNT=$((STEP_COUNT + 1))
@@ -547,26 +601,36 @@ CTX_EOF
 
   # --- Dispatch ---
 
-  RESULT=""
-  RESULT=$(bash "$SCRIPT_DIR/dispatch-step.sh" "$STEP" "$PROJECT_DIR" "$PROMPT_FILE" "$IDLE_TIMEOUT" "$MAX_TIMEOUT" 2>&1) || {
+  RESULT_FILE="/tmp/poor-dev-result-${STEP}-$$.json"
+  bash "$SCRIPT_DIR/dispatch-step.sh" "$STEP" "$PROJECT_DIR" "$PROMPT_FILE" \
+    "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$RESULT_FILE" || {
     DISPATCH_EXIT=$?
+    RESULT=""
+    if [[ -f "$RESULT_FILE" ]]; then
+      RESULT=$(cat "$RESULT_FILE")
+    fi
+    : "${RESULT:={}}"
+    rm -f "$PROMPT_FILE" "$RESULT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
 
     # Rate limit check
     RATE_COUNT=$(check_rate_limit)
     if [[ "$RATE_COUNT" -gt 0 ]]; then
       bash "$SCRIPT_DIR/pipeline-state.sh" set-status "$FD" "rate-limited" "Rate limit at step $STEP" > /dev/null
       echo "{\"step\":\"$STEP\",\"status\":\"rate-limited\",\"rate_limit_count\":$RATE_COUNT}"
-      rm -f "$PROMPT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
       exit 3
     fi
 
     echo "{\"step\":\"$STEP\",\"status\":\"error\",\"exit_code\":$DISPATCH_EXIT,\"result\":$(echo "$RESULT" | jq -R -s '.')}"
-    rm -f "$PROMPT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
     exit 1
   }
 
-  # Cleanup temp files
-  rm -f "$PROMPT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
+  # Read result from file
+  RESULT=""
+  if [[ -f "$RESULT_FILE" ]]; then
+    RESULT=$(cat "$RESULT_FILE")
+  fi
+  : "${RESULT:={}}"
+  rm -f "$PROMPT_FILE" "$RESULT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
 
   # --- Post-specify: extract spec.md ---
 
@@ -729,7 +793,8 @@ CTX_EOF
     fi
   fi
 
-  echo "{\"step\":\"$STEP\",\"status\":\"complete\",\"progress\":\"$STEP_COUNT/$TOTAL_STEPS\",\"result\":$RESULT}"
+  COMPLETED_COUNT=$(jq -r '.completed | length' "$STATE_FILE" 2>/dev/null || echo "$STEP_COUNT")
+  echo "{\"step\":\"$STEP\",\"status\":\"step_complete\",\"progress\":\"$COMPLETED_COUNT/$TOTAL_STEPS\",\"result\":$RESULT}"
 done
 
 # All steps complete

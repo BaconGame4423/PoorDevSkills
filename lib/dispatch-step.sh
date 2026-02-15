@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Usage: dispatch-step.sh <step> <project_dir> <prompt_file> [idle_timeout] [max_timeout]
+# Usage: dispatch-step.sh <step> <project_dir> <prompt_file> [idle_timeout] [max_timeout] [result_file]
 #
 # Wraps a single dispatch cycle:
 #   1. Resolves CLI/model via config-resolver.sh
@@ -18,6 +18,7 @@ PROJECT_DIR="${2:?Usage: dispatch-step.sh <step> <project_dir> <prompt_file> [id
 PROMPT_FILE="${3:?Usage: dispatch-step.sh <step> <project_dir> <prompt_file> [idle_timeout] [max_timeout]}"
 IDLE_TIMEOUT="${4:-120}"
 MAX_TIMEOUT="${5:-600}"
+RESULT_FILE="${6:-}"
 
 # Resolve to absolute paths
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -80,7 +81,7 @@ chmod +x "$CMD_FILE"
 
 # --- Execute via poll-dispatch.sh ---
 
-bash "$SCRIPT_DIR/poll-dispatch.sh" "$CMD_FILE" "$OUTPUT_FILE" "$PROGRESS_FILE" "$IDLE_TIMEOUT" "$MAX_TIMEOUT"
+bash "$SCRIPT_DIR/poll-dispatch.sh" "$CMD_FILE" "$OUTPUT_FILE" "$PROGRESS_FILE" "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$STEP" "$RESULT_FILE"
 EXIT_CODE=$?
 
 # Cleanup temp files (output/progress are consumed by caller if needed)

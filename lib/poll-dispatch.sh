@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Usage: poll-dispatch.sh <command_file> <output_file> <progress_file> <idle_timeout> <max_timeout>
+# Usage: poll-dispatch.sh <command_file> <output_file> <progress_file> <idle_timeout> <max_timeout> [step_name] [result_file]
 #
 # Polls a dispatched command outside the orchestrator's context window.
 # Extracts progress markers incrementally and outputs a JSON summary on completion.
@@ -9,12 +9,20 @@ set -euo pipefail
 #   { "exit_code": N, "elapsed": N, "timeout_type": "none"|"idle"|"max",
 #     "verdict": "GO"|"CONDITIONAL"|"NO-GO"|null,
 #     "errors": [...], "clarifications": [...] }
+#
+# When RESULT_FILE is specified:
+#   stdout: heartbeat JSONL (15s interval)
+#   RESULT_FILE: JSON summary (above format)
+# When RESULT_FILE is not specified:
+#   stdout: JSON summary (backward compatible)
 
 COMMAND_FILE="$1"
 OUTPUT_FILE="$2"
 PROGRESS_FILE="$3"
 IDLE_TIMEOUT="${4:-120}"
 MAX_TIMEOUT="${5:-600}"
+STEP_NAME="${6:-unknown}"
+RESULT_FILE="${7:-}"
 
 # Validate inputs
 if [ ! -f "$COMMAND_FILE" ]; then
@@ -37,6 +45,9 @@ fi
 env -u CLAUDECODE bash "$COMMAND_FILE" > "$OUTPUT_FILE" 2>&1 &
 PID=$!
 
+START_TIME=$(date +%s)
+LAST_HB=$START_TIME
+LAST_IDLE_TIME=$START_TIME
 ELAPSED=0
 IDLE=0
 LAST_SIZE=0
@@ -59,12 +70,21 @@ while kill -0 "$PID" 2>/dev/null; do
   else
     sleep 1
   fi
-  ELAPSED=$((ELAPSED + 1))
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - START_TIME))
+
+  # Heartbeat output (only when RESULT_FILE is specified, every 15s)
+  if [ -n "$RESULT_FILE" ] && [ $((NOW - LAST_HB)) -ge 15 ]; then
+    CURRENT_SIZE_HB=$(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo 0)
+    echo '{"heartbeat":true,"step":"'"$STEP_NAME"'","elapsed":'"$ELAPSED"',"output_bytes":'"$CURRENT_SIZE_HB"'}'
+    LAST_HB=$NOW
+  fi
 
   CURRENT_SIZE=$(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo 0)
   if [ "$CURRENT_SIZE" -gt "$LAST_SIZE" ]; then
     OUTPUT_STARTED=true
     IDLE=0
+    LAST_IDLE_TIME=$NOW
 
     # Incremental scan: only read new bytes for markers
     NEW_CONTENT=$(tail -c +$((LAST_SIZE + 1)) "$OUTPUT_FILE" 2>/dev/null || true)
@@ -84,7 +104,7 @@ while kill -0 "$PID" 2>/dev/null; do
       COMPLETION_GRACE=0
     fi
   else
-    IDLE=$((IDLE + 1))
+    IDLE=$((NOW - LAST_IDLE_TIME))
   fi
 
   # opencode completion signal detected: 10s grace then clean exit
@@ -150,7 +170,7 @@ else
 fi
 
 # Output JSON summary
-jq -n \
+SUMMARY=$(jq -n \
   --argjson exit_code "$EXIT_CODE" \
   --argjson elapsed "$ELAPSED" \
   --arg timeout_type "$TIMEOUT_TYPE" \
@@ -159,4 +179,10 @@ jq -n \
   --argjson clarifications "$CLARIFICATIONS" \
   '{exit_code: $exit_code, elapsed: $elapsed, timeout_type: $timeout_type,
     verdict: (if $verdict == "" then null else $verdict end),
-    errors: $errors, clarifications: $clarifications}'
+    errors: $errors, clarifications: $clarifications}')
+
+if [ -n "$RESULT_FILE" ]; then
+  echo "$SUMMARY" > "$RESULT_FILE"
+else
+  echo "$SUMMARY"
+fi

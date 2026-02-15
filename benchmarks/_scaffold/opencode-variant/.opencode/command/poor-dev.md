@@ -89,8 +89,7 @@ If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/repor
 
 パイプラインフロー (feature/bugfix/roadmap/discovery/investigation) の場合:
 
-ユーザー入力を heredoc で stdin に渡し、intake.sh を実行する。
-bash ツールで以下のコマンドを実行:
+**bash ツールで以下を実行すること（テキストとして出力しない）:**
 
 ```bash
 bash lib/intake.sh --flow <分類結果> --project-dir "$(pwd)" << 'INPUTEOF'
@@ -101,11 +100,15 @@ INPUTEOF
 `<分類結果>` は Step 1 の分類結果に置換する（feature, bugfix, investigation, roadmap, discovery）。
 `<User Input セクションのテキストをここにコピー>` は上記 User Input セクションの内容をそのまま貼り付ける。
 
-exit code で分岐:
-- `0`: 全完了 → stdout の JSONL から結果サマリーを報告
-- `1`: エラー → エラー詳細を報告
-- `2`: NO-GO → ユーザーと対話して解決策を検討
-- `3`: rate-limit → 時間をおいて再実行を案内
+intake.sh はブランチ作成後、パイプライン全体（specify を含む全ステップ）をバックグラウンドで起動し即座に終了する。
+stdout の JSONL から結果を読み取り、ユーザーに以下を報告:
+- feature_dir のパス
+- パイプラインがバックグラウンドで実行中であること（specify から開始）
+- 進捗は `pipeline-state.json` で確認可能であること
+
+exit code 非0 の場合はエラーを報告して終了。
+
+**禁止事項**: lib/ 内のスクリプトを直接呼び出したり読んだりしないこと。intake.sh 以外のスクリプトは使わない。
 
 非パイプラインフローの場合:
 - Q&A → `/poor-dev.ask` コマンドを実行

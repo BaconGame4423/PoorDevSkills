@@ -38,9 +38,9 @@ The text after the command **is** the user's request. Do not ask them to repeat 
 
 ### Flow Control Rule
 
-This command is the pipeline orchestrator. After classification (Step 1-4):
-- Pipeline flows (Feature, Bugfix, Roadmap, Discovery, Investigation) → proceed to **Step 5**
-- Non-pipeline flows (Q&A, Documentation) → execute target skill directly in Step 4
+This command is the pipeline orchestrator. After classification (Step 1-2):
+- Pipeline flows (Feature, Bugfix, Roadmap, Discovery, Investigation) → proceed to **Step 3** (bash lib/intake.sh)
+- Non-pipeline flows (Q&A, Documentation) → execute target skill directly in Step 3
 - Do NOT auto-transition to other agents via handoff frontmatter. Handoffs are UI metadata only.
 
 ### Step 1: Input Classification
@@ -82,138 +82,34 @@ If confidence is Medium or below, ask user to choose:
 
 If "もう少し詳しく" → re-classify. If option 6 → follow-up: ask/report.
 
-**Non-pipeline shortcut**: Q&A / Documentation → skip Step 3, go to Step 4D/4E.
-**Investigation shortcut**: → skip Step 3, go to Step 4G (no branch/directory creation needed).
-**Discovery shortcut**: → skip Step 3, go to Step 4F (branch handled by `/poor-dev.discovery`).
+**Non-pipeline shortcut**: Q&A / Documentation → Step 3 の非パイプラインフロー処理へ。
+**Pipeline flows**: Feature / Bugfix / Investigation / Roadmap / Discovery → Step 3 の bash lib/intake.sh を実行。
 
-### Step 3: Branch & Directory Creation (pipeline flows only)
+### Step 3: パイプライン実行
 
-1. Generate short name (2-4 words): action-noun for features, `fix-` prefix for bugs. Preserve technical terms.
-2. Create feature branch:
-   ```bash
-   git fetch --all --prune
-   ```
-   Find highest number N across remote branches, local branches, specs directories. Use N+1.
-   ```bash
-   git checkout -b NNN-short-name
-   mkdir -p specs/NNN-short-name
-   ```
+パイプラインフロー (feature/bugfix/roadmap/discovery/investigation) の場合:
 
-### Step 4: Routing
+**bash ツールで以下を実行すること（テキストとして出力しない）:**
 
-**4A Feature**: Report "Classified as feature: <summary>". → Step 5
-**4B Bugfix**:
-1. Check `bug-patterns.md` for similar past patterns.
-2. Create `$FEATURE_DIR/bug-report.md`:
-   ```markdown
-   # Bug Report: [BUG SHORT NAME]
-   **Branch**: `[###-fix-bug-name]` | **Created**: [DATE] | **Status**: Investigating
-   **Input**: "$ARGUMENTS"
-   ## Description
-   [summary]
-   ## Expected vs Actual
-   - Expected: [expected]
-   - Actual: [actual, with error messages if available]
-   ## Steps to Reproduce
-   1. [Step 1]
-   ## Context
-   - Frequency: [always / intermittent / specific conditions]
-   - Environment: [OS, Language/Runtime, Key Dependencies]
-   - Since When: [onset timing]
-   - Reproduction: [Not Attempted / Reproduced / Could Not Reproduce]
-   ```
-   Fill what can be extracted. Leave unknowns as placeholders.
-3. Report "Classified as bugfix: <summary>". → Step 5
-**4C Roadmap**: Report "Classified as roadmap: <summary>". → Step 5
-**4D Q&A**: Report "Classified as Q&A: <summary>". Execute `/poor-dev.ask` directly (non-pipeline).
-**4E Documentation**: Report "Classified as documentation: <summary>". Execute `/poor-dev.report` directly (non-pipeline).
-**4F Discovery**: Report "Classified as discovery: <summary>". → Step 5
-**4G Investigation**: Report "Classified as investigation: <summary>". → Step 5
+```bash
+bash lib/intake.sh --flow <分類結果> --project-dir "$(pwd)" << 'INPUTEOF'
+<User Input セクションのテキストをここにコピー>
+INPUTEOF
+```
 
-### Step 5: Specify + Pipeline Dispatch
+`<分類結果>` は Step 1 の分類結果に置換する（feature, bugfix, investigation, roadmap, discovery）。
+`<User Input セクションのテキストをここにコピー>` は上記 User Input セクションの内容をそのまま貼り付ける。
 
-After routing to a pipeline flow, orchestrate the specify step directly, then dispatch the remaining pipeline to a sub-agent.
+intake.sh はブランチ作成後、パイプライン全体（specify を含む全ステップ）をバックグラウンドで起動し即座に終了する。
+stdout の JSONL から結果を読み取り、ユーザーに以下を報告:
+- feature_dir のパス
+- パイプラインがバックグラウンドで実行中であること（specify から開始）
+- 進捗は `pipeline-state.json` で確認可能であること
 
-#### 5A. Specify Step (read-only dispatch)
+exit code 非0 の場合はエラーを報告して終了。
 
-1. Read `commands/poor-dev.specify.md`
-2. Strip YAML frontmatter (first `---` to next `---`). Validate no `handoffs:` remains.
-3. Prepend NON_INTERACTIVE_HEADER + READONLY_HEADER:
-   ```markdown
-   ## Mode: NON_INTERACTIVE (pipeline sub-agent)
-   - No AskUserQuestion → use [NEEDS CLARIFICATION: ...] markers
-   - No Gate Check, Dashboard Update, handoffs, EnterPlanMode/ExitPlanMode
-   - Output progress: [PROGRESS: ...] / [REVIEW-PROGRESS: ...]
-   - If blocked → [ERROR: description] and stop
-   - File scope: FEATURE_DIR + project source only. NEVER modify: agents/, commands/, lib/, .poor-dev/, .opencode/command/, .opencode/agents/, .claude/agents/, .claude/commands/
-   - Shell infrastructure: mkdir・ディレクトリ作成・/tmp/ 操作は禁止。/tmp/ ファイルは poll-dispatch.sh が自動管理する
-   - End with: files created/modified, unresolved items
+**禁止事項**: lib/ 内のスクリプトを直接呼び出したり読んだりしないこと。intake.sh 以外のスクリプトは使わない。
 
-   ## Read-Only Execution Mode
-   You have READ-ONLY tool access (Edit, Write, Bash, NotebookEdit are disabled).
-   - Output the spec draft as plain markdown text in your response.
-   - First line MUST be: `[BRANCH: suggested-short-name]`
-   - The rest of your output is the spec draft content (using the Spec Template).
-   - Include `[NEEDS CLARIFICATION: question]` markers inline as needed (max 3).
-   - Do NOT attempt to create branches, directories, or files.
-   ```
-4. Append: `$ARGUMENTS` (full original user input) as context
-5. Resolve model: `bash lib/config-resolver.sh specify .poor-dev/config.json`
-6. Dispatch with polling (same pattern as pipeline):
-   - opencode/claude/FALLBACK dispatch → poll-dispatch.sh → JSON summary
-   - If cli=claude: add `--disallowedTools "Edit,Write,Bash,NotebookEdit"`
-   - FALLBACK_MODE: `Task(subagent_type="Explore", model="haiku", prompt=...)`
-7. Parse output:
-   - Extract `[BRANCH: ...]` → SUGGESTED_BRANCH
-   - Remaining = draft body
-   - `[ERROR: ...]` → stop
-8. Branch + FEATURE_DIR:
-   - Already on feature branch → FEATURE_DIR known, skip
-   - On main → create branch from SUGGESTED_BRANCH + `mkdir -p FEATURE_DIR`
-9. Write `FEATURE_DIR/spec-draft.md`
-10. **[NEEDS CLARIFICATION] resolution**:
-    - Extract all `[NEEDS CLARIFICATION: ...]` markers from spec-draft.md
-    - INTERACTIVE_MODE = true → AskUserQuestion per marker → replace in spec-draft.md
-    - INTERACTIVE_MODE = false → keep markers (user resolves during approval pause)
-11. **User approval**:
-    Display spec-draft.md as 日本語要約:
-    ```
-    ## 仕様ドラフト: [機能名の日本語訳]
-    ### ユーザーストーリー
-    - **P1**: [ストーリータイトルの日本語要約（1行）]
-    ### 機能要件
-    - FR-001: [要件の日本語訳（1行）]
-    ### エッジケース
-    - [日本語要約]
-    ### 成功基準
-    - SC-001: [基準の日本語訳]
-    ```
-    - INTERACTIVE_MODE = true → AskUserQuestion:
-      - "承認する" → `cp spec-draft.md spec.md && rm spec-draft.md`、続行
-      - "修正指示付きで棄却" → feedback 追記 → 停止
-      - "棄却する" → 停止 (spec-draft.md 保存)
-    - INTERACTIVE_MODE = false → 表示 → PAUSE_FOR_APPROVAL("spec-approval", "specify", summary)
-12. Validation: 承認後 spec.md → checklists/requirements.md 生成
-
-#### 5B. Pipeline Dispatch (remaining steps)
-
-specify 完了後、残りパイプラインを sub-agent として dispatch:
-
-1. Read `commands/poor-dev.pipeline.md`, strip frontmatter
-2. Prepend NON_INTERACTIVE_HEADER
-3. Append 以下の classification JSON をプロンプト末尾にインラインで付加:
-   ```json
-   {
-     "flow": "${FLOW}",
-     "feature_dir": "${FEATURE_DIR}",
-     "branch": "${BRANCH}",
-     "summary": "${FEATURE_SUMMARY}",
-     "interactive_mode": ${INTERACTIVE_MODE},
-     "completed": ["specify"],
-     "arguments": "${ORIGINAL_ARGUMENTS}"
-   }
-   ```
-4. Resolve model for "plan" step (pipeline orchestrator uses plan-tier model):
-   `bash lib/config-resolver.sh plan .poor-dev/config.json`
-5. Dispatch via opencode/claude/Task() with polling
-6. Poll until completion → relay progress → display result
+非パイプラインフローの場合:
+- Q&A → `/poor-dev.ask` コマンドを実行
+- Documentation → `/poor-dev.report` コマンドを実行

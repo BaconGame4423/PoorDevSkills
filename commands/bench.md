@@ -304,7 +304,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
 
   # pipeline-state.json チェック（60秒ごと）
   if [ $((CHECK % 6)) -eq 0 ]; then
-    STATE_FILE=$(find "$COMBO_DIR" -name "pipeline-state.json" 2>/dev/null | head -1)
+    STATE_FILE=$(find "$COMBO_DIR" -not -path '*/_runs/*' -name "pipeline-state.json" 2>/dev/null | head -1)
     if [ -n "$STATE_FILE" ]; then
       CURRENT=$(jq -r '.current // "running"' "$STATE_FILE" 2>/dev/null)
       COMPLETED=$(jq -r '.completed | length' "$STATE_FILE" 2>/dev/null)

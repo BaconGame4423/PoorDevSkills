@@ -7,13 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Reads user input from stdin (heredoc) or --input-file, then:
 #   1. Generates short-name from input text
 #   2. Creates branch + feature directory via branch-setup.sh
-#   3. Dispatches specify step (readonly) via compose-prompt.sh + dispatch-step.sh
-#   4. Extracts spec text and saves to spec.md
-#   5. Runs remaining pipeline via pipeline-runner.sh
+#   3. Saves input to feature_dir/input.txt
+#   4. Launches pipeline-runner.sh (including specify) in background
 #
 # stdin: user input text (via heredoc)
 # stdout: JSONL progress events
-# exit code: 0=complete, 1=error, 2=NO-GO, 3=rate-limit
+# exit code: 0=complete, 1=error
 
 # --- Argument parsing ---
 
@@ -82,59 +81,17 @@ FEATURE_DIR=$(echo "$BRANCH_RESULT" | jq -r '.feature_dir')
 FD="$PROJECT_DIR/$FEATURE_DIR"
 echo '{"event":"branch_created","branch":"'"$BRANCH"'","feature_dir":"'"$FEATURE_DIR"'"}'
 
-# --- 3. Spec dispatch (readonly) ---
+# --- 3. Save input to feature directory ---
 
-echo '{"event":"specify","status":"starting"}'
-rm -f /tmp/poor-dev-output-specify-*.txt 2>/dev/null || true
+cp "$TEMP_INPUT" "$FD/input.txt" && rm -f "$TEMP_INPUT"
 
-PROMPT_FILE="/tmp/poor-dev-specify-$$.txt"
-
-# Resolve command file (commands/ → .opencode/command/ fallback)
-SPECIFY_CMD="$PROJECT_DIR/commands/poor-dev.specify.md"
-[[ ! -f "$SPECIFY_CMD" ]] && SPECIFY_CMD="$PROJECT_DIR/.opencode/command/poor-dev.specify.md"
-
-if [[ ! -f "$SPECIFY_CMD" ]]; then
-  echo '{"event":"specify","status":"error","reason":"poor-dev.specify.md not found"}'
-  rm -f "$TEMP_INPUT"
-  exit 1
-fi
-
-bash "$SCRIPT_DIR/compose-prompt.sh" \
-  "$SPECIFY_CMD" "$PROMPT_FILE" \
-  --header non_interactive --header readonly \
-  --context "input=$TEMP_INPUT"
-
-DISPATCH_EXIT=0
-bash "$SCRIPT_DIR/dispatch-step.sh" specify "$PROJECT_DIR" "$PROMPT_FILE" 120 600 2>&1 || DISPATCH_EXIT=$?
-
-rm -f "$TEMP_INPUT" "$PROMPT_FILE" 2>/dev/null || true
-
-if [[ "$DISPATCH_EXIT" -ne 0 ]]; then
-  echo '{"event":"specify","status":"error","exit_code":'"$DISPATCH_EXIT"'}'
-  exit 1
-fi
-
-# --- 4. Extract spec text ---
-
-SPEC_OUTPUT=$(ls -t /tmp/poor-dev-output-specify-*.txt 2>/dev/null | head -1)
-if [[ -n "$SPEC_OUTPUT" && -f "$SPEC_OUTPUT" ]]; then
-  jq -r 'select(.type=="text") | .part.text // empty' "$SPEC_OUTPUT" 2>/dev/null | \
-    sed '/^\[BRANCH:/d' > "$FD/spec.md"
-fi
-
-if [[ ! -f "$FD/spec.md" ]] || [[ ! -s "$FD/spec.md" ]]; then
-  echo '{"event":"specify","status":"error","reason":"spec.md not extracted"}'
-  exit 1
-fi
-echo '{"event":"specify","status":"complete","file":"'"$FEATURE_DIR/spec.md"'"}'
-
-# --- 5. Pipeline runner (background) ---
+# --- 4. Pipeline runner (background) ---
 #
-# pipeline-runner.sh can take 30-60+ minutes to complete (dispatching multiple
-# sub-agent steps). Running it synchronously would exceed the bash tool timeout
-# in TUI-based LLM environments (opencode, claude). Instead, we launch it in
-# the background and return immediately so the calling model can poll
-# pipeline-state.json for progress.
+# pipeline-runner.sh runs the full pipeline including specify as the first step.
+# It can take 30-60+ minutes to complete. Running it synchronously would exceed
+# the bash tool timeout in TUI-based LLM environments (opencode, claude).
+# Instead, we launch it in the background and return immediately so the calling
+# model can poll pipeline-state.json for progress.
 
 PIPELINE_LOG="$FD/pipeline.log"
 PIPELINE_PID_FILE="$FD/pipeline.pid"
@@ -146,11 +103,11 @@ nohup bash "$SCRIPT_DIR/pipeline-runner.sh" \
   --feature-dir "$FEATURE_DIR" \
   --branch "$BRANCH" \
   --project-dir "$PROJECT_DIR" \
-  --completed specify \
+  --input-file "$FD/input.txt" \
   --summary "$INPUT" > "$PIPELINE_LOG" 2>&1 &
 PIPELINE_PID=$!
 echo "$PIPELINE_PID" > "$PIPELINE_PID_FILE"
 
 echo '{"event":"pipeline","status":"background","pid":'"$PIPELINE_PID"',"feature_dir":"'"$FEATURE_DIR"'","log":"'"$PIPELINE_LOG"'"}'
-echo '{"event":"intake_complete","feature_dir":"'"$FEATURE_DIR"'","branch":"'"$BRANCH"'","spec":"'"$FEATURE_DIR/spec.md"'"}'
+echo '{"event":"intake_complete","feature_dir":"'"$FEATURE_DIR"'","branch":"'"$BRANCH"'"}'
 exit 0

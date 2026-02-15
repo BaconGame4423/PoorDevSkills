@@ -17,6 +17,7 @@ BRANCH=""
 PROJECT_DIR=""
 COMPLETED_CSV=""
 SUMMARY=""
+INPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --project-dir) PROJECT_DIR="$2"; shift 2 ;;
     --completed)  COMPLETED_CSV="$2"; shift 2 ;;
     --summary)    SUMMARY="$2";     shift 2 ;;
+    --input-file) INPUT_FILE="$2";  shift 2 ;;
     --resume)     shift ;;  # no-op: resume is automatic via pipeline-state.json
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -47,7 +49,7 @@ get_pipeline_steps() {
   local flow="$1"
   case "$flow" in
     feature)
-      echo "suggest plan planreview tasks tasksreview implement architecturereview qualityreview phasereview"
+      echo "specify suggest plan planreview tasks tasksreview implement architecturereview qualityreview phasereview"
       ;;
     bugfix)
       echo "bugfix"
@@ -111,6 +113,9 @@ context_args_for_step() {
   local args=""
 
   case "$step" in
+    specify)
+      [[ -f "$fd/input.txt" ]] && args="--context input=$fd/input.txt"
+      ;;
     suggest)
       [[ -f "$fd/spec.md" ]] && args="--context spec=$fd/spec.md"
       ;;
@@ -157,6 +162,12 @@ check_prerequisites() {
   local fd="$2"
 
   case "$step" in
+    suggest)
+      if [[ ! -f "$fd/spec.md" ]]; then
+        echo "missing prerequisite: spec.md"
+        return 1
+      fi
+      ;;
     plan)
       if [[ ! -f "$fd/spec.md" ]]; then
         echo "missing prerequisite: spec.md"
@@ -496,6 +507,11 @@ for STEP in $PIPELINE_STEPS; do
     --header non_interactive
   )
 
+  # specify step needs readonly header
+  if [[ "$STEP" == "specify" ]]; then
+    COMPOSE_ARGS+=(--header readonly)
+  fi
+
   # Add context
   CONTEXT_ARGS=$(context_args_for_step "$STEP" "$FD")
   if [[ -n "$CONTEXT_ARGS" ]]; then
@@ -540,6 +556,25 @@ CTX_EOF
 
   # Cleanup temp files
   rm -f "$PROMPT_FILE" "${PIPELINE_CTX:-/dev/null}" 2>/dev/null || true
+
+  # --- Post-specify: extract spec.md ---
+
+  if [[ "$STEP" == "specify" ]]; then
+    SPEC_OUTPUT=$(ls -t /tmp/poor-dev-output-specify-*.txt 2>/dev/null | head -1)
+    if [[ -n "$SPEC_OUTPUT" && -f "$SPEC_OUTPUT" ]]; then
+      SPEC_TEXT=$(jq -r 'select(.type=="text") | .part.text // empty' "$SPEC_OUTPUT" 2>/dev/null || true)
+      if [[ -n "$SPEC_TEXT" ]]; then
+        echo "$SPEC_TEXT" | sed '/^\[BRANCH:/d' > "$FD/spec.md"
+      else
+        # claude CLI text format fallback
+        sed '/^\[BRANCH:/d' "$SPEC_OUTPUT" > "$FD/spec.md"
+      fi
+    fi
+    if [[ ! -f "$FD/spec.md" ]] || [[ ! -s "$FD/spec.md" ]]; then
+      echo "{\"step\":\"specify\",\"status\":\"error\",\"reason\":\"spec.md not extracted\"}"
+      exit 1
+    fi
+  fi
 
   # --- Parse result ---
 

@@ -1,7 +1,7 @@
 {
   "default": {
     "cli": "opencode",
-    "model": "zai-coding-plan/glm-5"
+    "model": "opencode/minimax-m2.5-free"
   },
   "overrides": {},
   "gates": {},
@@ -11,9 +11,5 @@
     "max_timeout": 600
   },
   "protected_files": [],
-  "fallback_model": "zai-coding-plan/glm-5",
-  "parallel": {
-    "enabled": true,
-    "strategy": "phase-split"
-  }
+  "fallback_model": "opencode/minimax-m2.5-free"
 }

@@ -43,6 +43,8 @@ LAST_SIZE=0
 OUTPUT_STARTED=false
 TIMEOUT_TYPE="none"
 MARKER_COUNT=0
+COMPLETION_DETECTED=false
+COMPLETION_GRACE=0
 
 # Use inotifywait for event-driven monitoring if available, else fall back to sleep
 HAS_INOTIFYWAIT=false
@@ -75,8 +77,25 @@ while kill -0 "$PID" 2>/dev/null; do
     fi
 
     LAST_SIZE=$CURRENT_SIZE
+
+    # opencode completion signal: step_finish with reason:"stop"
+    if echo "$NEW_CONTENT" | grep -q '"type":"step_finish".*"reason":"stop"'; then
+      COMPLETION_DETECTED=true
+      COMPLETION_GRACE=0
+    fi
   else
     IDLE=$((IDLE + 1))
+  fi
+
+  # opencode completion signal detected: 10s grace then clean exit
+  if [ "$COMPLETION_DETECTED" = true ]; then
+    COMPLETION_GRACE=$((COMPLETION_GRACE + 1))
+    if ! kill -0 "$PID" 2>/dev/null || [ "$COMPLETION_GRACE" -ge 10 ]; then
+      kill "$PID" 2>/dev/null || true
+      wait "$PID" 2>/dev/null || true
+      TIMEOUT_TYPE="none"
+      break
+    fi
   fi
 
   # Idle timeout (only after output has started)

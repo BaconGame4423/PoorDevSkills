@@ -66,7 +66,8 @@ derive_config() {
   "polling": {
     "interval": 1,
     "idle_timeout": 120,
-    "max_timeout": 600
+    "max_timeout": 600,
+    "step_timeouts": {}
   },
   "protected_files": [],
   "fallback_model": "$fb"

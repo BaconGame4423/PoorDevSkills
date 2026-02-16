@@ -124,6 +124,18 @@ else
   MAX_TIMEOUT=600
 fi
 
+# --- Step-specific timeout resolution ---
+resolve_step_timeout() {
+  local step="$1" field="$2" default="$3"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    local val
+    val=$(jq -r --arg s "$step" --arg f "$field" \
+      '.polling.step_timeouts[$s][$f] // empty' "$CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$val" && "$val" != "null" ]]; then echo "$val"; return; fi
+  fi
+  echo "$default"
+}
+
 # --- Context arguments per step ---
 
 context_args_for_step() {
@@ -439,8 +451,11 @@ CTX_EOF
     pre_phase_head=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
 
     local impl_result_file="/tmp/poor-dev-result-implement-phase${phase_num}-$$.json"
+    local impl_idle impl_max
+    impl_idle=$(resolve_step_timeout "implement" "idle_timeout" "$IDLE_TIMEOUT")
+    impl_max=$(resolve_step_timeout "implement" "max_timeout" "$MAX_TIMEOUT")
     bash "$SCRIPT_DIR/dispatch-step.sh" "implement" "$project_dir" "$prompt_file" \
-      "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$impl_result_file" || {
+      "$impl_idle" "$impl_max" "$impl_result_file" || {
       local dispatch_exit=$?
       local result=""
       if [[ -f "$impl_result_file" ]]; then
@@ -719,8 +734,10 @@ CTX_EOF
   # --- Dispatch ---
 
   RESULT_FILE="/tmp/poor-dev-result-${STEP}-$$.json"
+  STEP_IDLE=$(resolve_step_timeout "$STEP" "idle_timeout" "$IDLE_TIMEOUT")
+  STEP_MAX=$(resolve_step_timeout "$STEP" "max_timeout" "$MAX_TIMEOUT")
   bash "$SCRIPT_DIR/dispatch-step.sh" "$STEP" "$PROJECT_DIR" "$PROMPT_FILE" \
-    "$IDLE_TIMEOUT" "$MAX_TIMEOUT" "$RESULT_FILE" || {
+    "$STEP_IDLE" "$STEP_MAX" "$RESULT_FILE" || {
     DISPATCH_EXIT=$?
     RESULT=""
     if [[ -f "$RESULT_FILE" ]]; then

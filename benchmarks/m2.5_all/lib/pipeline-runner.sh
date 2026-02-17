@@ -513,6 +513,12 @@ CTX_EOF
       echo "{\"phase\":$phase_num,\"warning\":\"no new files detected after phase completion\"}"
     fi
 
+    # Commit phase artifacts to protect from subsequent retry cleanup
+    if [[ -n "$phase_files" ]]; then
+      git -C "$project_dir" add -A 2>/dev/null || true
+      git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null || true
+    fi
+
     # Update phase state
     update_implement_phase_state "$STATE_FILE" "$phase_key"
 

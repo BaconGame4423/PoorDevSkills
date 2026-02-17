@@ -30,11 +30,20 @@ for i in $(seq 0 $((combo_count - 1))); do
   orch_disp=$(jval ".models[\"$orch\"].display_name")
   sub_disp=$(jval ".models[\"$sub\"].display_name")
 
+  step_ovr=$(jval ".combinations[$i].step_overrides // {}")
+  step_ovr_count=$(echo "$step_ovr" | jq 'length')
+
   dir_names+=("$dir")
 
   if [[ "$mode" == "baseline" ]]; then
     display_labels+=("$orch_disp (Baseline)")
     roles+=("baseline")
+  elif [[ "$step_ovr_count" -gt 0 ]]; then
+    ovr_desc=$(echo "$step_ovr" | jq -r --argjson models "$(jq '.models' "$CONFIG")" '
+      to_entries | map("\(.key)=\($models[.value].display_name)") | join(",")
+    ')
+    display_labels+=("$orch_disp ($ovr_desc)")
+    roles+=("step-override")
   elif [[ "$orch" == "$sub" ]]; then
     display_labels+=("$orch_disp")
     roles+=("solo")

@@ -33,8 +33,11 @@ model_fallback() {
 # Solo (orch=sub): cli=sub, model=sub, fallback=model定義のfallback ?? sub
 # Hybrid 同CLI:    cli=sub, model=sub, fallback=orch
 # Hybrid 異CLI:    cli=sub, model=sub, fallback=sub
+# step_overrides: 特定ステップだけ別モデルを使う (JSON object)
+# config_extras: sub_agent の config_extras を base config に deep merge
 derive_config() {
   local orch="$1" sub="$2"
+  local step_overrides_json="${3:-\{\}}"
   local sub_cli sub_model orch_cli orch_model fb
 
   sub_cli=$(model_cli "$sub")
@@ -54,25 +57,37 @@ derive_config() {
     fb="$sub_model"
   fi
 
-  cat <<ENDJSON
-{
-  "default": {
-    "cli": "$sub_cli",
-    "model": "$sub_model"
-  },
-  "overrides": {},
-  "gates": {},
-  "auto_approve": true,
-  "polling": {
-    "interval": 1,
-    "idle_timeout": 120,
-    "max_timeout": 600,
-    "step_timeouts": {}
-  },
-  "protected_files": [],
-  "fallback_model": "$fb"
-}
-ENDJSON
+  # step_overrides → overrides ブロック変換
+  local overrides_block
+  overrides_block=$(echo "$step_overrides_json" | jq --argjson models "$(jq '.models' "$CONFIG")" '
+    to_entries | map({
+      key: .key,
+      value: { cli: $models[.value].cli, model: $models[.value].model_id }
+    }) | from_entries
+  ')
+
+  # sub_agent の config_extras 取得
+  local extras
+  extras=$(jval ".models[\"$sub\"].config_extras // {}")
+
+  # base config + extras deep merge
+  jq -n \
+    --arg cli "$sub_cli" --arg model "$sub_model" --arg fb "$fb" \
+    --argjson overrides "$overrides_block" --argjson extras "$extras" \
+    '{
+      default: { cli: $cli, model: $model },
+      overrides: $overrides,
+      gates: {},
+      auto_approve: true,
+      polling: {
+        interval: 1,
+        idle_timeout: 120,
+        max_timeout: 600,
+        step_timeouts: {}
+      },
+      protected_files: [],
+      fallback_model: $fb
+    } * $extras'
 }
 
 # --- sync_scaffold: DevSkills ソース → スキャフォールドに同期 ---
@@ -356,7 +371,8 @@ HOOK_EOF
 
     # 5) .poor-dev/config.json 生成
     mkdir -p "$target/.poor-dev"
-    derive_config "$orch" "$sub" > "$target/.poor-dev/config.json"
+    step_overrides=$(jval ".combinations[$i].step_overrides // {}")
+    derive_config "$orch" "$sub" "$step_overrides" > "$target/.poor-dev/config.json"
     echo "  generated .poor-dev/config.json"
 
     # 6) opencode.json（orch が opencode の場合のみ）

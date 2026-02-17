@@ -65,6 +65,9 @@
     { "dir_name": "m2.5_orch_glm5_sub",   "orchestrator": "m2.5",   "sub_agent": "glm5"   },
     { "dir_name": "claude_baseline",      "orchestrator": "claude",  "sub_agent": "claude",  "mode": "baseline" },
     { "dir_name": "glm5_baseline",       "orchestrator": "glm5",   "sub_agent": "glm5",   "mode": "baseline" },
-    { "dir_name": "m2.5_baseline",       "orchestrator": "m2.5",   "sub_agent": "m2.5",   "mode": "baseline" }
+    { "dir_name": "m2.5_baseline",       "orchestrator": "m2.5",   "sub_agent": "m2.5",   "mode": "baseline" },
+    { "dir_name": "glm5_claude_plan",    "orchestrator": "glm5",  "sub_agent": "glm5",  "step_overrides": { "plan": "claude" } },
+    { "dir_name": "glm5_claude_specify", "orchestrator": "glm5",  "sub_agent": "glm5",  "step_overrides": { "specify": "claude" } },
+    { "dir_name": "glm5_claude_design",  "orchestrator": "glm5",  "sub_agent": "glm5",  "step_overrides": { "specify": "claude", "suggest": "claude", "plan": "claude" } }
   ]
 }

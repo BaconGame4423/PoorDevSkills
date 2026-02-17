@@ -288,6 +288,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `poor-dev benchmark run <combo> [version]` | ベンチマーク一括実行（セットアップ→非対話パイプライン→分析→メトリクス収集） |
 | `/bench <combo>` | ベンチマーク全自動実行（右 tmux ペイン） + PoorDevSkills 分析 |
 | `/bench --results <combo>` | ベンチマーク分析結果の表示 |
+| `/bench.repair <combo>` | 前回ベンチの失敗診断・修正・smoke test + フルベンチ誘導 |
 
 ---
 

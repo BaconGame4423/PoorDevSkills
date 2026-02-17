@@ -16,6 +16,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=utils.sh
 source "$SCRIPT_DIR/utils.sh"
+# shellcheck source=retry-helpers.sh
+source "$SCRIPT_DIR/retry-helpers.sh"
 
 # --- Parse arguments ---
 
@@ -157,11 +159,11 @@ while [[ $ITER -lt $MAX_ITER ]]; do
       continue
     fi
 
-    # Dispatch in background with per-persona timeout
+    # Dispatch in background with per-persona timeout (max_retries=1)
     RESULT_FILE="$OUTPUT_DIR/${PERSONA_NAME}-result.json"
     (
-      bash "$SCRIPT_DIR/dispatch-step.sh" "$PERSONA_NAME" "$PROJECT_DIR" "$PROMPT_FILE" \
-        "$IDLE_TIMEOUT" "$PERSONA_TIMEOUT" "$RESULT_FILE" > /dev/null 2>&1
+      dispatch_with_retry "$PERSONA_NAME" "$PROJECT_DIR" "$PROMPT_FILE" \
+        "$IDLE_TIMEOUT" "$PERSONA_TIMEOUT" "$RESULT_FILE" 1 > /dev/null 2>&1
 
       # Copy output file to output dir for aggregation
       PERSONA_OUTPUT=$(ls -t /tmp/poor-dev-output-${PERSONA_NAME}-*.txt 2>/dev/null | head -1 || true)
@@ -275,8 +277,8 @@ while [[ $ITER -lt $MAX_ITER ]]; do
 
     if [[ -f "$FIX_PROMPT_FILE" ]]; then
       FIX_RESULT_FILE="/tmp/poor-dev-result-fixer-$$.json"
-      bash "$SCRIPT_DIR/dispatch-step.sh" "fixer" "$PROJECT_DIR" "$FIX_PROMPT_FILE" \
-        "$IDLE_TIMEOUT" "$PERSONA_TIMEOUT" "$FIX_RESULT_FILE" > /dev/null 2>&1 || {
+      dispatch_with_retry "fixer" "$PROJECT_DIR" "$FIX_PROMPT_FILE" \
+        "$IDLE_TIMEOUT" "$PERSONA_TIMEOUT" "$FIX_RESULT_FILE" 1 > /dev/null 2>&1 || {
         echo "{\"review\":\"$REVIEW_TYPE\",\"iteration\":$ITER,\"warning\":\"fixer dispatch failed\"}"
       }
       rm -f "$FIX_PROMPT_FILE" "$FIX_RESULT_FILE"

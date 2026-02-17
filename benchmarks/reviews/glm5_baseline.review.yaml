@@ -1,0 +1,304 @@
+# ============================================================
+# benchLLM レビューテンプレート
+# ============================================================
+# 使い方:
+#   cp _templates/benchmark-review.yaml <dir>.review.yaml
+#   各セクションを記入し、scoring で総合スコアを算出する
+# ============================================================
+
+meta:
+  directory: "glm5_baseline"
+  model_config:
+    primary: "GLM-5 (zai-coding-plan/glm-5)"
+    secondary: ""
+    role: "solo"
+  reviewer: "claude-opus-4.6"
+  review_date: "2026-02-17"
+  status: "completed"
+
+# ============================================================
+# トークン / コスト / 実行時間
+# ============================================================
+metrics:
+  input_tokens: 29466
+  cache_creation_input_tokens: 0
+  cache_read_input_tokens: 48320
+  output_tokens: 7562
+  total_tokens: 85348
+  cost_usd: 0.00
+  cost_usd_api_equivalent: 0.043
+  cost_breakdown:
+    input_api: 0.0236               # 29466 × $0.80/M
+    output_api: 0.0194              # 7562 × $2.56/M
+  cost_note: "Pro Plan $27/月 ($81/3ヶ月, 5h/400 prompts)。API 従量換算で $0.043"
+  wall_clock_ms: 164195
+  num_turns: 5
+  is_error: false
+
+# ============================================================
+# 1. Process Adherence (プロセス遵守) - 15%
+# ============================================================
+# DevSkillsワークフロー各段階の遵守を評価
+# stages: specify → plan → planreview → tasks → tasksreview →
+#         implement → qualityreview → phasereview
+process:
+  stages:
+    specify:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    plan:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    planreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasks:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasksreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    implement:
+      completed: true
+      artifacts: [function-visualizer.html]
+      notes: "opencode で直接実装。1ファイル完結。git commit 済み"
+    qualityreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    phasereview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+  stages_completed: 1              # out of 8 (implement のみ)
+  score: 0                         # baseline はプロセス非適用。比較時 N/A 扱い
+  notes: "baseline モード: PoorDevSkills パイプラインを使用せず opencode で直接実装。プロセス遵守は評価対象外"
+
+# ============================================================
+# 2. Code Quality (コード品質) - 25%
+# ============================================================
+# severity: C=Critical, H=High, M=Medium, L=Low
+code_quality:
+  issues:
+    - id: CQ-001
+      severity: M
+      category: security
+      location: "function-visualizer.html:476"
+      description: "new Function('x', ...) による数式評価 — eval() と同等のコード実行"
+      impact: "ユーザー入力が regex 置換のみで new Function() に渡される。XSS 等の悪意ある入力でスクリプト実行可能"
+      suggestion: "AST ベースの安全なパーサーに置き換え。new Function() を排除"
+    - id: CQ-002
+      severity: M
+      category: bug
+      location: "function-visualizer.html:462-473"
+      description: "regex 逐次置換による数式パーサー。単語境界 (\\b) なし、順序依存、カスケード破損"
+      impact: "asin→aMath.sin, constant→Math.costant, 2e3→2Math.E3 等の置換衝突。主要関数は動作するがエッジケースで壊れる"
+      suggestion: "トークナイザー + パーサーによる正規の構文解析に置き換え"
+    - id: CQ-003
+      severity: L
+      category: bug
+      location: "function-visualizer.html:514-518"
+      description: "range 入力のバリデーション不足。parseFloat('0') が falsy で -10 にフォールバック"
+      impact: "xMin に 0 を入力すると -10 になる。xMin >= xMax で反転するとグラフ破綻"
+      suggestion: "Number() + 明示的 isNaN チェック。min < max のバリデーション追加"
+    - id: CQ-004
+      severity: L
+      category: style
+      location: "function-visualizer.html:417"
+      description: "input イベントにデバウンスなし。毎キーストロークで new Function() コンパイル + 全再描画"
+      impact: "高速タイピング時に不要な再計算。実用上はパフォーマンス影響軽微"
+      suggestion: "requestAnimationFrame または 100ms デバウンス追加"
+    - id: CQ-005
+      severity: L
+      category: structure
+      location: "function-visualizer.html:382-851"
+      description: "859行モノリシック構造。パース・描画・UI・座標変換が FunctionVisualizer 単一クラスに集約"
+      impact: "保守性への影響のみ。動作上の問題なし"
+      suggestion: "関心分離 (parser, renderer, controller) への分割"
+  strengths:
+    - "全基本機能が動作する堅実な実装"
+    - "数値微分 (中心差分法 h=0.0001) — シンプルかつ十分な精度"
+    - "1ファイル完結 (858行) で外部依存ゼロ"
+    - "10プリセットボタン + カラーピッカー3色 (関数・導関数・接線)"
+    - "凡例の動的更新、niceStep 適応的グリッドステップ計算"
+  score: 62
+  notes: "重大バグなし、全機能動作。Medium: new Function() eval相当 + regex パーサー脆弱性 (セキュリティ加重)。Low: バリデーション・デバウンス・構造の3件。strengths bonus で一部相殺"
+
+# ============================================================
+# 3. Completeness (完全性) - 25%
+# ============================================================
+# FR-001 ~ FR-013: 機能要件チェック
+completeness:
+  requirements:
+    FR-001:
+      name: "インタラクティブ関数グラフ表示"
+      status: "partial"
+      notes: "Canvas ベース関数描画は動作。ただしドラッグパンなし (ボタンズーム + 手動レンジ入力のみ)。ホイールズームなし"
+    FR-002:
+      name: "数式入力フィールド"
+      status: "pass"
+      notes: "テキスト入力 + regex ベースパーサー。^, 括弧, 基本関数は正しく解釈。暗黙乗算 (2x) は非対応"
+    FR-003:
+      name: "リアルタイムグラフ更新"
+      status: "pass"
+      notes: "input イベントで即座に再描画"
+    FR-004:
+      name: "自動ズーム/スケール"
+      status: "partial"
+      notes: "Y 軸のみ自動スケール (チェックボックス opt-in, デフォルト OFF)。X 軸は固定。ズーム操作後に再適用されない"
+    FR-005:
+      name: "軸ラベルとグリッド線"
+      status: "pass"
+      notes: "niceStep() で適応的ステップ幅。軸名表示あり。グリッドはトグル可能"
+    FR-006:
+      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      status: "pass"
+      notes: "要件の7関数 + ln (log エイリアス) 対応。regex 置換で Math.* に変換"
+    FR-007:
+      name: "微分（導関数）の計算と表示"
+      status: "pass"
+      notes: "数値微分 (中心差分法 h=0.0001)。記号微分はないが値の計算は正確"
+    FR-008:
+      name: "導関数のグラフ重畳表示"
+      status: "pass"
+      notes: "色分けされた導関数グラフをトグルボタンで重畳表示。カラーピッカーで色変更可能"
+    FR-009:
+      name: "カーソル追従ツールチップ (x, f(x), f'(x))"
+      status: "pass"
+      notes: "マウス位置の x, f(x), f'(x) をリアルタイム表示"
+    FR-010:
+      name: "接線表示"
+      status: "pass"
+      notes: "マウス位置の接線をトグルボタンで描画。カラーピッカーで色変更可能"
+    FR-011:
+      name: "レスポンシブデザイン"
+      status: "partial"
+      notes: "CSS メディアクエリ (1024px) + viewport meta あり。ただしタッチイベント未実装 (touchstart/touchmove/touchend なし)"
+    FR-012:
+      name: "エラーハンドリング（不正入力）"
+      status: "partial"
+      notes: "エラーメッセージ表示あり (赤背景ボックス)。ただし入力欄への赤枠ハイライトなし"
+    FR-013:
+      name: "プリセット関数ボタン"
+      status: "pass"
+      notes: "10プリセット: sin, cos, tan, log, exp, sqrt, abs, x^2, x^3-3*x, sin(x)*cos(x)"
+  passed: 8
+  partial: 4
+  failed: 0
+  bugged: 0
+  score: 77                        # (8*1.0 + 4*0.5) / 13 * 100 = 76.9 ≈ 77
+  notes: "8 pass + 4 partial。主な欠落: ドラッグパン (FR-001), Y軸のみ autoScale (FR-004), タッチ操作 (FR-011), 入力欄赤枠 (FR-012)"
+
+# ============================================================
+# 4. UX / Visual Quality - 15%
+# ============================================================
+# 各項目 1-5 のスコア
+ux:
+  visual_design:
+    score: 4
+    notes: "ダークテーマ、グラデーション背景、カラーピッカー付き。プリセットボタン整然配置。プロフェッショナルな見た目"
+  responsive:
+    score: 2
+    notes: "CSS ブレークポイントあるがタッチイベント完全欠落。モバイルでツールチップ・接線追従不可"
+  usability:
+    score: 3
+    notes: "プリセット・色変更・グリッドトグルは良好。ドラッグパンなし・ホイールズームなしが操作性を下げる"
+  error_feedback:
+    score: 3
+    notes: "エラーメッセージ表示あり。入力欄の赤枠ハイライトなし。エラー消去タイミングは適切"
+  accessibility:
+    score: 2
+    notes: "aria 属性なし、キーボードナビゲーション非対応、色のみで情報区別 (色覚多様性未考慮)"
+  average: 2.8                     # (4+2+3+3+2) / 5
+  score: 56                        # 2.8 * 20
+  notes: "視覚デザインは良好。タッチ非対応とドラッグ操作欠落が主な減点要因"
+
+# ============================================================
+# 5. Constitution Compliance (憲章準拠) - 10%
+# ============================================================
+# DevSkills憲章の関連原則チェック
+constitution:
+  principles:
+    III_review_driven_quality:
+      compliant: false
+      notes: "baseline: レビュープロセスなし"
+    V_incremental_delivery:
+      compliant: false
+      notes: "baseline: 1発実装。インクリメンタルではない"
+    VIII_verification_gates:
+      compliant: false
+      notes: "baseline: 検証ゲートなし"
+    X_documentation_as_code:
+      compliant: false
+      notes: "baseline: spec/plan/tasks ドキュメントなし"
+  compliant_count: 0               # out of 4
+  score: 0
+  notes: "baseline モード: 憲章準拠は評価対象外"
+
+# ============================================================
+# 6. Efficiency (効率) - 10%
+# ============================================================
+efficiency:
+  wall_clock_seconds: 164
+  session_count: 1
+  output_lines: 858
+  output_bytes: 30861
+  lines_per_second: 5.23
+  files_created: 1
+  total_tokens: 85348
+  cost_usd: 0.043
+  tokens_per_output_line: 100
+  score: 88
+  notes: "$0.043 推定 / 164秒 / 5ターンで 77% 完全性。Claude の約 1/13 のコストで 77% 完全性を達成。コスト効率は3モデル中最高"
+
+# ============================================================
+# 総合スコア
+# ============================================================
+# score = process(15%) + code_quality(25%) + completeness(25%)
+#       + ux(15%) + constitution(10%) + efficiency(10%)
+scoring:
+  weights:
+    process: 0.15
+    code_quality: 0.25
+    completeness: 0.25
+    ux: 0.15
+    constitution: 0.10
+    efficiency: 0.10
+  component_scores:
+    process: 0                     # N/A for baseline
+    code_quality: 62
+    completeness: 77
+    ux: 56
+    constitution: 0                # N/A for baseline
+    efficiency: 88
+  total: 52                        # 0*0.15 + 62*0.25 + 77*0.25 + 56*0.15 + 0*0.10 + 88*0.10 = 52.0
+  total_excl_process: 69           # (62*25+77*25+56*15+88*10)/75 = 69.3 ≈ 69
+  grade: "D"                       # 全項目込み
+  grade_excl_process: "C"          # プロセス/憲章除外の実質グレード
+
+# ============================================================
+# サマリ
+# ============================================================
+summary:
+  strengths:
+    - "極めて低コスト ($0.043 推定) で 77% の要件充足"
+    - "全基本機能が動作 — グラフ描画、数値微分、接線、ツールチップ"
+    - "5ターン / 164秒の効率的な実装"
+    - "カラーピッカー、凡例動的更新、グリッドトグル等の付加機能"
+    - "数値微分 (中心差分法) による安定した導関数計算"
+  weaknesses:
+    - "new Function() によるセキュリティリスク (eval 相当)"
+    - "regex ベースパーサーの脆弱性 (エッジケースで置換衝突)"
+    - "タッチイベント完全欠落 (モバイル操作不可)"
+    - "ドラッグパン / ホイールズームなし (インタラクション不足)"
+    - "暗黙乗算 (2x, 2sin(x)) 非対応"
+  critical_issues: []
+  recommendations:
+    - "コスト効率重視のユースケースでは GLM-5 baseline が最良の選択肢"
+    - "セキュリティ要件がある場合は new Function() の排除が必須"
+    - "パイプライン版との比較時は process/constitution 除外スコア (69点 C) を基準値として使用"

@@ -1,0 +1,294 @@
+# ============================================================
+# benchLLM レビューテンプレート
+# ============================================================
+# 使い方:
+#   cp _templates/benchmark-review.yaml <dir>.review.yaml
+#   各セクションを記入し、scoring で総合スコアを算出する
+# ============================================================
+
+meta:
+  directory: "m2.5_baseline"
+  model_config:
+    primary: "MiniMax M2.5 (opencode/minimax-m2.5-free)"
+    secondary: ""
+    role: "solo"
+  reviewer: "claude-opus-4.6"
+  review_date: "2026-02-17"
+  status: "completed"
+
+# ============================================================
+# トークン / コスト / 実行時間
+# ============================================================
+metrics:
+  input_tokens: 29266
+  cache_creation_input_tokens: 0
+  cache_read_input_tokens: 59008
+  output_tokens: 10039
+  reasoning_tokens: 560
+  total_tokens: 98313
+  cost_usd: 0.00
+  cost_usd_api_equivalent: 0.021
+  cost_breakdown:
+    input_api: 0.00878             # 29266 × $0.30/M
+    output_api: 0.01205            # 10039 × $1.20/M
+  cost_note: "Plus-Highspeed $40/月 (5h/300 prompts)。Free キャンペーン中。API 従量換算で $0.021"
+  wall_clock_ms: 113103
+  num_turns: 5
+  is_error: false
+
+# ============================================================
+# 1. Process Adherence (プロセス遵守) - 15%
+# ============================================================
+# DevSkillsワークフロー各段階の遵守を評価
+# stages: specify → plan → planreview → tasks → tasksreview →
+#         implement → qualityreview → phasereview
+process:
+  stages:
+    specify:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    plan:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    planreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasks:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasksreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    implement:
+      completed: true
+      artifacts: [index.html]
+      notes: "opencode で直接実装。1ファイル完結 (1176行)。git commit 済み"
+    qualityreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    phasereview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+  stages_completed: 1              # out of 8 (implement のみ)
+  score: 0                         # baseline はプロセス非適用。比較時 N/A 扱い
+  notes: "baseline モード: PoorDevSkills パイプラインを使用せず opencode で直接実装。プロセス遵守は評価対象外"
+
+# ============================================================
+# 2. Code Quality (コード品質) - 25%
+# ============================================================
+# severity: C=Critical, H=High, M=Medium, L=Low
+code_quality:
+  issues:
+    - id: CQ-001
+      severity: C
+      category: bug
+      location: "index.html:465-477"
+      description: "tokenizer が変数 x を FUNCTION 型でトークン化。x は sin/cos/tan と同じ分岐に入る"
+      impact: "全ての x 含有式 (x^2, sin(x), cos(x) 等) がパースエラー。アプリの基本機能が完全に動作しない。エラー: 'xの後に(が必要です'"
+      suggestion: "x を VARIABLE 型として別途トークン化。if (name === 'x') { tokens.push({type: 'VARIABLE', value: 'x'}) }"
+    - id: CQ-002
+      severity: C
+      category: bug
+      location: "index.html:724"
+      description: "simplifyDerivative の binary fallback が {type: ast.op} を返す。正しくは {type: 'binary', op: ast.op}"
+      impact: "導関数の AST ノードの type が '+' や '*' になり、evaluate() で NaN、derivativeToString() で '?' を返す"
+      suggestion: "return { type: 'binary', op: ast.op, left: l, right: r } に修正"
+    - id: CQ-003
+      severity: H
+      category: bug
+      location: "index.html:368-369,428"
+      description: "autoScale チェックボックスが UI に存在するが実装ロジックが完全に欠落。イベントリスナーなし、checked 参照なし"
+      impact: "自動スケール機能が完全に非機能。チェックボックスのトグルが何も起こさない"
+      suggestion: "draw() 内で autoScale.checked を参照し、Y軸範囲を関数値域に自動調整するロジック追加"
+  strengths:
+    - "記号微分エンジンの設計意図は正しい (連鎖律、積/商の法則、べき乗則)"
+    - "AST ベースのトークナイザー + パーサー構造 (実装にバグがあるが設計は健全)"
+    - "1176行の包括的な実装 — 3モデル中最多のコード量"
+    - "ドラッグパン実装あり (mousedown/mousemove/mouseup)"
+    - "数式文字列表示 (f(x) = ..., f'(x) = ...)"
+    - "devicePixelRatio 対応の高DPIキャンバス"
+  score: 35
+  notes: "Critical 2件が致命的。CQ-001 はアプリ全体を動作不能にする (全 x 含有式がパースエラー)。CQ-002 は導関数表示を破壊。CQ-003 は宣伝された機能の未実装。設計レベルの意図は良好だが実装バグが深刻"
+
+# ============================================================
+# 3. Completeness (完全性) - 25%
+# ============================================================
+# FR-001 ~ FR-013: 機能要件チェック
+completeness:
+  requirements:
+    FR-001:
+      name: "インタラクティブ関数グラフ表示"
+      status: "bug"
+      notes: "Canvas + ドラッグパン実装あり。しかし CQ-001 tokenizer バグで全式がパースエラー → グラフ描画不能"
+    FR-002:
+      name: "数式入力フィールド"
+      status: "bug"
+      notes: "入力フィールド + AST パーサー実装あり。CQ-001 で x 含有式が全て失敗"
+    FR-003:
+      name: "リアルタイムグラフ更新"
+      status: "bug"
+      notes: "input イベントバインド済み。パースエラーのため描画が発生しない"
+    FR-004:
+      name: "自動ズーム/スケール"
+      status: "fail"
+      notes: "CQ-003: チェックボックス UI のみ存在。実装ロジック完全欠落 (イベントリスナーなし、参照なし)"
+    FR-005:
+      name: "軸ラベルとグリッド線"
+      status: "pass"
+      notes: "グリッド線・軸ラベル・目盛り数値は関数パースに依存せず正常描画される"
+    FR-006:
+      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      status: "bug"
+      notes: "7関数のトークン定義あり。しかし全て引数に x を含むため CQ-001 でパース不能"
+    FR-007:
+      name: "微分（導関数）の計算と表示"
+      status: "bug"
+      notes: "記号微分エンジン実装あり (連鎖律・積商法則)。CQ-001 でパースが先行失敗。CQ-002 で仮にパースできても NaN"
+    FR-008:
+      name: "導関数のグラフ重畳表示"
+      status: "bug"
+      notes: "導関数グラフ描画コード存在。CQ-001 + CQ-002 で実行不能"
+    FR-009:
+      name: "カーソル追従ツールチップ (x, f(x), f'(x))"
+      status: "bug"
+      notes: "ツールチップ UI 実装あり。関数評価不能のため値表示不可"
+    FR-010:
+      name: "接線表示"
+      status: "bug"
+      notes: "接線描画コード存在。関数評価不能のため描画不可"
+    FR-011:
+      name: "レスポンシブデザイン"
+      status: "partial"
+      notes: "CSS メディアクエリ (900px, 600px) + viewport meta + devicePixelRatio 対応。タッチイベント未実装"
+    FR-012:
+      name: "エラーハンドリング（不正入力）"
+      status: "pass"
+      notes: "パースエラー時にエラーメッセージ表示。(皮肉にも CQ-001 バグにより常時エラー表示が発動)"
+    FR-013:
+      name: "プリセット関数ボタン"
+      status: "bug"
+      notes: "12プリセットボタン配置。全プリセットが x を含むため CQ-001 でパース失敗"
+  passed: 2
+  partial: 1
+  failed: 1
+  bugged: 9
+  score: 33                        # pass=1.0×2 + partial=0.5×1 + fail=0.0×1 + bug×9。Critical cascade で bug 項目を 0.20 評価: (4.30/13)*100 = 33
+  notes: "CQ-001 tokenizer バグが 9/13 要件に cascade。コードは存在するが実行不能。FR-005 (グリッド/軸) と FR-012 (エラー表示) のみ正常動作"
+
+# ============================================================
+# 4. UX / Visual Quality - 15%
+# ============================================================
+# 各項目 1-5 のスコア
+ux:
+  visual_design:
+    score: 4
+    notes: "モダンなダークテーマ、グラデーション背景、適切な色使い。レイアウト構成は良好"
+  responsive:
+    score: 3
+    notes: "3段階メディアクエリ (900px, 600px) + devicePixelRatio 対応。タッチイベント未実装だがレイアウトは適応的"
+  usability:
+    score: 1
+    notes: "基本機能 (関数描画) が CQ-001 で動作しないため事実上使用不能。UI は存在するが結果を返さない"
+  error_feedback:
+    score: 3
+    notes: "パースエラー時にエラーメッセージ表示 ('xの後に(が必要です')。入力欄赤枠なし"
+  accessibility:
+    score: 2
+    notes: "aria 属性なし、キーボード操作非対応、色のみで情報区別"
+  average: 2.6                     # (4+3+1+3+2) / 5
+  score: 52                        # 2.6 * 20
+  notes: "視覚デザインは3モデル中最も洗練されているが、usability が Critical バグで壊滅"
+
+# ============================================================
+# 5. Constitution Compliance (憲章準拠) - 10%
+# ============================================================
+# DevSkills憲章の関連原則チェック
+constitution:
+  principles:
+    III_review_driven_quality:
+      compliant: false
+      notes: "baseline: レビュープロセスなし"
+    V_incremental_delivery:
+      compliant: false
+      notes: "baseline: 1発実装。インクリメンタルではない"
+    VIII_verification_gates:
+      compliant: false
+      notes: "baseline: 検証ゲートなし。CQ-001 は基本テストで検出可能だった"
+    X_documentation_as_code:
+      compliant: false
+      notes: "baseline: spec/plan/tasks ドキュメントなし"
+  compliant_count: 0               # out of 4
+  score: 0
+  notes: "baseline モード: 憲章準拠は評価対象外。ただし検証ゲートがあれば CQ-001 は確実に検出されていた"
+
+# ============================================================
+# 6. Efficiency (効率) - 10%
+# ============================================================
+efficiency:
+  wall_clock_seconds: 113
+  session_count: 1
+  output_lines: 1176
+  output_bytes: 42391
+  lines_per_second: 10.41
+  files_created: 1
+  total_tokens: 98313
+  cost_usd: 0.021
+  tokens_per_output_line: 84
+  score: 40
+  notes: "最速 (113秒) + 最多コード (1176行) + 最低コスト ($0.021)。しかし成果物が動作不能のため効率スコアにペナルティ。動かないコードの生産速度に価値なし"
+
+# ============================================================
+# 総合スコア
+# ============================================================
+# score = process(15%) + code_quality(25%) + completeness(25%)
+#       + ux(15%) + constitution(10%) + efficiency(10%)
+scoring:
+  weights:
+    process: 0.15
+    code_quality: 0.25
+    completeness: 0.25
+    ux: 0.15
+    constitution: 0.10
+    efficiency: 0.10
+  component_scores:
+    process: 0                     # N/A for baseline
+    code_quality: 35
+    completeness: 33
+    ux: 52
+    constitution: 0                # N/A for baseline
+    efficiency: 40
+  total: 29                        # 0*0.15 + 35*0.25 + 33*0.25 + 52*0.15 + 0*0.10 + 40*0.10 = 28.8 ≈ 29
+  total_excl_process: 38           # (35*25+33*25+52*15+40*10)/75 = 38.4 ≈ 38
+  grade: "F"                       # 全項目込み
+  grade_excl_process: "F"          # プロセス/憲章除外でも F (< 40)
+
+# ============================================================
+# サマリ
+# ============================================================
+summary:
+  strengths:
+    - "最速の実装 (113秒) + 最低コスト ($0.021 推定)"
+    - "最多コード量 (1176行) — 包括的な機能セット設計"
+    - "記号微分エンジンの設計意図は健全 (連鎖律・積商法則・べき乗則)"
+    - "ドラッグパン、数式文字列表示、高DPIキャンバスなど設計上の配慮"
+    - "3段階レスポンシブブレークポイント + devicePixelRatio 対応"
+  weaknesses:
+    - "Critical: tokenizer が x を FUNCTION 型で分類 → 全式パースエラー → アプリ動作不能"
+    - "Critical: simplifyDerivative の type 欠落 → 導関数が NaN/'?' に"
+    - "High: autoScale がチェックボックスのみで実装ロジック完全欠落"
+    - "タッチイベント未実装"
+    - "最もコード量が多いのに最も動作しない — 量≠質の典型例"
+  critical_issues:
+    - "CQ-001: tokenizer x→FUNCTION バグ。1行修正 (x を VARIABLE 型に分離) で全機能復活する可能性が高い"
+    - "CQ-002: simplifyDerivative fallback の type 欠落。{type: 'binary', op: ast.op} に修正"
+  recommendations:
+    - "CQ-001 の1行修正で score が大幅に改善する可能性あり (Code Quality +20〜30, Completeness +30〜40)"
+    - "パイプライン版で検証ゲートを導入すれば CQ-001 クラスのバグは確実に検出可能"
+    - "パイプライン版との比較時は process/constitution 除外スコア (38点 F) を基準値として使用"

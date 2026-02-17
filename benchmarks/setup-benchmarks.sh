@@ -236,8 +236,17 @@ if [[ "$MODE" == "update" ]]; then
     orch_cli=$(model_cli "$orch")
     target="$SCRIPT_DIR/$dir_name"
 
+    local mode
+    mode=$(jval ".combinations[$i].mode // \"pipeline\"")
+
     echo ""
     echo "--- [$dir_name] updating skill files ---"
+
+    if [[ "$mode" == "baseline" ]]; then
+      echo "  SKIP: baseline モードはスキルファイル更新不要"
+      continue
+    fi
+
     update_skill "$target" "$orch_cli" "$dir_name"
   done
 
@@ -256,9 +265,10 @@ for i in $(seq 0 $((combo_count - 1))); do
   orch_model=$(model_id "$orch")
 
   target="$SCRIPT_DIR/$dir_name"
+  mode=$(jval ".combinations[$i].mode // \"pipeline\"")
 
   echo ""
-  echo "--- [$dir_name] orch=$orch($orch_cli) sub=$sub ---"
+  echo "--- [$dir_name] orch=$orch($orch_cli) sub=$sub mode=$mode ---"
 
   # 1) 既存ディレクトリ削除（冪等性）
   if [[ -d "$target" ]]; then
@@ -269,71 +279,118 @@ for i in $(seq 0 $((combo_count - 1))); do
   # 2) ディレクトリ作成
   mkdir -p "$target"
 
-  # 3) common ファイルコピー
-  cp "$SCAFFOLD/common/constitution.md" "$target/"
-  cp "$SCAFFOLD/common/.gitignore" "$target/"
-  cp "$SCAFFOLD/common/.poor-dev-version" "$target/"
-  cp "$SCAFFOLD/common/CLAUDE.md" "$target/"
-  cp "$SCAFFOLD/common/AGENTS.md" "$target/"
-  cp -r "$SCAFFOLD/common/templates" "$target/"
-  echo "  copied common files"
+  if [[ "$mode" == "baseline" ]]; then
+    # --- baseline モード: 最小環境のみ ---
 
-  # 4) バリアント選択 & コピー
-  if [[ "$orch_cli" == "claude" ]]; then
-    variant="claude-variant"
+    # .gitignore
+    cat > "$target/.gitignore" <<'GITIGNORE_EOF'
+node_modules/
+dist/
+*.log
+_runs/
+GITIGNORE_EOF
+    echo "  created .gitignore (minimal)"
+
+    # CLAUDE.md（git push 禁止のみ）
+    cat > "$target/CLAUDE.md" <<'CLAUDE_EOF'
+# CLAUDE.md (Baseline Benchmark)
+
+## 制約
+- `git push` は絶対に実行しないでください
+- 実装が完了したら `git commit` してください
+CLAUDE_EOF
+    echo "  created CLAUDE.md (minimal)"
+
+    # git init + pre-push hook
+    if [[ "$NO_GIT" == false ]]; then
+      (
+        cd "$target"
+        git init -q
+        mkdir -p .git/hooks
+        cat > .git/hooks/pre-push <<'HOOK_EOF'
+#!/usr/bin/env bash
+echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
+exit 1
+HOOK_EOF
+        chmod +x .git/hooks/pre-push
+        git add -A
+        git commit -q -m "initial scaffold for $dir_name (baseline)"
+      )
+      echo "  git init + initial commit done (baseline)"
+    else
+      echo "  skipped git init (--no-git)"
+    fi
+
   else
-    variant="opencode-variant"
-  fi
-  cp -rL "$SCAFFOLD/$variant/.opencode" "$target/"
-  cp -rL "$SCAFFOLD/$variant/.claude" "$target/"
-  echo "  copied $variant files"
+    # --- pipeline モード: 既存のフルセットアップ ---
 
-  # 5) .poor-dev/config.json 生成
-  mkdir -p "$target/.poor-dev"
-  derive_config "$orch" "$sub" > "$target/.poor-dev/config.json"
-  echo "  generated .poor-dev/config.json"
+    # 3) common ファイルコピー
+    cp "$SCAFFOLD/common/constitution.md" "$target/"
+    cp "$SCAFFOLD/common/.gitignore" "$target/"
+    cp "$SCAFFOLD/common/.poor-dev-version" "$target/"
+    cp "$SCAFFOLD/common/CLAUDE.md" "$target/"
+    cp "$SCAFFOLD/common/AGENTS.md" "$target/"
+    cp -r "$SCAFFOLD/common/templates" "$target/"
+    echo "  copied common files"
 
-  # 6) opencode.json（orch が opencode の場合のみ）
-  if [[ "$orch_cli" == "opencode" ]]; then
-    cat > "$target/opencode.json" <<ENDJSON
+    # 4) バリアント選択 & コピー
+    if [[ "$orch_cli" == "claude" ]]; then
+      variant="claude-variant"
+    else
+      variant="opencode-variant"
+    fi
+    cp -rL "$SCAFFOLD/$variant/.opencode" "$target/"
+    cp -rL "$SCAFFOLD/$variant/.claude" "$target/"
+    echo "  copied $variant files"
+
+    # 5) .poor-dev/config.json 生成
+    mkdir -p "$target/.poor-dev"
+    derive_config "$orch" "$sub" > "$target/.poor-dev/config.json"
+    echo "  generated .poor-dev/config.json"
+
+    # 6) opencode.json（orch が opencode の場合のみ）
+    if [[ "$orch_cli" == "opencode" ]]; then
+      cat > "$target/opencode.json" <<ENDJSON
 {
   "\$schema": "https://opencode.ai/config.json",
   "model": "$orch_model"
 }
 ENDJSON
-    echo "  generated opencode.json"
-  fi
+      echo "  generated opencode.json"
+    fi
 
-  # 7) .claude/commands/ symlinks（orch が claude の場合のみ）
-  if [[ "$orch_cli" == "claude" ]]; then
-    mkdir -p "$target/.claude/commands"
-    for cmd_file in "$target/.opencode/command"/poor-dev*.md; do
-      [[ -f "$cmd_file" ]] || continue
-      local_name=$(basename "$cmd_file")
-      ln -s "../../.opencode/command/$local_name" "$target/.claude/commands/$local_name"
-    done
-    echo "  created .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
-  fi
+    # 7) .claude/commands/ symlinks（orch が claude の場合のみ）
+    if [[ "$orch_cli" == "claude" ]]; then
+      mkdir -p "$target/.claude/commands"
+      for cmd_file in "$target/.opencode/command"/poor-dev*.md; do
+        [[ -f "$cmd_file" ]] || continue
+        local_name=$(basename "$cmd_file")
+        ln -s "../../.opencode/command/$local_name" "$target/.claude/commands/$local_name"
+      done
+      echo "  created .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
+    fi
 
-  # 8) git init + 初期コミット（--no-git でなければ）
-  if [[ "$NO_GIT" == false ]]; then
-    (
-      cd "$target"
-      git init -q
-      # pre-push hook: ベンチマーク環境からの push を物理的にブロック
-      mkdir -p .git/hooks
-      cat > .git/hooks/pre-push <<'HOOK_EOF'
+    # 8) git init + 初期コミット（--no-git でなければ）
+    if [[ "$NO_GIT" == false ]]; then
+      (
+        cd "$target"
+        git init -q
+        # pre-push hook: ベンチマーク環境からの push を物理的にブロック
+        mkdir -p .git/hooks
+        cat > .git/hooks/pre-push <<'HOOK_EOF'
 #!/usr/bin/env bash
 echo "ERROR: ベンチマーク環境からの push は禁止されています" >&2
 exit 1
 HOOK_EOF
-      chmod +x .git/hooks/pre-push
-      git add -A
-      git commit -q -m "initial scaffold for $dir_name"
-    )
-    echo "  git init + initial commit done"
-  else
-    echo "  skipped git init (--no-git)"
+        chmod +x .git/hooks/pre-push
+        git add -A
+        git commit -q -m "initial scaffold for $dir_name"
+      )
+      echo "  git init + initial commit done"
+    else
+      echo "  skipped git init (--no-git)"
+    fi
+
   fi
 
 done

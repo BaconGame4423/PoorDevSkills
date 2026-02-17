@@ -26,12 +26,16 @@ for i in $(seq 0 $((combo_count - 1))); do
   dir=$(jval ".combinations[$i].dir_name")
   orch=$(jval ".combinations[$i].orchestrator")
   sub=$(jval ".combinations[$i].sub_agent")
+  mode=$(jval ".combinations[$i].mode // \"pipeline\"")
   orch_disp=$(jval ".models[\"$orch\"].display_name")
   sub_disp=$(jval ".models[\"$sub\"].display_name")
 
   dir_names+=("$dir")
 
-  if [[ "$orch" == "$sub" ]]; then
+  if [[ "$mode" == "baseline" ]]; then
+    display_labels+=("$orch_disp (Baseline)")
+    roles+=("baseline")
+  elif [[ "$orch" == "$sub" ]]; then
     display_labels+=("$orch_disp")
     roles+=("solo")
   else
@@ -148,7 +152,7 @@ SECTION
 SECTION
 
   make_header "指標"
-  metrics=("壁時計時間 (秒)" "セッション数" "出力行数" "出力バイト数" "出力速度 (lines/sec)" "生成ファイル数")
+  metrics=("壁時計時間 (秒)" "セッション数" "出力行数" "出力バイト数" "出力速度 (lines/sec)" "生成ファイル数" "入力トークン" "出力トークン" "コスト (USD)")
   for m in "${metrics[@]}"; do
     make_empty_row "$m"
   done

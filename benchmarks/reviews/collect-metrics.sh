@@ -83,14 +83,25 @@ for artifact in spec.md plan.md tasks.md review-log.yaml; do
     fi
 done
 
-# Check pipeline-state.json if exists
-PSJ=$(find "$DIR_PATH" -name "pipeline-state.json" -not -path '*/_runs/*' -not -path '*/.git/*' -print -quit 2>/dev/null)
-if [ -n "$PSJ" ]; then
-    echo ""
-    echo "  pipeline-state.json (${PSJ#$DIR_PATH/}):"
-    head -20 "$PSJ" 2>/dev/null
+# Check if this is a baseline mode
+BENCH_CONFIG="$BENCH_ROOT/benchmarks.json"
+BENCH_MODE="pipeline"
+if [ -f "$BENCH_CONFIG" ] && command -v jq &>/dev/null; then
+    BENCH_MODE=$(jq -r --arg d "$DIR_NAME" '.combinations[] | select(.dir_name == $d) | .mode // "pipeline"' "$BENCH_CONFIG")
+fi
+
+if [ "$BENCH_MODE" = "baseline" ]; then
+    echo "  (baseline モード: パイプライン成果物なし)"
 else
-    echo "  pipeline-state.json: not found"
+    # Check pipeline-state.json if exists
+    PSJ=$(find "$DIR_PATH" -name "pipeline-state.json" -not -path '*/_runs/*' -not -path '*/.git/*' -print -quit 2>/dev/null)
+    if [ -n "$PSJ" ]; then
+        echo ""
+        echo "  pipeline-state.json (${PSJ#$DIR_PATH/}):"
+        head -20 "$PSJ" 2>/dev/null
+    else
+        echo "  pipeline-state.json: not found"
+    fi
 fi
 
 # ----------------------------------------------------------
@@ -170,6 +181,27 @@ elif [ -f "$DIR_PATH/opencode.json" ]; then
     cat "$DIR_PATH/opencode.json" 2>/dev/null
 else
     echo "  No model configuration found"
+fi
+
+# ----------------------------------------------------------
+# 6. Token / Cost metrics (from .bench-metrics.json)
+# ----------------------------------------------------------
+echo ""
+echo "--- Token / Cost Metrics ---"
+
+if [ -f "$DIR_PATH/.bench-metrics.json" ] && command -v jq &>/dev/null; then
+    echo "  Mode:          $(jq -r '.mode // "unknown"' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Model:         $(jq -r '.model // "unknown"' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Input tokens:  $(jq -r '.input_tokens // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Output tokens: $(jq -r '.output_tokens // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Total tokens:  $(jq -r '.total_tokens // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Cost (USD):    \$$(jq -r '.cost_usd // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  API time (ms): $(jq -r '.duration_ms // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Wall time (ms):$(jq -r '.wall_clock_ms // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Turns:         $(jq -r '.num_turns // 0' "$DIR_PATH/.bench-metrics.json")"
+    echo "  Timestamp:     $(jq -r '.timestamp // "unknown"' "$DIR_PATH/.bench-metrics.json")"
+else
+    echo "  .bench-metrics.json not found (pipeline mode or not yet run)"
 fi
 
 echo ""

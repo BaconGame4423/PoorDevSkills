@@ -42,6 +42,7 @@ benchmarks/
 | `claude_glm5_sub` | Claude | GLM-5 | orch+sub |
 | `claude_m2.5_sub` | Claude | MiniMax M2.5 | orch+sub |
 | `m2.5_orch_glm5_sub` | MiniMax M2.5 | GLM-5 | orch+sub |
+| `claude_baseline` | Claude | Claude | baseline |
 
 ## 使い方
 
@@ -119,6 +120,36 @@ TUI 内ではスキル（`/poor-dev`）が正しく認識・実行され、PoorD
 3. `cp benchmarks/reviews/_templates/benchmark-review.yaml benchmarks/reviews/<dir>.review.yaml`
 4. レビューテンプレートに記入
 5. `reviews/COMPARISON.md` にスコアを追記
+
+## ベースラインモード
+
+`mode: "baseline"` の組み合わせは PoorDevSkills パイプライン（specify→plan→tasks→implement→review）を使わず、`claude -p --output-format json` で素のプロンプト1発実行する。パイプラインの付加価値を測定するための比較対象。
+
+### baseline と pipeline の違い
+
+| 項目 | pipeline | baseline |
+|---|---|---|
+| プロンプト | `/poor-dev` プレフィックス付き | 素のタスク説明 + 要件リスト |
+| スキャフォールド | フル（constitution, templates, commands, lib） | 最小（.gitignore, CLAUDE.md のみ） |
+| 成果物 | spec.md, plan.md, tasks.md, コード, review-log.yaml | コードのみ |
+| メトリクス | ファイル統計, git 履歴, タイミング推定 | JSON出力からトークン/コスト/実行時間を直接取得 |
+| PoorDevSkills 分析 | あり（poordev-analysis.yaml） | なし |
+| CLI オプション | `--output-format text` | `--output-format json` |
+
+### baseline 実行フロー
+
+```bash
+# フル実行
+./benchmarks/run-benchmark.sh claude_baseline
+
+# セットアップのみ
+./benchmarks/run-benchmark.sh --setup claude_baseline
+
+# メトリクス収集のみ
+./benchmarks/run-benchmark.sh --collect claude_baseline
+```
+
+実行後、`claude_baseline/.bench-metrics.json` にトークン数・コスト・実行時間が記録される。
 
 ## スコアリング次元
 

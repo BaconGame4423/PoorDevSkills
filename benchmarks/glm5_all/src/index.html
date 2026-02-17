@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Function Visualizer with Differentiation</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/mathjs@11.11.0/lib/browser/math.js"></script>
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/function-plot@1.22.9/dist/function-plot.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1>Function Visualizer</h1>
+      <p class="subtitle">Interactive Graphing with Derivatives</p>
+    </header>
+
+    <main class="main-content">
+      <section class="input-section">
+        <div class="function-input-container">
+          <label for="function-input">Enter function f(x):</label>
+          <input type="text" id="function-input" placeholder="e.g., x^2, sin(x), log(x)" autocomplete="off">
+          <div id="error-display" class="error-display" role="alert" aria-live="polite"></div>
+        </div>
+
+        <div class="derivative-info" id="derivative-info">
+          <span class="derivative-label">f'(x) = </span>
+          <span class="derivative-formula" id="derivative-formula"></span>
+        </div>
+
+        <div class="preset-buttons" role="group" aria-label="Preset functions">
+          <button class="preset-btn" data-preset="sin(x)">sin(x)</button>
+          <button class="preset-btn" data-preset="cos(x)">cos(x)</button>
+          <button class="preset-btn" data-preset="tan(x)">tan(x)</button>
+          <button class="preset-btn" data-preset="log(x)">log(x)</button>
+          <button class="preset-btn" data-preset="exp(x)">exp(x)</button>
+          <button class="preset-btn" data-preset="sqrt(x)">sqrt(x)</button>
+          <button class="preset-btn" data-preset="abs(x)">abs(x)</button>
+        </div>
+
+        <div class="options-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="show-derivative" checked>
+            <span>Show derivative</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="show-tangent" checked>
+            <span>Show tangent line</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="graph-section">
+        <div id="graph-container" class="graph-container"></div>
+        <div id="tooltip" class="tooltip">
+          <div class="tooltip-row">
+            <span class="tooltip-label">x:</span>
+            <span id="tooltip-x" class="tooltip-value">-</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label">f(x):</span>
+            <span id="tooltip-fx" class="tooltip-value">-</span>
+          </div>
+          <div class="tooltip-row">
+            <span class="tooltip-label">f'(x):</span>
+            <span id="tooltip-dfx" class="tooltip-value">-</span>
+          </div>
+        </div>
+        <div id="legend" class="legend">
+          <div class="legend-item">
+            <span class="legend-color function-color"></span>
+            <span>f(x)</span>
+          </div>
+          <div class="legend-item" id="derivative-legend">
+            <span class="legend-color derivative-color"></span>
+            <span>f'(x)</span>
+          </div>
+          <div class="legend-item" id="tangent-legend">
+            <span class="legend-color tangent-color"></span>
+            <span>Tangent</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Use mouse to pan and zoom. Move cursor over graph to see values.</p>
+    </footer>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Usage: poll-dispatch.sh <command_file> <output_file> <progress_file> <idle_timeout> <max_timeout> [step_name] [result_file]
+#
+# Polls a dispatched command outside the orchestrator's context window.
+# Extracts progress markers incrementally and outputs a JSON summary on completion.
+#
+# stdout (JSON):
+#   { "exit_code": N, "elapsed": N, "timeout_type": "none"|"idle"|"max",
+#     "verdict": "GO"|"CONDITIONAL"|"NO-GO"|null,
+#     "errors": [...], "clarifications": [...] }
+#
+# When RESULT_FILE is specified:
+#   stdout: heartbeat JSONL (15s interval)
+#   RESULT_FILE: JSON summary (above format)
+# When RESULT_FILE is not specified:
+#   stdout: JSON summary (backward compatible)
+
+COMMAND_FILE="$1"
+OUTPUT_FILE="$2"
+PROGRESS_FILE="$3"
+IDLE_TIMEOUT="${4:-120}"
+MAX_TIMEOUT="${5:-600}"
+STEP_NAME="${6:-unknown}"
+RESULT_FILE="${7:-}"
+
+# Validate inputs
+if [ ! -f "$COMMAND_FILE" ]; then
+  echo '{"exit_code":1,"elapsed":0,"timeout_type":"none","verdict":null,"errors":["Command file not found: '"$COMMAND_FILE"'"],"clarifications":[]}' >&2
+  exit 1
+fi
+
+# Validate: command file must contain a known dispatch CLI keyword
+FIRST_CMD=$(grep -m1 -oE '\b(opencode|claude|cat)\b' "$COMMAND_FILE" || true)
+if [ -z "$FIRST_CMD" ]; then
+  echo '{"exit_code":1,"elapsed":0,"timeout_type":"none","verdict":null,"errors":["Dispatch command must start with opencode, claude, or cat"],"clarifications":[]}' >&2
+  exit 1
+fi
+
+# Initialize output files
+: > "$OUTPUT_FILE"
+: > "$PROGRESS_FILE"
+
+# Execute command (stdout/stderr → output_file)
+env -u CLAUDECODE bash "$COMMAND_FILE" > "$OUTPUT_FILE" 2>&1 &
+PID=$!
+
+START_TIME=$(date +%s)
+LAST_HB=$START_TIME
+LAST_IDLE_TIME=$START_TIME
+ELAPSED=0
+IDLE=0
+LAST_SIZE=0
+OUTPUT_STARTED=false
+TIMEOUT_TYPE="none"
+MARKER_COUNT=0
+COMPLETION_DETECTED=false
+COMPLETION_GRACE=0
+
+# Use inotifywait for event-driven monitoring if available, else fall back to sleep
+HAS_INOTIFYWAIT=false
+if command -v inotifywait >/dev/null 2>&1; then
+  HAS_INOTIFYWAIT=true
+fi
+
+while kill -0 "$PID" 2>/dev/null; do
+  # Event-driven or sleep-based wait
+  if [ "$HAS_INOTIFYWAIT" = true ]; then
+    inotifywait -t "$((IDLE_TIMEOUT < 5 ? IDLE_TIMEOUT : 5))" -e modify "$OUTPUT_FILE" 2>/dev/null || true
+  else
+    sleep 1
+  fi
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - START_TIME))
+
+  # Heartbeat output (only when RESULT_FILE is specified, every 15s)
+  if [ -n "$RESULT_FILE" ] && [ $((NOW - LAST_HB)) -ge 15 ]; then
+    CURRENT_SIZE_HB=$(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo 0)
+    echo '{"heartbeat":true,"step":"'"$STEP_NAME"'","elapsed":'"$ELAPSED"',"output_bytes":'"$CURRENT_SIZE_HB"'}'
+    LAST_HB=$NOW
+  fi
+
+  CURRENT_SIZE=$(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo 0)
+  if [ "$CURRENT_SIZE" -gt "$LAST_SIZE" ]; then
+    OUTPUT_STARTED=true
+    IDLE=0
+    LAST_IDLE_TIME=$NOW
+
+    # Incremental scan: only read new bytes for markers
+    NEW_CONTENT=$(tail -c +$((LAST_SIZE + 1)) "$OUTPUT_FILE" 2>/dev/null || true)
+    if [ -n "$NEW_CONTENT" ]; then
+      NEW_MARKERS=$(echo "$NEW_CONTENT" | grep -oP '\[(PROGRESS|REVIEW-PROGRESS): [^\]]*\]' || true)
+      if [ -n "$NEW_MARKERS" ]; then
+        echo "$NEW_MARKERS" >> "$PROGRESS_FILE"
+        MARKER_COUNT=$((MARKER_COUNT + $(echo "$NEW_MARKERS" | wc -l)))
+      fi
+    fi
+
+    LAST_SIZE=$CURRENT_SIZE
+
+    # opencode completion signal: step_finish with reason:"stop"
+    if echo "$NEW_CONTENT" | grep -q '"type":"step_finish".*"reason":"stop"'; then
+      COMPLETION_DETECTED=true
+      COMPLETION_GRACE=0
+    fi
+  else
+    IDLE=$((NOW - LAST_IDLE_TIME))
+  fi
+
+  # opencode completion signal detected: 10s grace then clean exit
+  if [ "$COMPLETION_DETECTED" = true ]; then
+    COMPLETION_GRACE=$((COMPLETION_GRACE + 1))
+    if ! kill -0 "$PID" 2>/dev/null || [ "$COMPLETION_GRACE" -ge 10 ]; then
+      kill "$PID" 2>/dev/null || true
+      wait "$PID" 2>/dev/null || true
+      TIMEOUT_TYPE="none"
+      break
+    fi
+  fi
+
+  # Idle timeout (only after output has started)
+  if [ "$OUTPUT_STARTED" = true ] && [ "$IDLE" -ge "$IDLE_TIMEOUT" ]; then
+    kill "$PID" 2>/dev/null || true
+    wait "$PID" 2>/dev/null || true
+    TIMEOUT_TYPE="idle"
+    break
+  fi
+
+  # Max timeout
+  if [ "$ELAPSED" -ge "$MAX_TIMEOUT" ]; then
+    kill "$PID" 2>/dev/null || true
+    wait "$PID" 2>/dev/null || true
+    TIMEOUT_TYPE="max"
+    break
+  fi
+done
+
+# Get exit code
+if [ "$TIMEOUT_TYPE" = "none" ]; then
+  wait "$PID" 2>/dev/null
+  EXIT_CODE=$?
+else
+  EXIT_CODE=124
+fi
+
+# Extract results from output_file (only the needed fields, not full content)
+VERDICT=$(tail -80 "$OUTPUT_FILE" | grep -oP '^v: \K(GO|CONDITIONAL|NO-GO)' | tail -1 || true)
+
+# Use subshells to avoid pipefail issues when grep finds no matches
+# Filter template false positives: instruction text "[ERROR: description]" and
+# YAML example placeholders containing angle brackets "<...>"
+ERRORS_RAW=$(grep -oP '\[ERROR: [^\]]*\]' "$OUTPUT_FILE" 2>/dev/null || true)
+if [ -n "$ERRORS_RAW" ]; then
+  ERRORS_RAW=$(echo "$ERRORS_RAW" | grep -vE '<[^>]+>|^\[ERROR: description\]$' || true)
+fi
+if [ -n "$ERRORS_RAW" ]; then
+  ERRORS=$(echo "$ERRORS_RAW" | jq -R -s 'split("\n") | map(select(. != ""))')
+else
+  ERRORS='[]'
+fi
+
+CLARIFICATIONS_RAW=$(grep -oP '\[NEEDS CLARIFICATION: [^\]]*\]' "$OUTPUT_FILE" 2>/dev/null || true)
+if [ -n "$CLARIFICATIONS_RAW" ]; then
+  CLARIFICATIONS_RAW=$(echo "$CLARIFICATIONS_RAW" | grep -vE '<[^>]+>|^\[NEEDS CLARIFICATION: question\]$' || true)
+fi
+if [ -n "$CLARIFICATIONS_RAW" ]; then
+  CLARIFICATIONS=$(echo "$CLARIFICATIONS_RAW" | jq -R -s 'split("\n") | map(select(. != ""))')
+else
+  CLARIFICATIONS='[]'
+fi
+
+# Output JSON summary
+SUMMARY=$(jq -n \
+  --argjson exit_code "$EXIT_CODE" \
+  --argjson elapsed "$ELAPSED" \
+  --arg timeout_type "$TIMEOUT_TYPE" \
+  --arg verdict "${VERDICT:-}" \
+  --argjson errors "$ERRORS" \
+  --argjson clarifications "$CLARIFICATIONS" \
+  '{exit_code: $exit_code, elapsed: $elapsed, timeout_type: $timeout_type,
+    verdict: (if $verdict == "" then null else $verdict end),
+    errors: $errors, clarifications: $clarifications}')
+
+if [ -n "$RESULT_FILE" ]; then
+  echo "$SUMMARY" > "$RESULT_FILE"
+else
+  echo "$SUMMARY"
+fi

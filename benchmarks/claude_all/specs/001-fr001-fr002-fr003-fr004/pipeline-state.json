@@ -1,0 +1,25 @@
+{
+  "flow": "feature",
+  "variant": null,
+  "pipeline": [
+    "specify",
+    "suggest",
+    "plan",
+    "planreview",
+    "tasks",
+    "tasksreview",
+    "implement",
+    "architecturereview",
+    "qualityreview",
+    "phasereview"
+  ],
+  "completed": [
+    "specify"
+  ],
+  "current": "suggest",
+  "status": "active",
+  "pauseReason": null,
+  "condition": null,
+  "pendingApproval": null,
+  "updated": "2026-02-17T01:18:51Z"
+}

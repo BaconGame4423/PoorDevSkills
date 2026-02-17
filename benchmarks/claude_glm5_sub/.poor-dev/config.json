@@ -1,0 +1,15 @@
+{
+  "default": {
+    "cli": "opencode",
+    "model": "zai-coding-plan/glm-5"
+  },
+  "overrides": {},
+  "gates": {},
+  "polling": {
+    "interval": 1,
+    "idle_timeout": 120,
+    "max_timeout": 600
+  },
+  "protected_files": [],
+  "fallback_model": "zai-coding-plan/glm-5"
+}

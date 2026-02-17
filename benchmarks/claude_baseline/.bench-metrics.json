@@ -1,0 +1,16 @@
+{
+  "mode": "baseline",
+  "model": "opus",
+  "input_tokens": 9,
+  "cache_creation_input_tokens": 16696,
+  "cache_read_input_tokens": 202059,
+  "output_tokens": 13395,
+  "total_tokens": 232159,
+  "cost_usd": 0.5450325,
+  "duration_ms": 167720,
+  "duration_api_ms": 171131,
+  "wall_clock_ms": 169965,
+  "num_turns": 9,
+  "is_error": false,
+  "timestamp": "2026-02-17T02:17:37Z"
+}

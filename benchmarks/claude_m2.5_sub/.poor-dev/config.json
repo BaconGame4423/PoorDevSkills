@@ -1,0 +1,15 @@
+{
+  "default": {
+    "cli": "opencode",
+    "model": "opencode/minimax-m2.5-free"
+  },
+  "overrides": {},
+  "gates": {},
+  "polling": {
+    "interval": 1,
+    "idle_timeout": 120,
+    "max_timeout": 600
+  },
+  "protected_files": [],
+  "fallback_model": "opencode/minimax-m2.5-free"
+}

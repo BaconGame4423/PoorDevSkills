@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>関数ビジュアライザー - 微分機能付き</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 1.5rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .controls {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+        }
+
+        .control-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .function-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-family: 'Consolas', monospace;
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            transition: border-color 0.2s;
+        }
+
+        .function-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .function-input.error {
+            border-color: var(--error);
+        }
+
+        .error-message {
+            color: var(--error);
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .preset-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .checkbox-item input {
+            width: 1.125rem;
+            height: 1.125rem;
+            accent-color: var(--primary);
+        }
+
+        .checkbox-item span {
+            font-size: 0.9rem;
+        }
+
+        .color-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.25rem;
+        }
+
+        .color-f { background: var(--primary); }
+        .color-df { background: var(--secondary); }
+        .color-tangent { background: var(--accent); }
+
+        .graph-container {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        #graphCanvas {
+            width: 100%;
+            height: 500px;
+            cursor: crosshair;
+            display: block;
+        }
+
+        @media (max-width: 600px) {
+            #graphCanvas {
+                height: 350px;
+            }
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 100;
+            min-width: 150px;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.25rem 0;
+        }
+
+        .tooltip-label {
+            color: var(--text-muted);
+        }
+
+        .tooltip-value {
+            font-family: 'Consolas', monospace;
+        }
+
+        .formula-display {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Consolas', monospace;
+        }
+
+        .formula-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .formula-item:last-child {
+            border-bottom: none;
+        }
+
+        .formula-label {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            min-width: 80px;
+        }
+
+        .formula-value {
+            font-size: 1rem;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .zoom-btn {
+            width: 36px;
+            height: 36px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 1.25rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .zoom-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .range-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .range-control input[type="range"] {
+            flex: 1;
+            accent-color: var(--primary);
+        }
+
+        .range-value {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            min-width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>関数ビジュアライザー</h1>
+            <p class="subtitle">微分機能を備えたインタラクティブな数学ツール</p>
+        </header>
+
+        <div class="main-content">
+            <aside class="controls">
+                <div class="control-group">
+                    <label>関数 f(x) を入力</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="functionInput" class="function-input" value="x^2" placeholder="数式を入力...">
+                    </div>
+                    <p id="errorMessage" class="error-message">無効な数式です</p>
+                </div>
+
+                <div class="control-group">
+                    <label>プリセット関数</label>
+                    <div class="preset-buttons">
+                        <button class="preset-btn" data-fn="x^2">x²</button>
+                        <button class="preset-btn" data-fn="x^3">x³</button>
+                        <button class="preset-btn" data-fn="sin(x)">sin(x)</button>
+                        <button class="preset-btn" data-fn="cos(x)">cos(x)</button>
+                        <button class="preset-btn" data-fn="tan(x)">tan(x)</button>
+                        <button class="preset-btn" data-fn="log(x)">log(x)</button>
+                        <button class="preset-btn" data-fn="exp(x)">eˣ</button>
+                        <button class="preset-btn" data-fn="sqrt(x)">√x</button>
+                        <button class="preset-btn" data-fn="abs(x)">|x|</button>
+                        <button class="preset-btn" data-fn="1/x">1/x</button>
+                        <button class="preset-btn" data-fn="sin(x)+cos(x)">sin+cos</button>
+                        <button class="preset-btn" data-fn="x*sin(x)">x·sin(x)</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>表示オプション</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="showDerivative" checked>
+                            <span class="color-indicator color-df"></span>
+                            <span>導関数 f'(x) を表示</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="showTangent">
+                            <span class="color-indicator color-tangent"></span>
+                            <span>接線を表示</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="showGrid" checked>
+                            <span>グリッド線を表示</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="autoScale" checked>
+                            <span>自動スケール</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>ズーム</label>
+                    <div class="range-control">
+                        <input type="range" id="zoomRange" min="1" max="20" value="5">
+                        <span class="range-value" id="zoomValue">5</span>
+                    </div>
+                </div>
+
+                <div class="formula-display">
+                    <div class="formula-item">
+                        <span class="formula-label">f(x) =</span>
+                        <span class="formula-value" id="formulaOriginal" style="color: var(--primary);">x²</span>
+                    </div>
+                    <div class="formula-item">
+                        <span class="formula-label">f'(x) =</span>
+                        <span class="formula-value" id="formulaDerivative" style="color: var(--secondary);">2x</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="graph-container">
+                <canvas id="graphCanvas"></canvas>
+                <div class="tooltip" id="tooltip">
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">x =</span>
+                        <span class="tooltip-value" id="tooltipX">0.00</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">f(x) =</span>
+                        <span class="tooltip-value" id="tooltipF" style="color: var(--primary);">0.00</span>
+                    </div>
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">f'(x) =</span>
+                        <span class="tooltip-value" id="tooltipDF" style="color: var(--secondary);">0.00</span>
+                    </div>
+                </div>
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoomIn">+</button>
+                    <button class="zoom-btn" id="zoomOut">−</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+        
+        const functionInput = document.getElementById('functionInput');
+        const errorMessage = document.getElementById('errorMessage');
+        const showDerivative = document.getElementById('showDerivative');
+        const showTangent = document.getElementById('showTangent');
+        const showGrid = document.getElementById('showGrid');
+        const autoScale = document.getElementById('autoScale');
+        const zoomRange = document.getElementById('zoomRange');
+        const zoomValue = document.getElementById('zoomValue');
+        
+        const formulaOriginal = document.getElementById('formulaOriginal');
+        const formulaDerivative = document.getElementById('formulaDerivative');
+        
+        const tooltipX = document.getElementById('tooltipX');
+        const tooltipF = document.getElementById('tooltipF');
+        const tooltipDF = document.getElementById('tooltipDF');
+
+        let currentFunction = 'x^2';
+        let currentDerivative = null;
+        let scale = 40;
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let tangentPoint = null;
+
+        function tokenize(expr) {
+            const tokens = [];
+            let i = 0;
+            while (i < expr.length) {
+                if (expr[i] === ' ' || expr[i] === '\t') {
+                    i++;
+                    continue;
+                }
+                if (/[0-9]/.test(expr[i]) || (expr[i] === '.' && /[0-9]/.test(expr[i+1]))) {
+                    let num = '';
+                    while (i < expr.length && (/[0-9]/.test(expr[i]) || expr[i] === '.')) {
+                        num += expr[i++];
+                    }
+                    tokens.push({ type: 'NUMBER', value: parseFloat(num) });
+                    continue;
+                }
+                if (/[a-zA-Z]/.test(expr[i])) {
+                    let name = '';
+                    while (i < expr.length && /[a-zA-Z0-9]/.test(expr[i])) {
+                        name += expr[i++];
+                    }
+                    if (name === 'sin' || name === 'cos' || name === 'tan' || 
+                        name === 'log' || name === 'exp' || name === 'sqrt' || 
+                        name === 'abs' || name === 'x') {
+                        tokens.push({ type: 'FUNCTION', value: name });
+                    } else {
+                        throw new Error(`不明な関数: ${name}`);
+                    }
+                    continue;
+                }
+                if ('+-*/^()'.includes(expr[i])) {
+                    tokens.push({ type: expr[i], value: expr[i] });
+                    i++;
+                    continue;
+                }
+                throw new Error(`無効な文字: ${expr[i]}`);
+            }
+            return tokens;
+        }
+
+        function parseExpression(tokens) {
+            let pos = 0;
+            
+            function parsePrimary() {
+                if (pos >= tokens.length) throw new Error('式が不完全です');
+                const token = tokens[pos];
+                
+                if (token.type === 'NUMBER') {
+                    pos++;
+                    return { type: 'number', value: token.value };
+                }
+                if (token.type === 'FUNCTION') {
+                    pos++;
+                    if (tokens[pos]?.value !== '(') throw new Error(`(${token.value}の後に(が必要です`);
+                    pos++;
+                    const arg = parseAddSub();
+                    if (tokens[pos]?.value !== ')') throw new Error(')が必要です');
+                    pos++;
+                    return { type: 'call', func: token.value, arg: arg };
+                }
+                if (token.value === 'x') {
+                    pos++;
+                    return { type: 'var', name: 'x' };
+                }
+                if (token.value === '(') {
+                    pos++;
+                    const expr = parseAddSub();
+                    if (tokens[pos]?.value !== ')') throw new Error(')が必要です');
+                    pos++;
+                    return expr;
+                }
+                throw new Error(`予期しないトークン: ${token.value}`);
+            }
+            
+            function parsePower() {
+                let left = parsePrimary();
+                while (pos < tokens.length && tokens[pos]?.value === '^') {
+                    pos++;
+                    const right = parsePrimary();
+                    left = { type: 'binary', op: '^', left, right };
+                }
+                return left;
+            }
+            
+            function parseUnary() {
+                if (pos < tokens.length && (tokens[pos]?.value === '+' || tokens[pos]?.value === '-')) {
+                    const op = tokens[pos].value;
+                    pos++;
+                    const operand = parseUnary();
+                    return { type: 'unary', op, operand };
+                }
+                return parsePower();
+            }
+            
+            function parseMulDiv() {
+                let left = parseUnary();
+                while (pos < tokens.length && (tokens[pos]?.value === '*' || tokens[pos]?.value === '/')) {
+                    const op = tokens[pos].value;
+                    pos++;
+                    const right = parseUnary();
+                    left = { type: 'binary', op, left, right };
+                }
+                return left;
+            }
+            
+            function parseAddSub() {
+                let left = parseMulDiv();
+                while (pos < tokens.length && (tokens[pos]?.value === '+' || tokens[pos]?.value === '-')) {
+                    const op = tokens[pos].value;
+                    pos++;
+                    const right = parseMulDiv();
+                    left = { type: 'binary', op, left, right };
+                }
+                return left;
+            }
+            
+            return parseAddSub();
+        }
+
+        function differentiate(ast) {
+            if (!ast) return null;
+            
+            if (ast.type === 'number') {
+                return { type: 'number', value: 0 };
+            }
+            if (ast.type === 'var') {
+                return { type: 'number', value: 1 };
+            }
+            if (ast.type === 'unary') {
+                if (ast.op === '-') {
+                    return { type: 'unary', op: '-', operand: differentiate(ast.operand) };
+                }
+            }
+            if (ast.type === 'binary') {
+                if (ast.op === '+') {
+                    return { type: 'binary', op: '+', left: differentiate(ast.left), right: differentiate(ast.right) };
+                }
+                if (ast.op === '-') {
+                    return { type: 'binary', op: '-', left: differentiate(ast.left), right: differentiate(ast.right) };
+                }
+                if (ast.op === '*') {
+                    return {
+                        type: 'binary', op: '+',
+                        left: { type: 'binary', op: '*', left: differentiate(ast.left), right: ast.right },
+                        right: { type: 'binary', op: '*', left: ast.left, right: differentiate(ast.right) }
+                    };
+                }
+                if (ast.op === '/') {
+                    return {
+                        type: 'binary', op: '/',
+                        left: {
+                            type: 'binary', op: '-',
+                            left: { type: 'binary', op: '*', left: differentiate(ast.left), right: ast.right },
+                            right: { type: 'binary', op: '*', left: ast.left, right: differentiate(ast.right) }
+                        },
+                        right: { type: 'binary', op: '^', left: ast.right, right: { type: 'number', value: 2 } }
+                    };
+                }
+                if (ast.op === '^') {
+                    if (ast.right.type === 'number') {
+                        const n = ast.right.value;
+                        return {
+                            type: 'binary', op: '*',
+                            left: { type: 'number', value: n },
+                            right: {
+                                type: 'binary', op: '*',
+                                left: differentiate(ast.left),
+                                right: { type: 'binary', op: '^', left: ast.left, right: { type: 'number', value: n - 1 } }
+                            }
+                        };
+                    }
+                }
+            }
+            if (ast.type === 'call') {
+                const u = differentiate(ast.arg);
+                if (ast.func === 'sin') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'call', func: 'cos', arg: ast.arg } };
+                }
+                if (ast.func === 'cos') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'unary', op: '-', operand: { type: 'call', func: 'sin', arg: ast.arg } } };
+                }
+                if (ast.func === 'tan') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'call', func: 'sec2', arg: ast.arg } };
+                }
+                if (ast.func === 'log') {
+                    return { type: 'binary', op: '/', left: u, right: ast.arg };
+                }
+                if (ast.func === 'exp') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'call', func: 'exp', arg: ast.arg } };
+                }
+                if (ast.func === 'sqrt') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'call', func: 'rsqrt', arg: ast.arg } };
+                }
+                if (ast.func === 'abs') {
+                    return { type: 'binary', op: '*', left: u, right: { type: 'call', func: 'sgn', arg: ast.arg } };
+                }
+            }
+            return { type: 'number', value: 0 };
+        }
+
+        function evaluate(ast, x) {
+            if (!ast) return NaN;
+            
+            if (ast.type === 'number') return ast.value;
+            if (ast.type === 'var') return x;
+            
+            if (ast.type === 'unary') {
+                if (ast.op === '-') return -evaluate(ast.operand, x);
+            }
+            
+            if (ast.type === 'binary') {
+                const l = evaluate(ast.left, x);
+                const r = evaluate(ast.right, x);
+                if (ast.op === '+') return l + r;
+                if (ast.op === '-') return l - r;
+                if (ast.op === '*') return l * r;
+                if (ast.op === '/') return l / r;
+                if (ast.op === '^') return Math.pow(l, r);
+            }
+            
+            if (ast.type === 'call') {
+                const arg = evaluate(ast.arg, x);
+                switch (ast.func) {
+                    case 'sin': return Math.sin(arg);
+                    case 'cos': return Math.cos(arg);
+                    case 'tan': return Math.tan(arg);
+                    case 'log': return Math.log(arg);
+                    case 'exp': return Math.exp(arg);
+                    case 'sqrt': return Math.sqrt(arg);
+                    case 'abs': return Math.abs(arg);
+                    case 'sec2': return 1 / Math.cos(arg) ** 2;
+                    case 'rsqrt': return 1 / (2 * Math.sqrt(arg));
+                    case 'sgn': return arg >= 0 ? 1 : -1;
+                }
+            }
+            
+            return NaN;
+        }
+
+        function simplifyDerivative(ast) {
+            if (!ast) return ast;
+            
+            if (ast.type === 'number') return ast;
+            if (ast.type === 'var') return ast;
+            
+            if (ast.type === 'unary') {
+                return { type: 'unary', op: ast.op, operand: simplifyDerivative(ast.operand) };
+            }
+            
+            if (ast.type === 'binary') {
+                const l = simplifyDerivative(ast.left);
+                const r = simplifyDerivative(ast.right);
+                
+                if (ast.op === '+' || ast.op === '-') {
+                    if (l.type === 'number' && l.value === 0) {
+                        return ast.op === '+' ? r : { type: 'unary', op: '-', operand: r };
+                    }
+                    if (r.type === 'number' && r.value === 0) {
+                        return l;
+                    }
+                }
+                
+                if (ast.op === '*') {
+                    if (l.type === 'number' && l.value === 0) return { type: 'number', value: 0 };
+                    if (r.type === 'number' && r.value === 0) return { type: 'number', value: 0 };
+                    if (l.type === 'number' && l.value === 1) return r;
+                    if (r.type === 'number' && r.value === 1) return l;
+                    if (l.type === 'number') return { type: 'binary', op: '*', left: l, right: r };
+                    if (r.type === 'number' && r.value === 1) return l;
+                }
+                
+                if (ast.op === '/') {
+                    if (r.type === 'number' && r.value === 1) return l;
+                }
+                
+                return { type: ast.op, left: l, right: r };
+            }
+            
+            if (ast.type === 'call') {
+                return { type: 'call', func: ast.func, arg: simplifyDerivative(ast.arg) };
+            }
+            
+            return ast;
+        }
+
+        function derivativeToString(ast) {
+            if (!ast) return '0';
+            
+            if (ast.type === 'number') return ast.value.toString();
+            if (ast.type === 'var') return 'x';
+            
+            if (ast.type === 'unary') {
+                return '-' + derivativeToString(ast.operand);
+            }
+            
+            if (ast.type === 'binary') {
+                const l = derivativeToString(ast.left);
+                const r = derivativeToString(ast.right);
+                
+                if (ast.op === '+') return `(${l} + ${r})`;
+                if (ast.op === '-') return `(${l} - ${r})`;
+                if (ast.op === '*') return `(${l} * ${r})`;
+                if (ast.op === '/') return `(${l} / ${r})`;
+                if (ast.op === '^') return `(${l} ^ ${r})`;
+            }
+            
+            if (ast.type === 'call') {
+                const arg = derivativeToString(ast.arg);
+                switch (ast.func) {
+                    case 'sin': return `sin(${arg})`;
+                    case 'cos': return `cos(${arg})`;
+                    case 'tan': return `tan(${arg})`;
+                    case 'log': return `log(${arg})`;
+                    case 'exp': return `exp(${arg})`;
+                    case 'sqrt': return `sqrt(${arg})`;
+                    case 'abs': return `abs(${arg})`;
+                    case 'sec2': return `sec²(${arg})`;
+                    case 'rsqrt': return `1/(2√${arg})`;
+                    case 'sgn': return `sgn(${arg})`;
+                }
+            }
+            
+            return '?';
+        }
+
+        function formatDerivative(ast) {
+            if (!ast) return '0';
+            
+            if (ast.type === 'number') return ast.value.toString();
+            if (ast.type === 'var') return '1';
+            
+            if (ast.type === 'unary') {
+                return '-' + formatDerivative(ast.operand);
+            }
+            
+            if (ast.type === 'binary') {
+                const l = formatDerivative(ast.left);
+                const r = formatDerivative(ast.right);
+                
+                if (ast.op === '+') return `${l} + ${r}`;
+                if (ast.op === '-') return `${l} - ${r}`;
+                if (ast.op === '*') return `${l} · ${r}`;
+                if (ast.op === '/') return `(${l}) / (${r})`;
+                if (ast.op === '^') return `(${l})^(${r})`;
+            }
+            
+            if (ast.type === 'call') {
+                const arg = formatDerivative(ast.arg);
+                switch (ast.func) {
+                    case 'sin': return `cos(${arg})`;
+                    case 'cos': return `-sin(${arg})`;
+                    case 'tan': return `sec²(${arg})`;
+                    case 'log': return `1/${arg}`;
+                    case 'exp': return `e^${arg}`;
+                    case 'sqrt': return `1/(2√${arg})`;
+                    case 'abs': return `sgn(${arg})`;
+                }
+            }
+            
+            return '?';
+        }
+
+        let parsedFunction = null;
+        let parsedDerivative = null;
+
+        function parseAndCompile() {
+            const expr = functionInput.value.trim();
+            if (!expr) {
+                showError('数式を入力してください');
+                return false;
+            }
+            
+            try {
+                const tokens = tokenize(expr);
+                parsedFunction = parseExpression(tokens);
+                
+                const derivAst = differentiate(parsedFunction);
+                parsedDerivative = simplifyDerivative(derivAst);
+                
+                hideError();
+                formulaOriginal.textContent = expr;
+                formulaDerivative.textContent = formatDerivative(parsedDerivative);
+                
+                return true;
+            } catch (e) {
+                showError(e.message);
+                return false;
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorMessage.classList.add('visible');
+            functionInput.classList.add('error');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('visible');
+            functionInput.classList.remove('error');
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = (rect.width - 32) * dpr;
+            canvas.height = (rect.height - 32) * dpr;
+            canvas.style.width = (rect.width - 32) + 'px';
+            canvas.style.height = (rect.height - 32) + 'px';
+            ctx.scale(dpr, dpr);
+            draw();
+        }
+
+        function draw() {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, width, height);
+            
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+            
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            
+            if (showGrid.checked) {
+                const gridSize = scale;
+                
+                for (let x = centerX % gridSize; x < width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                    ctx.stroke();
+                }
+                
+                for (let y = centerY % gridSize; y < height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                    ctx.stroke();
+                }
+            }
+            
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(centerX, 0);
+            ctx.lineTo(centerX, height);
+            ctx.stroke();
+            
+            if (showGrid.checked) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px Consolas, monospace';
+                
+                const xStep = scale >= 20 ? 1 : scale >= 10 ? 5 : 10;
+                for (let x = -Math.ceil(centerX / scale); x < (width - centerX) / scale; x += xStep) {
+                    const screenX = centerX + x * scale;
+                    if (screenX > 0 && screenX < width) {
+                        ctx.fillText(x.toString(), screenX + 2, centerY + 12);
+                    }
+                }
+                
+                const yStep = scale >= 20 ? 1 : scale >= 10 ? 5 : 10;
+                for (let y = -Math.ceil((height - centerY) / scale); y < centerY / scale; y += yStep) {
+                    const screenY = centerY - y * scale;
+                    if (screenY > 0 && screenY < height) {
+                        ctx.fillText(y.toString(), centerX + 4, screenY - 2);
+                    }
+                }
+            }
+            
+            if (!parsedFunction) return;
+            
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#4f46e5';
+            ctx.beginPath();
+            
+            let started = false;
+            let prevY = null;
+            
+            for (let screenX = 0; screenX < width; screenX++) {
+                const x = (screenX - centerX) / scale;
+                let y;
+                
+                try {
+                    y = evaluate(parsedFunction, x);
+                } catch (e) {
+                    y = NaN;
+                }
+                
+                const screenY = centerY - y * scale;
+                
+                if (!isNaN(y) && isFinite(y) && Math.abs(y * scale) < height * 10) {
+                    if (!started) {
+                        ctx.moveTo(screenX, screenY);
+                        started = true;
+                    } else if (prevY !== null && Math.abs(screenY - prevY) < height) {
+                        ctx.lineTo(screenX, screenY);
+                    } else {
+                        ctx.moveTo(screenX, screenY);
+                    }
+                } else {
+                    started = false;
+                }
+                prevY = screenY;
+            }
+            ctx.stroke();
+            
+            if (showDerivative.checked && parsedDerivative) {
+                ctx.strokeStyle = '#10b981';
+                ctx.beginPath();
+                
+                started = false;
+                prevY = null;
+                
+                for (let screenX = 0; screenX < width; screenX++) {
+                    const x = (screenX - centerX) / scale;
+                    let y;
+                    
+                    try {
+                        y = evaluate(parsedDerivative, x);
+                    } catch (e) {
+                        y = NaN;
+                    }
+                    
+                    const screenY = centerY - y * scale;
+                    
+                    if (!isNaN(y) && isFinite(y) && Math.abs(y * scale) < height * 10) {
+                        if (!started) {
+                            ctx.moveTo(screenX, screenY);
+                            started = true;
+                        } else if (prevY !== null && Math.abs(screenY - prevY) < height) {
+                            ctx.lineTo(screenX, screenY);
+                        } else {
+                            ctx.moveTo(screenX, screenY);
+                        }
+                    } else {
+                        started = false;
+                    }
+                    prevY = screenY;
+                }
+                ctx.stroke();
+            }
+            
+            if (showTangent.checked && tangentPoint !== null) {
+                const x0 = tangentPoint;
+                let slope;
+                try {
+                    slope = evaluate(parsedDerivative, x0);
+                } catch (e) {
+                    slope = 0;
+                }
+                
+                const y0 = evaluate(parsedFunction, x0);
+                
+                const screenX0 = centerX + x0 * scale;
+                const screenY0 = centerY - y0 * scale;
+                
+                const lineLength = 3;
+                const x1 = x0 - lineLength;
+                const x2 = x0 + lineLength;
+                const y1 = y0 + slope * (x1 - x0);
+                const y2 = y0 + slope * (x2 - x0);
+                
+                const screenX1 = centerX + x1 * scale;
+                const screenY1 = centerY - y1 * scale;
+                const screenX2 = centerX + x2 * scale;
+                const screenY2 = centerY - y2 * scale;
+                
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(screenX1, screenY1);
+                ctx.lineTo(screenX2, screenY2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.arc(screenX0, screenY0, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function getMousePosition(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function screenToMath(screenX, screenY) {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+            
+            return {
+                x: (screenX - centerX) / scale,
+                y: (centerY - screenY) / scale
+            };
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getMousePosition(e);
+            const math = screenToMath(pos.x, pos.y);
+            
+            if (!parsedFunction || !parsedDerivative) return;
+            
+            let fVal, dfVal;
+            try {
+                fVal = evaluate(parsedFunction, math.x);
+                dfVal = evaluate(parsedDerivative, math.x);
+            } catch (err) {
+                fVal = NaN;
+                dfVal = NaN;
+            }
+            
+            tooltipX.textContent = math.x.toFixed(3);
+            tooltipF.textContent = isFinite(fVal) ? fVal.toFixed(3) : 'N/A';
+            tooltipDF.textContent = isFinite(dfVal) ? dfVal.toFixed(3) : 'N/A';
+            
+            const tooltipRect = canvas.getBoundingClientRect();
+            let tooltipXPos = pos.x + 15;
+            let tooltipYPos = pos.y + 15;
+            
+            if (tooltipXPos + 160 > tooltipRect.width) {
+                tooltipXPos = pos.x - 165;
+            }
+            if (tooltipYPos + 80 > tooltipRect.height) {
+                tooltipYPos = pos.y - 85;
+            }
+            
+            tooltip.style.left = tooltipXPos + 'px';
+            tooltip.style.top = tooltipYPos + 'px';
+            tooltip.classList.add('visible');
+            
+            if (showTangent.checked) {
+                tangentPoint = math.x;
+                draw();
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            tooltip.classList.remove('visible');
+            tangentPoint = null;
+            draw();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            const pos = getMousePosition(e);
+            lastMouseX = pos.x;
+            lastMouseY = pos.y;
+            canvas.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            offsetX += currentX - lastMouseX;
+            offsetY += currentY - lastMouseY;
+            
+            lastMouseX = currentX;
+            lastMouseY = currentY;
+            
+            draw();
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            canvas.style.cursor = 'crosshair';
+        });
+
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                functionInput.value = btn.dataset.fn;
+                if (parseAndCompile()) {
+                    draw();
+                }
+            });
+        });
+
+        functionInput.addEventListener('input', () => {
+            if (parseAndCompile()) {
+                draw();
+            }
+        });
+
+        showDerivative.addEventListener('change', draw);
+        showTangent.addEventListener('change', draw);
+        showGrid.addEventListener('change', draw);
+
+        zoomRange.addEventListener('input', (e) => {
+            zoomValue.textContent = e.target.value;
+            scale = parseInt(e.target.value) * 8;
+            draw();
+        });
+
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            zoomRange.value = Math.min(20, parseInt(zoomRange.value) + 1);
+            zoomRange.dispatchEvent(new Event('input'));
+        });
+
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            zoomRange.value = Math.max(1, parseInt(zoomRange.value) - 1);
+            zoomRange.dispatchEvent(new Event('input'));
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        parseAndCompile();
+        resizeCanvas();
+    </script>
+</body>
+</html>

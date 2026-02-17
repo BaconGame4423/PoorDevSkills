@@ -1,0 +1,112 @@
+workflow:
+  pipeline_adherence:
+    completed_steps: [specify, suggest, plan, planreview, tasks, tasksreview, implement, architecturereview, qualityreview, phasereview]
+    skipped_steps: []
+    notes: |
+      パイプラインは全ステップ完了 (status: completed)。
+      implement_phases_completed で9フェーズ全て完了と記録。
+      ただし tasks.md のチェックボックス状態と不整合あり（後述）。
+  information_flow:
+    gaps:
+      - source: tasks.md
+        target: actual implementation
+        issue: "tasks.md で T007-T028 が未チェックのまま、pipeline-state.json は全フェーズ完了と記録"
+      - source: plan.md
+        target: generated code
+        issue: "plan.md のプロジェクト構造 (src/core/parser.ts 等) と実際の生成場所が混在"
+    notes: |
+      spec → suggestions → plan → tasks → code の流れは論理的。
+      しかしタスク完了状態の同期が取れていない。
+  bottlenecks:
+    issues:
+      - "タスク完了マークの自動更新が機能していない可能性"
+      - "生成コードの配置先が feature_dir 内とリポジトリルートで分散"
+    notes: |
+      実行時間のボトルネックは観測されず。主な問題は整合性管理。
+  review_effectiveness:
+    useful_fixes: 0
+    noise_fixes: 0
+    notes: |
+      review-log-planreview.yaml が空 (issues: null, verdicts: "")。
+      レビューが実行されたが指摘がなかった、またはレビュー自体が不十分だった可能性。
+      改善: レビュー結果の必須フィールド、指摘0件の場合の明示的な理由記述を推奨。
+
+commands:
+  issues:
+    - command: poor-dev.implement
+      severity: H
+      description: "tasks.md の完了チェックボックス更新が漏れている。T007-T028 が [ ] のまま pipeline-state.json は完了"
+      suggestion: "タスク実行後に tasks.md を自動更新するロジックを追加。または pipeline-state.json と tasks.md の同期確認を追加"
+    - command: poor-dev.specify
+      severity: M
+      description: "spec.md の [NEEDS CLARIFICATION] が残っている状態で plan に進んでいる"
+      suggestion: "clarification が残っている場合、明示的な警告または確認プロンプトを表示"
+    - command: poor-dev.tasks
+      severity: M
+      description: "tasks.md の files: メタデータが実際の生成パスと不一致"
+      suggestion: "tasks 生成時に feature_dir ベースの絶対パスまたは相対パスを明確化"
+    - command: poor-dev.plan
+      severity: L
+      description: "plan.md の Project Structure で複数オプションが残っている（Option 1/2/3）"
+      suggestion: "選択した構造を明確にマークまたは他を削除"
+    - command: poor-dev.implement
+      severity: M
+      description: "生成コードが specs/*/src/ と リポジトリルート src/ に分散して配置"
+      suggestion: "実装先のルートディレクトリを明確に定義し、一貫性を保証"
+  strengths:
+    - "コマンドの段階的実行モデルが明確（Step 1-3）"
+    - "進捗マーカー ([PROGRESS: ...]) による追跡可能性"
+    - "DAGベースのタスク依存関係管理"
+    - "並列実行戦略の複数オプション (same-branch, worktree, phase-split)"
+
+model_fit:
+  difficult_steps:
+    - step: implement
+      reason: "28タスク中21タスクが実行された痕跡があるが、tasks.md の状態更新漏れ。タスク完了確認処理が複雑"
+      suggestion: "タスク完了時に [X] への自動更新を確実に実行するロジック強化"
+    - step: tasksreview
+      reason: "tasks.md の整合性チェックが実施されたか不明"
+      suggestion: "レビュー時に tasks.md の形式チェックを追加"
+  prompt_issues:
+    - "implement.md のタスク完了マーク指示が実行されていない（重要度HIGH）"
+    - "並列実行時のファイル競合検証が実際に行われたか不明"
+  context_window_pressure:
+    worst_step: implement
+    estimated_tokens: 15000
+    notes: |
+      plan.md (170行) + tasks.md (178行) + spec.md (149行) + ライブラリ知識。
+      中程度の負荷。問題なし。
+  tier_recommendations:
+    glm-5: "現状の複雑さに対して適合。ただし整合性管理の強化が必要"
+
+summary:
+  top_issues:
+    - severity: H
+      description: "tasks.md と pipeline-state.json の完了状態不整合"
+      impact: "進捗の正確な追跡不可、再実行時のスキップ判断が困難"
+    - severity: H
+      description: "生成コードの配置場所不一致 (feature_dir vs repo root)"
+      impact: "成果物の特定が困難、クリーンアップ時の漏れ"
+    - severity: M
+      description: "review-log が空でレビュー有効性が不明"
+      impact: "品質保証プロセスの不透明性"
+  quick_wins:
+    - action: "implement.md で [X] 更新を確実に実行する指示を強化"
+      effort: low
+      impact: high
+    - action: "実装先ディレクトリを feature_dir 内に統一、または明示的なルール追加"
+      effort: low
+      impact: high
+    - action: "review-log.yaml に必須フィールド追加（reviewer, issues_count, summary）"
+      effort: low
+      impact: medium
+  strategic:
+    - action: "タスク状態と pipeline-state.json の自動同期メカニズム実装"
+      timeline: short-term
+      rationale: "パイプライン再開時の整合性保証"
+    - action: "成果物配置ルールの明文化とバリデーション追加"
+      timeline: short-term
+      rationale: "単一HTMLプロジェクトなど構造が特殊な場合の対応"
+    - action: "レビュー品質の定量評価メトリクス導入"
+      timeline: medium-term
+      rationale: "レビュー指摘0件が適切かどうかの判断基準"

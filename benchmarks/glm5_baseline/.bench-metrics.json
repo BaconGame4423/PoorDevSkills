@@ -1,0 +1,18 @@
+{
+  "mode": "baseline",
+  "model": "zai-coding-plan/glm-5",
+  "cli": "opencode",
+  "input_tokens": 29466,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 48320,
+  "output_tokens": 7562,
+  "reasoning_tokens": 0,
+  "total_tokens": 85348,
+  "cost_usd": 0,
+  "duration_ms": 0,
+  "duration_api_ms": 0,
+  "wall_clock_ms": 164195,
+  "num_turns": 5,
+  "is_error": false,
+  "timestamp": "2026-02-17T02:38:01Z"
+}

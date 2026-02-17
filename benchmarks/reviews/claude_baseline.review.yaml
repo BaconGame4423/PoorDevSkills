@@ -1,0 +1,289 @@
+# ============================================================
+# benchLLM レビューテンプレート
+# ============================================================
+# 使い方:
+#   cp _templates/benchmark-review.yaml <dir>.review.yaml
+#   各セクションを記入し、scoring で総合スコアを算出する
+# ============================================================
+
+meta:
+  directory: "claude_baseline"
+  model_config:
+    primary: "Claude Opus 4.6"
+    secondary: "Claude Haiku 4.5 (ツールルーティング自動使用)"
+    role: "solo"
+  reviewer: "claude-opus-4.6"
+  review_date: "2026-02-17"
+  status: "completed"
+
+# ============================================================
+# トークン / コスト / 実行時間
+# ============================================================
+metrics:
+  input_tokens: 9
+  cache_creation_input_tokens: 16696
+  cache_read_input_tokens: 202059
+  output_tokens: 13395
+  total_tokens: 232159
+  cost_usd: 0.5450325
+  cost_breakdown:
+    opus: 0.5402995
+    haiku: 0.004733
+  duration_ms: 167720
+  duration_api_ms: 171131
+  wall_clock_ms: 169965
+  num_turns: 9
+  is_error: false
+
+# ============================================================
+# 1. Process Adherence (プロセス遵守) - 15%
+# ============================================================
+# DevSkillsワークフロー各段階の遵守を評価
+# stages: specify → plan → planreview → tasks → tasksreview →
+#         implement → qualityreview → phasereview
+process:
+  stages:
+    specify:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    plan:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    planreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasks:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    tasksreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    implement:
+      completed: true
+      artifacts: [index.html]
+      notes: "claude -p で直接実装。1ファイル完結。git commit 済み"
+    qualityreview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+    phasereview:
+      completed: false
+      artifacts: []
+      notes: "baseline: プロセスなし"
+  stages_completed: 1              # out of 8 (implement のみ)
+  score: 0                         # baseline はプロセス非適用。比較時 N/A 扱い
+  notes: "baseline モード: PoorDevSkills パイプラインを使用せず claude -p で直接実装。プロセス遵守は評価対象外"
+
+# ============================================================
+# 2. Code Quality (コード品質) - 25%
+# ============================================================
+# severity: C=Critical, H=High, M=Medium, L=Low
+code_quality:
+  issues:
+    - id: CQ-001
+      severity: L
+      category: style
+      location: "index.html:386-416"
+      description: "evaluate() の switch case 'bin' / 'func' に break 文がない"
+      impact: "return で抜けるため実動作上問題なし。ただし default ケースに意図せず到達するパスがある"
+      suggestion: "各 case の末尾に break を追加するか、exhaustive switch パターンに"
+    - id: CQ-002
+      severity: L
+      category: structure
+      location: "index.html:860-893"
+      description: "autoZoom() のサンプリング範囲が固定 (-10〜10)"
+      impact: "log(x) のような x>0 のみで意味がある関数では最適なズームにならない"
+      suggestion: "関数の定義域を推測するか、有効値のある範囲を動的にサンプリング"
+    - id: CQ-003
+      severity: L
+      category: structure
+      location: "index.html:813-814"
+      description: "drawCurve() のステップ数 max(w*2, 800) は高 DPI ディスプレイで過剰"
+      impact: "4K ディスプレイで ~7600 ステップ。mousemove のたびに全ピクセル再描画で負荷増"
+      suggestion: "論理ピクセル幅ベースに制限するか、requestAnimationFrame でスロットル"
+  strengths:
+    - "1ファイル完結 (index.html 1059行) で外部依存ゼロ"
+    - "AST ベース数式パーサー: 暗黙乗算 (2x), 定数 (pi, e), ln→log 正規化対応"
+    - "記号微分エンジン: 連鎖律、積の法則、商の法則、べき乗則を完全実装"
+    - "数値微分フォールバック (中心差分法 h=1e-7)"
+    - "不連続点検出 (tan 漸近線でグラフが壊れない)"
+    - "CSS 変数によるダークテーマ設計"
+    - "IIFE でグローバル汚染なし"
+  score: 78
+  notes: "重大なバグはなし。Low severity の構造的改善点が3件。全体的に堅実な実装"
+
+# ============================================================
+# 3. Completeness (完全性) - 25%
+# ============================================================
+# FR-001 ~ FR-013: 機能要件チェック
+completeness:
+  requirements:
+    FR-001:
+      name: "インタラクティブ関数グラフ表示"
+      status: "pass"
+      notes: "Canvas ベース。ドラッグでパン、ホイールでズーム"
+    FR-002:
+      name: "数式入力フィールド"
+      status: "pass"
+      notes: "独自パーサー。暗黙乗算 (2x, 2sin(x)) 対応"
+    FR-003:
+      name: "リアルタイムグラフ更新"
+      status: "pass"
+      notes: "input イベントで即座に再描画"
+    FR-004:
+      name: "自動ズーム/スケール"
+      status: "pass"
+      notes: "値域サンプリングで最適表示範囲を自動決定。ただしサンプリング範囲固定 (-10〜10)"
+    FR-005:
+      name: "軸ラベルとグリッド線"
+      status: "pass"
+      notes: "niceStep() で適応的ステップ幅。軸名 (x, y) 表示あり"
+    FR-006:
+      name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
+      status: "pass"
+      notes: "要件の7関数 + asin, acos, atan, ceil, floor も追加対応"
+    FR-007:
+      name: "微分（導関数）の計算と表示"
+      status: "pass"
+      notes: "記号微分エンジン。連鎖律・積/商の法則・べき乗則を実装"
+    FR-008:
+      name: "導関数のグラフ重畳表示"
+      status: "pass"
+      notes: "赤色 (rgba(233,69,96)) で重ね描画。トグルボタンで切替"
+    FR-009:
+      name: "カーソル追従ツールチップ (x, f(x), f'(x))"
+      status: "pass"
+      notes: "マウス位置の x, f(x), f'(x) をリアルタイム表示。色分けあり"
+    FR-010:
+      name: "接線表示"
+      status: "pass"
+      notes: "黄色 (rgba(240,165,0)) でカーソル位置の接線描画。トグルボタン"
+    FR-011:
+      name: "レスポンシブデザイン"
+      status: "pass"
+      notes: "フレキシブルレイアウト + devicePixelRatio 対応 + タッチ操作 (1本指パン, 2本指ピンチズーム)"
+    FR-012:
+      name: "エラーハンドリング（不正入力）"
+      status: "pass"
+      notes: "エラーメッセージを画面下部に表示 + 入力欄を赤枠でハイライト"
+    FR-013:
+      name: "プリセット関数ボタン"
+      status: "pass"
+      notes: "sin, cos, tan, log, exp, sqrt, abs, x^2, x^3-3x の9プリセット"
+  passed: 13
+  partial: 0
+  failed: 0
+  bugged: 0
+  score: 100
+  notes: "全13要件を完全充足"
+
+# ============================================================
+# 4. UX / Visual Quality - 15%
+# ============================================================
+# 各項目 1-5 のスコア
+ux:
+  visual_design:
+    score: 4
+    notes: "ダークテーマ、CSS 変数設計、色分けが明確。プロフェッショナルな見た目"
+  responsive:
+    score: 4
+    notes: "モバイル対応メディアクエリ + タッチイベント + DPR 対応。十分なレスポンシブ設計"
+  usability:
+    score: 4
+    notes: "プリセットボタン、トグル UI、直感的なパン/ズーム操作"
+  error_feedback:
+    score: 4
+    notes: "不正入力時のエラーメッセージ + 赤枠ハイライト。フェードアニメーション付き"
+  accessibility:
+    score: 2
+    notes: "aria 属性なし、キーボード操作非対応、色のみで情報区別 (色覚多様性未考慮)"
+  average: 3.6
+  score: 72                        # 3.6 * 20
+  notes: "視覚デザインと操作性は良好。アクセシビリティが弱点"
+
+# ============================================================
+# 5. Constitution Compliance (憲章準拠) - 10%
+# ============================================================
+# DevSkills憲章の関連原則チェック
+constitution:
+  principles:
+    III_review_driven_quality:
+      compliant: false
+      notes: "baseline: レビュープロセスなし"
+    V_incremental_delivery:
+      compliant: false
+      notes: "baseline: 1発実装。インクリメンタルではない"
+    VIII_verification_gates:
+      compliant: false
+      notes: "baseline: 検証ゲートなし"
+    X_documentation_as_code:
+      compliant: false
+      notes: "baseline: spec/plan/tasks ドキュメントなし"
+  compliant_count: 0               # out of 4
+  score: 0
+  notes: "baseline モード: 憲章準拠は評価対象外。パイプライン版との差異を測るための基準"
+
+# ============================================================
+# 6. Efficiency (効率) - 10%
+# ============================================================
+efficiency:
+  wall_clock_seconds: 170
+  session_count: 1
+  output_lines: 1059
+  output_bytes: 30633
+  lines_per_second: 6.23
+  files_created: 1
+  total_tokens: 232159
+  cost_usd: 0.545
+  tokens_per_output_line: 219
+  score: 85
+  notes: "$0.545 / 約3分 / 9ターンで全13要件充足。単発実装としてはコスパ非常に良い"
+
+# ============================================================
+# 総合スコア
+# ============================================================
+# score = process(15%) + code_quality(25%) + completeness(25%)
+#       + ux(15%) + constitution(10%) + efficiency(10%)
+scoring:
+  weights:
+    process: 0.15
+    code_quality: 0.25
+    completeness: 0.25
+    ux: 0.15
+    constitution: 0.10
+    efficiency: 0.10
+  component_scores:
+    process: 0                     # N/A for baseline
+    code_quality: 78
+    completeness: 100
+    ux: 72
+    constitution: 0                # N/A for baseline
+    efficiency: 85
+  total: 64                        # 0*0.15 + 78*0.25 + 100*0.25 + 72*0.15 + 0*0.10 + 85*0.10 = 63.8 ≈ 64
+  total_excl_process: 84           # process/constitution 除外 (code 25 + completeness 25 + ux 15 + efficiency 10 → 75%換算): (78*25+100*25+72*15+85*10)/75 = 84.1
+  grade: "D"                       # 全項目込み。baseline はプロセス/憲章が 0 なので構造的に低い
+  grade_excl_process: "B"          # プロセス/憲章除外の実質グレード
+
+# ============================================================
+# サマリ
+# ============================================================
+summary:
+  strengths:
+    - "全13要件を完全充足 (100%)"
+    - "$0.545 / 約3分の高コスパ"
+    - "AST ベース数式パーサー + 記号微分エンジンの堅実な実装"
+    - "1ファイル完結で外部依存ゼロ"
+    - "ダークテーマ、タッチ対応、不連続点検出など配慮が行き届いている"
+  weaknesses:
+    - "spec/plan/tasks 等のプロセス成果物なし (baseline の性質上当然)"
+    - "アクセシビリティ (aria, キーボード操作, 色覚多様性) が未対応"
+    - "autoZoom のサンプリング範囲固定で一部関数に最適でない"
+  critical_issues: []
+  recommendations:
+    - "パイプライン版との比較時は process/constitution 除外スコア (84点 B) を基準値として使用"
+    - "コード品質・完全性・UX・効率の4軸で pipeline 版が baseline を上回るか測定"

@@ -1,1 +1,0 @@
-../../.opencode/command/poor-dev.qualityreview.md

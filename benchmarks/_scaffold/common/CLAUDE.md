@@ -9,8 +9,8 @@
 - Branch Merge & Cleanup セクションの処理はスキップしてください
 
 ## インフラストラクチャ保護
-以下のディレクトリ・ファイルはパイプライン基盤です。読み取り・変更・分析を一切行わないでください:
-- lib/ — commands/ — agents/ — .poor-dev/
+以下のディレクトリ・ファイルはパイプライン基盤です。読み取り・変更・削除・分析を一切行わないでください:
+- .git/ — lib/ — commands/ — agents/ — .poor-dev/
 - .opencode/command/ — .opencode/agents/ — .claude/agents/ — .claude/commands/
 - /tmp/poor-dev-* ファイル
 

@@ -426,7 +426,7 @@ setup_environment() {
   else
     # 既存ディレクトリがあってもスキルファイルを最新に更新
     info "既存ディレクトリを検出。スキルファイルを更新"
-    bash "$SCRIPT_DIR/setup-benchmarks.sh" --update
+    bash "$SCRIPT_DIR/setup-benchmarks.sh" --update || warn "一部 combo の更新がスキップされました"
     ok "スキルファイル更新完了"
   fi
 

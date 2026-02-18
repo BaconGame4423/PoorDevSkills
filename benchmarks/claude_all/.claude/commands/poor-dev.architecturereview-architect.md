@@ -1,1 +1,0 @@
-../../.opencode/command/poor-dev.architecturereview-architect.md

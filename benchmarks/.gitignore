@@ -1,0 +1,12 @@
+# combo ディレクトリは各自の .git で管理。親リポからは除外
+# ホワイトリスト: インフラファイルのみ tracking
+*
+!.gitignore
+!benchmarks.json
+!run-benchmark.sh
+!setup-benchmarks.sh
+!generate-comparison.sh
+!_scaffold/
+!_scaffold/**
+!reviews/
+!reviews/**

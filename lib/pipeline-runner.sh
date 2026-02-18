@@ -12,6 +12,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=retry-helpers.sh
 source "$SCRIPT_DIR/retry-helpers.sh"
 
+# --- Safe git wrapper (prevents parent repo fallthrough) ---
+
+_safe_git() {
+  local dir="$1"; shift
+  if [[ ! -d "$dir/.git" ]]; then
+    echo "{\"warning\":\"git skipped: no .git in $dir\"}" >&2
+    return 1
+  fi
+  git -C "$dir" "$@"
+}
+
 # --- Cleanup trap ---
 
 cleanup_temp_files() {
@@ -56,6 +67,13 @@ if [[ -z "$FLOW" || -z "$FEATURE_DIR" || -z "$BRANCH" || -z "$PROJECT_DIR" ]]; t
 fi
 
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+
+# --- Validate .git exists (prevent parent repo fallthrough) ---
+if [[ ! -d "$PROJECT_DIR/.git" ]]; then
+  echo '{"error":"FATAL: .git not found in project_dir. Aborting to prevent parent repo fallthrough.","project_dir":"'"$PROJECT_DIR"'"}'
+  exit 1
+fi
+
 FD="$PROJECT_DIR/$FEATURE_DIR"
 
 # --- Pipeline step lookup ---
@@ -270,7 +288,7 @@ check_rate_limit() {
 protect_sources() {
   local project_dir="${1:-$PROJECT_DIR}"
   local protected_files
-  protected_files=$(git -C "$project_dir" diff --name-only HEAD 2>/dev/null || true)
+  protected_files=$(_safe_git "$project_dir" diff --name-only HEAD 2>/dev/null || true)
   if [[ -n "$protected_files" ]]; then
     local to_restore=""
     while IFS= read -r f; do
@@ -282,7 +300,7 @@ protect_sources() {
     done <<< "$protected_files"
     if [[ -n "$to_restore" ]]; then
       # shellcheck disable=SC2086
-      git -C "$project_dir" checkout HEAD -- $to_restore 2>/dev/null || true
+      _safe_git "$project_dir" checkout HEAD -- $to_restore 2>/dev/null || true
       echo '{"warning":"Protected files were modified by implement step and have been restored","files":"'"$(echo "$to_restore" | xargs)"'"}'
     fi
   fi
@@ -455,12 +473,12 @@ CTX_EOF
 
     # --- Dispatch with retry ---
     local pre_phase_head
-    pre_phase_head=$(git -C "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
+    pre_phase_head=$(_safe_git "$project_dir" rev-parse HEAD 2>/dev/null || echo "")
 
     # Pre-retry hook for implement: clean uncommitted changes
     _impl_phase_pre_retry() {
-      git -C "$project_dir" checkout -- . 2>/dev/null || true
-      git -C "$project_dir" clean -fd 2>/dev/null || true
+      _safe_git "$project_dir" checkout -- . 2>/dev/null || true
+      _safe_git "$project_dir" clean -fd --exclude='specs/' 2>/dev/null || true
     }
 
     local impl_result_file="/tmp/poor-dev-result-implement-phase${phase_num}-$$.json"
@@ -506,11 +524,11 @@ CTX_EOF
     # Post-phase file generation check
     local phase_files=""
     if [[ -n "$pre_phase_head" ]]; then
-      phase_files=$(git -C "$project_dir" diff --name-only "$pre_phase_head" HEAD 2>/dev/null || true)
+      phase_files=$(_safe_git "$project_dir" diff --name-only "$pre_phase_head" HEAD 2>/dev/null || true)
     fi
     local uncommitted
-    uncommitted=$(git -C "$project_dir" diff --name-only 2>/dev/null || true)
-    uncommitted="${uncommitted}$(printf '\n')$(git -C "$project_dir" diff --name-only --cached 2>/dev/null || true)"
+    uncommitted=$(_safe_git "$project_dir" diff --name-only 2>/dev/null || true)
+    uncommitted="${uncommitted}$(printf '\n')$(_safe_git "$project_dir" diff --name-only --cached 2>/dev/null || true)"
     phase_files="${phase_files}${uncommitted}"
     phase_files=$(echo "$phase_files" | grep -vE '^$|^(agents/|commands/|lib/|\.poor-dev/|\.opencode/|\.claude/)' | sort -u || true)
     if [[ -z "$phase_files" ]]; then
@@ -519,9 +537,9 @@ CTX_EOF
 
     # Commit phase artifacts to protect from subsequent retry cleanup
     if [[ -n "$phase_files" ]]; then
-      git -C "$project_dir" add -A 2>/dev/null || true
-      git -C "$project_dir" reset HEAD -- agents/ commands/ lib/ .poor-dev/ .opencode/ .claude/ 2>/dev/null || true
-      if ! git -C "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null; then
+      _safe_git "$project_dir" add -A 2>/dev/null || true
+      _safe_git "$project_dir" reset HEAD -- agents/ commands/ lib/ .poor-dev/ .opencode/ .claude/ 2>/dev/null || true
+      if ! _safe_git "$project_dir" commit -m "implement: phase ${phase_num} - ${phase_name}" --no-verify 2>/dev/null; then
         echo "{\"phase\":$phase_num,\"warning\":\"git commit failed for phase ${phase_num}, artifacts remain uncommitted\"}"
       fi
     fi
@@ -771,8 +789,8 @@ CTX_EOF
   MAIN_PRE_RETRY_HOOK=""
   if [[ "$STEP" == "implement" ]]; then
     _main_impl_pre_retry() {
-      git -C "$PROJECT_DIR" checkout -- . 2>/dev/null || true
-      git -C "$PROJECT_DIR" clean -fd 2>/dev/null || true
+      _safe_git "$PROJECT_DIR" checkout -- . 2>/dev/null || true
+      _safe_git "$PROJECT_DIR" clean -fd --exclude='specs/' 2>/dev/null || true
     }
     MAIN_PRE_RETRY_HOOK="_main_impl_pre_retry"
   fi

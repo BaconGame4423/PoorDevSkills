@@ -221,6 +221,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|
 | `/poor-dev` | 入力の受付（全フロー自動分類・ルーティング + specify オーケストレーション） |
 | `/poor-dev-simple` | GLM5 用簡略版 intake（1コマンド + spec 承認で全パイプライン自動実行） |
+| `/poor-dev.team` | Agent Teams オーケストレーター（全フロー対応。Opus 仲介レビューループ） |
 | `/poor-dev.pipeline` | パイプライン実行 sub-agent（`/poor-dev` から自動 dispatch。直接呼び出し不要） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 | `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
@@ -236,6 +237,7 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `/poor-dev.investigate` | 原因不明の問題調査・分析 | 調査レポート + 次アクション推奨 |
 | `/poor-dev.plan` | 技術計画の作成 | plan.md |
 | `/poor-dev.tasks` | タスク分解 | tasks.md |
+| `/poor-dev.testdesign` | テスト計画・テストスケルトン設計 | test-plan.md |
 | `/poor-dev.implement` | タスクに従い実装 | 実装コード |
 | `/poor-dev.analyze` | 仕様・計画・タスクの整合性分析 | 分析レポート |
 | `/poor-dev.checklist` | ドメイン別チェックリスト生成 | チェックリスト |

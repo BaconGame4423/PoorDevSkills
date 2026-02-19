@@ -40,7 +40,7 @@ export interface ReviewSetupResult {
 
 // --- ペルソナ定義 ---
 
-const PERSONA_MAP: Record<string, string[]> = {
+export const PERSONA_MAP: Record<string, string[]> = {
   planreview: [
     "planreview-pm",
     "planreview-critical",

@@ -18,6 +18,8 @@ import fs from "node:fs";
 import { dispatchWithRetry, type RetryOptions } from "./retry-helpers.js";
 import type { GitOps, FileSystem, Dispatcher, PipelineStateManager } from "./interfaces.js";
 import type { PipelineState, PoorDevConfig, TaskPhase } from "./types.js";
+import type { FlowDefinition } from "./flow-types.js";
+import { BUILTIN_FLOWS, getFlowDefinition } from "./flow-definitions.js";
 import { composePrompt as composePromptTs } from "./compose-prompt.js";
 import { extractOutput } from "./extract-output.js";
 import { validateTasks } from "./tasks-validate.js";
@@ -47,35 +49,6 @@ export type EventEmitter = (event: unknown) => void;
 
 // --- 定数 ---
 
-const FLOW_STEPS: Record<string, string[]> = {
-  feature: [
-    "specify",
-    "suggest",
-    "plan",
-    "planreview",
-    "tasks",
-    "tasksreview",
-    "implement",
-    "architecturereview",
-    "qualityreview",
-    "phasereview",
-  ],
-  bugfix: ["bugfix"],
-  roadmap: ["concept", "goals", "milestones", "roadmap"],
-  "discovery-init": ["discovery"],
-  "discovery-rebuild": ["rebuildcheck"],
-  investigation: ["investigate"],
-};
-
-const CONDITIONAL_STEPS = new Set(["bugfix", "rebuildcheck"]);
-const REVIEW_STEPS = new Set([
-  "planreview",
-  "tasksreview",
-  "architecturereview",
-  "qualityreview",
-  "phasereview",
-]);
-
 const IMPL_EXTENSIONS = [
   "html", "htm", "js", "ts", "jsx", "tsx", "mjs", "cjs",
   "css", "scss", "sass", "less", "py", "rb", "go", "rs",
@@ -87,24 +60,25 @@ const PROTECTED_DIRS_RE = /^(agents\/|commands\/|lib\/|\.poor-dev\/|\.opencode\/
 // --- ヘルパー関数 ---
 
 /**
- * get_pipeline_steps() に対応。
+ * get_pipeline_steps() に対応。FlowDefinition ベース。
  */
 function getFlowSteps(flow: string): string[] | null {
-  return FLOW_STEPS[flow] ?? null;
+  const def = getFlowDefinition(flow);
+  return def?.steps ?? null;
 }
 
 /**
- * is_conditional() に対応。
+ * is_conditional() に対応。FlowDefinition ベース。
  */
-function isConditional(step: string): boolean {
-  return CONDITIONAL_STEPS.has(step);
+function isConditional(step: string, flowDef: FlowDefinition): boolean {
+  return flowDef.conditionals?.includes(step) ?? false;
 }
 
 /**
- * is_review() に対応。
+ * is_review() に対応。FlowDefinition ベース。
  */
-function isReview(step: string): boolean {
-  return REVIEW_STEPS.has(step);
+function isReview(step: string, flowDef: FlowDefinition): boolean {
+  return flowDef.reviews?.includes(step) ?? false;
 }
 
 /**
@@ -262,38 +236,21 @@ function protectSources(projectDir: string, gitOps: GitOps): string | null {
 }
 
 /**
- * check_prerequisites() に対応。
+ * check_prerequisites() に対応。FlowDefinition ベース。
  */
 function checkPrerequisites(
   step: string,
   fd: string,
-  fileSystem: Pick<FileSystem, "exists">
+  fileSystem: Pick<FileSystem, "exists">,
+  flowDef: FlowDefinition
 ): string | null {
-  switch (step) {
-    case "suggest":
-      if (!fileSystem.exists(path.join(fd, "spec.md")))
-        return "missing prerequisite: spec.md";
-      break;
-    case "plan":
-      if (!fileSystem.exists(path.join(fd, "spec.md")))
-        return "missing prerequisite: spec.md";
-      break;
-    case "tasks":
-      if (
-        !fileSystem.exists(path.join(fd, "plan.md")) ||
-        !fileSystem.exists(path.join(fd, "spec.md"))
-      )
-        return "missing prerequisite: plan.md and/or spec.md";
-      break;
-    case "implement":
-      if (
-        !fileSystem.exists(path.join(fd, "tasks.md")) ||
-        !fileSystem.exists(path.join(fd, "spec.md"))
-      )
-        return "missing prerequisite: tasks.md and/or spec.md";
-      break;
-  }
-  return null;
+  const required = flowDef.prerequisites?.[step];
+  if (!required || required.length === 0) return null;
+
+  const missing = required.filter((f) => !fileSystem.exists(path.join(fd, f)));
+  if (missing.length === 0) return null;
+
+  return `missing prerequisite: ${missing.join(" and/or ")}`;
 }
 
 /**
@@ -334,70 +291,50 @@ function resolveCommandFile(
 }
 
 /**
- * context_args_for_step() に対応。
- * ステップごとのコンテキストファイルパスを返す。
+ * context_args_for_step() に対応。FlowDefinition ベース + 動的拡張。
+ *
+ * 静的マッピング: FlowDefinition.context[step] から読み取り
+ * 動的拡張: レビューステップでは review-log + impl ファイルを追加
  */
 function contextArgsForStep(
   step: string,
   fd: string,
-  fileSystem: Pick<FileSystem, "exists" | "readdir">
+  fileSystem: Pick<FileSystem, "exists" | "readdir">,
+  flowDef: FlowDefinition
 ): Record<string, string> {
   const ctx: Record<string, string> = {};
-  const has = (f: string) => fileSystem.exists(path.join(fd, f));
 
-  switch (step) {
-    case "specify":
-      if (has("input.txt")) ctx["input"] = path.join(fd, "input.txt");
-      break;
-    case "suggest":
-      if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-      break;
-    case "plan":
-      if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-      if (has("suggestions.yaml")) ctx["suggestions"] = path.join(fd, "suggestions.yaml");
-      break;
-    case "tasks":
-      if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
-      if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-      break;
-    case "implement":
-      if (has("tasks.md")) ctx["tasks"] = path.join(fd, "tasks.md");
-      if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
-      break;
-    default:
-      if (step.startsWith("planreview")) {
-        if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
-        if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-      } else if (step.startsWith("tasksreview")) {
-        if (has("tasks.md")) ctx["tasks"] = path.join(fd, "tasks.md");
-        if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-        if (has("plan.md")) ctx["plan"] = path.join(fd, "plan.md");
-      } else if (
-        step.startsWith("architecturereview") ||
-        step.startsWith("qualityreview") ||
-        step.startsWith("phasereview")
-      ) {
-        if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
-        const reviewLogType = path.join(fd, `review-log-${step}.yaml`);
-        const reviewLogGeneric = path.join(fd, "review-log.yaml");
-        if (fileSystem.exists(reviewLogType)) ctx["review_log"] = reviewLogType;
-        else if (fileSystem.exists(reviewLogGeneric)) ctx["review_log"] = reviewLogGeneric;
-        // Bug-2 fix: implement ステップが生成した実装ファイルをコンテキストに追加
-        const MAX_IMPL_CTX = 20;
-        let implIdx = 1;
-        outer: for (const ext of IMPL_EXTENSIONS) {
-          for (const f of globImplFiles(fd, ext, 3, fileSystem)) {
-            if (implIdx > MAX_IMPL_CTX) break outer;
-            ctx[`impl_${implIdx}`] = f;
-            implIdx++;
-          }
-        }
-      } else if (step === "bugfix") {
-        if (has("bug-report.md")) ctx["bug_report"] = path.join(fd, "bug-report.md");
-      } else if (["concept", "goals", "milestones", "roadmap"].includes(step)) {
-        if (has("spec.md")) ctx["spec"] = path.join(fd, "spec.md");
+  // 静的マッピング（FlowDefinition.context）
+  const staticCtx = flowDef.context?.[step];
+  if (staticCtx) {
+    for (const [key, filename] of Object.entries(staticCtx)) {
+      if (fileSystem.exists(path.join(fd, filename))) {
+        ctx[key] = path.join(fd, filename);
       }
+    }
   }
+
+  // 動的拡張: レビューステップ
+  const isReviewStep = flowDef.reviews?.includes(step) ?? false;
+  if (isReviewStep) {
+    // review-log 自動追加
+    const reviewLogType = path.join(fd, `review-log-${step}.yaml`);
+    const reviewLogGeneric = path.join(fd, "review-log.yaml");
+    if (fileSystem.exists(reviewLogType)) ctx["review_log"] = reviewLogType;
+    else if (fileSystem.exists(reviewLogGeneric)) ctx["review_log"] = reviewLogGeneric;
+
+    // impl ファイルスキャン（最大20件）
+    const MAX_IMPL_CTX = 20;
+    let implIdx = 1;
+    outer: for (const ext of IMPL_EXTENSIONS) {
+      for (const f of globImplFiles(fd, ext, 3, fileSystem)) {
+        if (implIdx > MAX_IMPL_CTX) break outer;
+        ctx[`impl_${implIdx}`] = f;
+        implIdx++;
+      }
+    }
+  }
+
   return ctx;
 }
 
@@ -475,6 +412,14 @@ export class PipelineRunner {
     // IMPLEMENT_COMPLETED フラグ
     let implementCompleted = completedSet.has("implement");
 
+    // --- FlowDefinition 解決 ---
+
+    const flowDef = getFlowDefinition(opts.flow);
+    if (!flowDef) {
+      emitEvent({ error: `Unknown flow: ${opts.flow}` });
+      return { exitCode: 1, events };
+    }
+
     // --- PIPELINE_STEPS 解決 ---
 
     let pipelineSteps: string[];
@@ -485,12 +430,7 @@ export class PipelineRunner {
     ) {
       pipelineSteps = savedState.pipeline;
     } else {
-      const flowSteps = getFlowSteps(opts.flow);
-      if (!flowSteps) {
-        emitEvent({ error: `Unknown flow: ${opts.flow}` });
-        return { exitCode: 1, events };
-      }
-      pipelineSteps = flowSteps;
+      pipelineSteps = flowDef.steps;
     }
 
     // pipeline-state.json 初期化（存在しない場合のみ）
@@ -531,7 +471,7 @@ export class PipelineRunner {
       }
 
       // 前提チェック
-      const prereqError = checkPrerequisites(step, fd, fileSystem);
+      const prereqError = checkPrerequisites(step, fd, fileSystem, flowDef);
       if (prereqError) {
         emitEvent({ step, error: prereqError });
         return { exitCode: 1, events };
@@ -605,7 +545,7 @@ export class PipelineRunner {
       // review ブランチ (bash mode)
       // =========================================================
 
-      if (isReview(step)) {
+      if (isReview(step, flowDef)) {
         const reviewMode = config?.review_mode ?? "llm";
 
         if (reviewMode === "bash") {
@@ -675,7 +615,7 @@ export class PipelineRunner {
       this.composePrompt(
         commandFile, promptFile, step,
         fd, opts.featureDir, opts.branch, opts.summary ?? "",
-        stepCount, totalSteps, config, fileSystem, emitEvent
+        stepCount, totalSteps, config, fileSystem, emitEvent, flowDef
       );
 
       // implement step のリトライ前フック (git cleanup)
@@ -746,17 +686,12 @@ export class PipelineRunner {
       // --- 出力抽出 (specify/suggest/plan/tasks → アーティファクトファイル) ---
 
       const outputFile = `/tmp/poor-dev-output-${step}-${process.pid}.txt`;
-      const outputArtifacts: Record<string, string> = {
-        specify: path.join(fd, "spec.md"),
-        suggest: path.join(fd, "suggestions.yaml"),
-        plan: path.join(fd, "plan.md"),
-        tasks: path.join(fd, "tasks.md"),
-      };
-      const saveTo = outputArtifacts[step];
+      const artifactFilename = flowDef.artifacts?.[step];
+      const saveTo = artifactFilename ? path.join(fd, artifactFilename) : undefined;
 
       // conditional step 処理のために出力ファイルを先読みしておく
       let rawOutputContent = "";
-      if (isConditional(step) && fileSystem.exists(outputFile)) {
+      if (isConditional(step, flowDef) && fileSystem.exists(outputFile)) {
         try { rawOutputContent = fileSystem.readFile(outputFile); } catch { /* no-op */ }
       }
 
@@ -788,7 +723,7 @@ export class PipelineRunner {
 
       // --- conditional step 処理 (bugfix/rebuildcheck) ---
 
-      if (isConditional(step)) {
+      if (isConditional(step, flowDef)) {
         switch (step) {
           case "bugfix": {
             const reclassifyMatch = /\[RECLASSIFY: ([A-Z]+)\]/.exec(rawOutputContent);
@@ -839,7 +774,7 @@ export class PipelineRunner {
       // --- review verdict 処理 (GO/CONDITIONAL/NO-GO) ---
 
       const verdict = dispatchResult.verdict;
-      if (isReview(step) && verdict) {
+      if (isReview(step, flowDef) && verdict) {
         if (verdict === "NO-GO") {
           stateManager.setStatus(stateFile, "paused", `NO-GO verdict at ${step}`);
           emitEvent({ action: "pause", step, reason: "NO-GO verdict" });
@@ -1200,13 +1135,14 @@ export class PipelineRunner {
     totalSteps: number,
     _config: PoorDevConfig | null,
     fileSystem: Pick<FileSystem, "exists" | "writeFile" | "readdir" | "removeFile">,
-    emit: EventEmitter
+    emit: EventEmitter,
+    flowDef: FlowDefinition
   ): void {
     const headers = ["non_interactive"];
     if (step === "specify") headers.push("readonly");
 
     // コンテキストファイル収集
-    const ctxArgs = contextArgsForStep(step, fd, fileSystem);
+    const ctxArgs = contextArgsForStep(step, fd, fileSystem, flowDef);
 
     // pipeline メタデータコンテキスト
     const pipelineCtxFile = `/tmp/poor-dev-pipeline-ctx-${step}-${process.pid}.txt`;

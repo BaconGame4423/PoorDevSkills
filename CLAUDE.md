@@ -35,6 +35,15 @@
   - minor: コマンド追加、エージェント追加、機能追加
   - major: 破壊的変更（コマンド体系変更、ディレクトリ構造変更）
 
+## Agent Teams フロー (poor-dev.team)
+
+- `/poor-dev.team` 実行中は TS ヘルパー (`npx poor-dev-next`) の JSON 指示に従う
+- Phase 0 はチームメイト不使用。Opus が直接ユーザーと議論
+- レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（直接通信しない）
+- compaction 後の回復: `pipeline-state.json` を読み、`npx poor-dev-next` 再実行
+- チーム名: `pd-<step>-<NNN>`
+- カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能
+
 ## ベンチマーク
 
 - ベンチマーク基盤の詳細は [docs/benchmarks.md](docs/benchmarks.md) を参照

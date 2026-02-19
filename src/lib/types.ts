@@ -56,6 +56,9 @@ export interface PipelineState {
   // 動的追加フィールド（init スキーマ外）
   implement_phases_completed?: string[];
   retries?: RetryRecord[];
+  // Agent Teams 拡張フィールド
+  teamPhase?: string;
+  reviewIterations?: number;
 }
 
 // --- フェーズ分割 ---

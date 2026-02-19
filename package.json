@@ -4,7 +4,8 @@
   "type": "module",
   "description": "AI-powered development workflow slash commands for OpenCode & Claude Code",
   "bin": {
-    "poor-dev": "./bin/poor-dev.mjs"
+    "poor-dev": "./bin/poor-dev.mjs",
+    "poor-dev-next": "./dist/bin/poor-dev-next.js"
   },
   "files": [
     "bin/",
@@ -36,6 +37,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "sync-agents": "npx tsx scripts/sync-agents.ts",
+    "sync-agents:check": "npx tsx scripts/sync-agents.ts --check",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version"

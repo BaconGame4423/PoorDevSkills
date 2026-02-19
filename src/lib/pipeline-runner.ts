@@ -635,15 +635,8 @@ export class PipelineRunner {
       if (step === "implement") {
         retryOpts.preRetryHook = async () => {
           if (gitOps.hasGitDir(projectDir)) {
-            try {
-              execFileSync("git", ["-C", projectDir, "checkout", "--", "."], { stdio: "pipe" });
-            } catch { /* no-op */ }
-            try {
-              execFileSync(
-                "git", ["-C", projectDir, "clean", "-fd", "--exclude=specs/"],
-                { stdio: "pipe" }
-              );
-            } catch { /* no-op */ }
+            try { gitOps.git(projectDir, ["checkout", "--", "."]); } catch { /* no-op */ }
+            try { gitOps.git(projectDir, ["clean", "-fd", "--exclude=specs/"]); } catch { /* no-op */ }
           }
         };
       }
@@ -852,15 +845,8 @@ export class PipelineRunner {
       // code-trace.md §8 Bug 1 参照。
       const preRetryHook = async () => {
         if (gitOps.hasGitDir(projectDir)) {
-          try {
-            execFileSync("git", ["-C", projectDir, "checkout", "--", "."], { stdio: "pipe" });
-          } catch { /* no-op */ }
-          try {
-            execFileSync(
-              "git", ["-C", projectDir, "clean", "-fd", "--exclude=specs/"],
-              { stdio: "pipe" }
-            );
-          } catch { /* no-op */ }
+          try { gitOps.git(projectDir, ["checkout", "--", "."]); } catch { /* no-op */ }
+          try { gitOps.git(projectDir, ["clean", "-fd", "--exclude=specs/"]); } catch { /* no-op */ }
         }
       };
 

@@ -110,6 +110,7 @@ export interface PoorDevConfig {
   };
   retry?: Partial<RetryConfig>;
   command_variant?: string;
+  review_mode?: "llm" | "bash";
   review_depth?: "auto" | "deep" | "standard" | "light";
   parallel?:
     | "on"

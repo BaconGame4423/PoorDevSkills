@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ReviewRunner } from "../lib/review-runner.js";
 import type { ReviewRunnerDeps } from "../lib/review-runner.js";
 import { makeDispatcher, makeFileSystem } from "./fixtures/mocks.js";
+import * as nodeFs from "node:fs";
 
 // --- execFileSync を vi.mock でスタブ化 ---
 // review-runner.ts は node:child_process の execFileSync を直接使用するため、
@@ -27,8 +28,21 @@ vi.mock("node:child_process", () => ({
   execFileSync: vi.fn(),
 }));
 
+// --- dispatchWithRetry をスパイ (call-through) ---
+// RetryOptions に stateManager が渡されないことを検証するため
+
+vi.mock("../lib/retry-helpers.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/retry-helpers.js")>();
+  return {
+    ...actual,
+    dispatchWithRetry: vi.fn(actual.dispatchWithRetry),
+  };
+});
+
 import { execFileSync } from "node:child_process";
+import { dispatchWithRetry } from "../lib/retry-helpers.js";
 const mockedExecFileSync = vi.mocked(execFileSync);
+const dispatchWithRetrySpy = vi.mocked(dispatchWithRetry);
 
 // --- ReviewSetup のデフォルトレスポンス ---
 
@@ -90,6 +104,7 @@ describe("ReviewRunner", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockedExecFileSync.mockReset();
+    dispatchWithRetrySpy.mockClear();
   });
 
   afterEach(() => {
@@ -197,11 +212,10 @@ describe("ReviewRunner", () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    // 全ペルソナ失敗（commandFile は存在するが promptFile が生成されないため
-    // persona dispatch は success=false になる）
-    // その場合 converged=false のままループ継続 or rate-limit
-    // ここでは exitCode が 0 or 3 であることを確認
-    expect([0, 3]).toContain(result.exitCode);
+    // 全ペルソナ失敗:
+    // commandFile は存在するが fs.statSync(TARGET_FILE) が ENOENT を投げるため
+    // dispatchPersona が reject → failedCount === personas.length → exitCode=3
+    expect(result.exitCode).toBe(3);
   });
 
   // ---------------------------------------------------------------
@@ -264,22 +278,63 @@ describe("ReviewRunner", () => {
   // code-trace.md §3-3: review-runner サブシェルでは STATE_FILE 未設定
   // ---------------------------------------------------------------
 
-  it("review-runner は RetryOptions に stateManager を渡さない（logRetry no-op 保証）", () => {
-    // このテストは review-runner.ts の dispatchPersona 関数の設計を検証する。
-    // retryOpts に stateManager が含まれないことを、ソースコードのコメントと
-    // ts-migration-priority.md §3-3 の記述から確認する。
-    //
-    // 実装: review-runner.ts L347-351
-    //   const retryOpts: RetryOptions = {
-    //     config: config?.retry ?? {},
-    //     maxRetriesOverride: MAX_RETRIES_PER_PERSONA,
-    //   };
-    //   // stateManager なし = logRetry は呼ばれない
-    //
-    // これは retry-helpers.test.ts の
-    // "stateManager 未設定のとき logRetry は呼ばれない" テストで検証済み。
-    //
-    // 本テストはドキュメントテストとして設計意図を明示する。
-    expect(true).toBe(true);  // 設計仕様の明示的な確認
+  it("review-runner は RetryOptions に stateManager を渡さない（logRetry no-op 保証）", async () => {
+    // execFileSync を用途別にモックして composePrompt を成功させる:
+    // - review-setup.sh → JSON レスポンス
+    // - compose-prompt.sh → promptFile を実際に /tmp へ書き込む（fs.existsSync が true になる）
+    // - review-aggregate.sh → JSON レスポンス
+    // - その他 → ""
+    mockedExecFileSync.mockImplementation((_cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      const script = argsArr[0] ?? "";
+      if (script.includes("review-setup.sh")) {
+        return makeSetupOutput() as unknown as ReturnType<typeof execFileSync>;
+      }
+      if (script.includes("compose-prompt.sh")) {
+        // promptFile (argsArr[2]) を実際に書き出す
+        if (argsArr[2]) nodeFs.writeFileSync(argsArr[2], "mock prompt");
+        return "" as unknown as ReturnType<typeof execFileSync>;
+      }
+      if (script.includes("review-aggregate.sh")) {
+        return makeAggregateOutput({ converged: true }) as unknown as ReturnType<typeof execFileSync>;
+      }
+      return "" as unknown as ReturnType<typeof execFileSync>;
+    });
+
+    // fs.statSync をスタブして TARGET_FILE がディレクトリとして見えるようにする
+    // （実在しないパスへの statSync は ENOENT を投げるため）
+    const statSyncStub = vi.spyOn(nodeFs, "statSync").mockReturnValue({
+      isDirectory: () => true,
+    } as ReturnType<typeof nodeFs.statSync>);
+
+    const fileSystem = makeFileSystem({
+      "/project/commands/poor-dev.qualityreview-code.md": "# code review",
+      "/project/commands/poor-dev.qualityreview-security.md": "# security review",
+    });
+
+    const runner = new ReviewRunner({ ...makeDeps(), fileSystem });
+    const promise = runner.run(REVIEW_TYPE, TARGET_FILE, FEATURE_DIR, PROJECT_DIR, () => {});
+    await vi.runAllTimersAsync();
+    await promise;
+
+    statSyncStub.mockRestore();
+
+    // 一時 promptFile を削除
+    for (const call of mockedExecFileSync.mock.calls) {
+      const argsArr = call[1] as string[] | undefined;
+      if (argsArr?.[0]?.includes("compose-prompt.sh") && argsArr[2]) {
+        try { nodeFs.unlinkSync(argsArr[2]); } catch { /* ignore */ }
+      }
+    }
+
+    // dispatchWithRetry が少なくとも1回呼ばれた（ペルソナが実際にディスパッチされた）
+    expect(dispatchWithRetrySpy).toHaveBeenCalled();
+
+    // 全ての呼び出しで RetryOptions に stateManager が含まれていないことを確認
+    // review-runner.ts L347-350: retryOpts = { config, maxRetriesOverride } のみ
+    for (const call of dispatchWithRetrySpy.mock.calls) {
+      const retryOpts = call[8]; // 9番目の引数 (options: RetryOptions)
+      expect(retryOpts).not.toHaveProperty("stateManager");
+    }
   });
 });

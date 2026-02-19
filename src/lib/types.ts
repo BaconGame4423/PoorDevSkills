@@ -120,4 +120,5 @@ export interface PoorDevConfig {
     | "worktree"
     | "phase-split";
   gates?: Record<string, boolean>;
+  auto_approve?: boolean;
 }

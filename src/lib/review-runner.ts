@@ -15,13 +15,16 @@
  */
 
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import os from "node:os";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 
 import { dispatchWithRetry, type RetryOptions } from "./retry-helpers.js";
-import type { Dispatcher, FileSystem } from "./interfaces.js";
+import type { Dispatcher, FileSystem, GitOps } from "./interfaces.js";
 import type { ReviewResult, ReviewVerdict, ReviewExitCode, PoorDevConfig } from "./types.js";
+import { setupReview } from "./review-setup.js";
+import { aggregateReviews } from "./review-aggregate.js";
+import { updateReviewLog } from "./review-log-update.js";
 
 // --- 型定義 ---
 
@@ -57,6 +60,7 @@ export interface ReviewRunnerDeps {
   fileSystem: FileSystem;
   dispatcher: Dispatcher;
   config: PoorDevConfig | null;
+  gitOps?: GitOps;
 }
 
 // --- 定数 ---
@@ -65,121 +69,6 @@ const MAX_RETRIES_PER_PERSONA = 1;
 const PROTECTED_DIRS_RE = /^(agents\/|commands\/|lib\/|\.poor-dev\/|\.opencode\/|\.claude\/)/;
 
 // --- ヘルパー ---
-
-/**
- * review-setup.sh を呼び出して ReviewSetup を取得する。
- * P2 移植範囲外 → 外部プロセス呼び出しを維持。
- */
-function runReviewSetup(
-  scriptDir: string,
-  reviewType: string,
-  targetFile: string,
-  featureDir: string,
-  projectDir: string
-): ReviewSetup {
-  const output = execFileSync(
-    "bash",
-    [
-      path.join(scriptDir, "review-setup.sh"),
-      "--type", reviewType,
-      "--target", targetFile,
-      "--feature-dir", featureDir,
-      "--project-dir", projectDir,
-    ],
-    { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
-  );
-
-  const json = JSON.parse(output) as {
-    max_iterations: number;
-    next_id: number;
-    log_path: string;
-    id_prefix: string;
-    depth: string;
-    personas: Array<{ name: string; cli: string; model: string }>;
-    fixer: { agent_name: string };
-  };
-
-  return {
-    maxIterations: json.max_iterations,
-    nextId: json.next_id,
-    logPath: json.log_path,
-    idPrefix: json.id_prefix,
-    depth: json.depth,
-    personas: json.personas,
-    fixer: { agentName: json.fixer.agent_name },
-  };
-}
-
-/**
- * review-aggregate.sh を呼び出して集約結果を取得する。
- */
-function runReviewAggregate(
-  scriptDir: string,
-  outputDir: string,
-  logPath: string,
-  idPrefix: string,
-  nextId: number,
-  reviewType: string
-): AggregateResult {
-  const output = execFileSync(
-    "bash",
-    [
-      path.join(scriptDir, "review-aggregate.sh"),
-      "--output-dir", outputDir,
-      "--log", logPath,
-      "--id-prefix", idPrefix,
-      "--next-id", String(nextId),
-      "--review-type", reviewType,
-    ],
-    { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
-  );
-
-  const json = JSON.parse(output) as {
-    total: number;
-    C: number;
-    H: number;
-    next_id: number;
-    issues_file: string;
-    converged: boolean;
-    verdicts: string;
-  };
-
-  return {
-    total: json.total,
-    C: json.C,
-    H: json.H,
-    nextId: json.next_id,
-    issuesFile: json.issues_file,
-    converged: json.converged,
-    verdicts: json.verdicts,
-  };
-}
-
-/**
- * review-log-update.sh を呼び出してログを更新する。
- */
-function runReviewLogUpdate(
-  scriptDir: string,
-  logPath: string,
-  issuesFile: string,
-  verdicts: string,
-  iteration: number,
-  fixedIds: string
-): void {
-  const args = [
-    path.join(scriptDir, "review-log-update.sh"),
-    "--log", logPath,
-    "--issues-file", issuesFile,
-    "--verdicts", verdicts,
-    "--iteration", String(iteration),
-  ];
-  if (fixedIds) {
-    args.push("--fixed", fixedIds);
-  }
-  try {
-    execFileSync("bash", args, { stdio: "pipe" });
-  } catch { /* no-op */ }
-}
 
 /**
  * コマンドファイルを解決する（variant 優先チェーン）。
@@ -411,7 +300,7 @@ export class ReviewRunner {
     projectDir: string,
     emit: ReviewEmitter = console.log
   ): Promise<ReviewResult> {
-    const { fileSystem, dispatcher, config } = this.deps;
+    const { fileSystem, dispatcher, config, gitOps } = this.deps;
     const scriptDir = path.join(projectDir, "lib");
     const fd = path.join(projectDir, featureDir);
 
@@ -432,7 +321,24 @@ export class ReviewRunner {
 
     let setup: ReviewSetup;
     try {
-      setup = runReviewSetup(scriptDir, reviewType, targetFile, featureDir, projectDir);
+      const setupResult = setupReview({
+        reviewType,
+        targetFile,
+        featureDir,
+        projectDir,
+        gitOps: gitOps ?? null,
+        fileSystem,
+        config,
+      });
+      setup = {
+        maxIterations: setupResult.maxIterations,
+        nextId: setupResult.nextId,
+        logPath: setupResult.logPath,
+        idPrefix: setupResult.idPrefix,
+        depth: setupResult.depth,
+        personas: setupResult.personas,
+        fixer: { agentName: setupResult.fixer.agentName },
+      };
     } catch (err) {
       emit({ review: reviewType, status: "error", reason: String(err) });
       return { verdict: "NO-GO", iterations: 0, converged: false, exitCode: 1 };
@@ -519,9 +425,14 @@ export class ReviewRunner {
 
       let agg: AggregateResult;
       try {
-        agg = runReviewAggregate(
-          scriptDir, outputDir, logPath, setup.idPrefix, nextId, reviewType
-        );
+        agg = aggregateReviews({
+          outputDir,
+          logPath,
+          idPrefix: setup.idPrefix,
+          nextId,
+          reviewType,
+          fileSystem,
+        });
       } catch (err) {
         emit({ review: reviewType, status: "error", reason: `aggregate failed: ${String(err)}` });
         fileSystem.removeDir(outputDir);
@@ -542,9 +453,14 @@ export class ReviewRunner {
 
       // --- Step 3: ログ更新 ---
 
-      runReviewLogUpdate(
-        scriptDir, logPath, agg.issuesFile, agg.verdicts, iter, fixedIds
-      );
+      updateReviewLog({
+        logPath,
+        issuesFile: agg.issuesFile,
+        verdicts: agg.verdicts,
+        iteration: iter,
+        ...(fixedIds ? { fixedIds } : {}),
+        fileSystem,
+      });
       fixedIds = "";
 
       // --- Step 4: 収束チェック ---

@@ -15,11 +15,13 @@
 
 import path from "node:path";
 import fs from "node:fs";
-import { execFileSync } from "node:child_process";
-
 import { dispatchWithRetry, type RetryOptions } from "./retry-helpers.js";
 import type { GitOps, FileSystem, Dispatcher, PipelineStateManager } from "./interfaces.js";
 import type { PipelineState, PoorDevConfig, TaskPhase } from "./types.js";
+import { composePrompt as composePromptTs } from "./compose-prompt.js";
+import { extractOutput } from "./extract-output.js";
+import { validateTasks } from "./tasks-validate.js";
+import { ReviewRunner } from "./review-runner.js";
 
 // --- 型定義 ---
 
@@ -605,9 +607,51 @@ export class PipelineRunner {
 
       if (isReview(step)) {
         const reviewMode = config?.review_mode ?? "llm";
-        // TODO: bash mode dispatch は review-runner.ts 統合後に実装 (P4)
-        // 現時点は LLM mode のみ有効。bash mode は通常 dispatch でバイパスされる。
-        void reviewMode;
+
+        if (reviewMode === "bash") {
+          // review-runner.ts (bash-driven mode) を呼び出す
+          const reviewTargets: Record<string, string> = {
+            planreview: path.join(fd, "plan.md"),
+            tasksreview: path.join(fd, "tasks.md"),
+          };
+          const reviewTarget = reviewTargets[step] ?? fd;
+
+          emitEvent({ step, status: "review-bash", mode: "bash" });
+
+          const reviewRunner = new ReviewRunner({
+            fileSystem,
+            dispatcher,
+            config,
+            gitOps,
+          });
+
+          let reviewResult;
+          try {
+            reviewResult = await reviewRunner.run(
+              step, reviewTarget, opts.featureDir, projectDir, emitEvent
+            );
+          } catch {
+            reviewResult = { exitCode: 1 as const, verdict: "NO-GO" as const, iterations: 0, converged: false };
+          }
+
+          if (reviewResult.exitCode === 3) {
+            stateManager.setStatus(stateFile, "rate-limited", `Rate limit at review ${step}`);
+            return { exitCode: 3, events };
+          }
+          if (reviewResult.exitCode === 2) {
+            stateManager.setStatus(stateFile, "paused", `NO-GO verdict at ${step}`);
+            emitEvent({ action: "pause", step, reason: "NO-GO verdict" });
+            return { exitCode: 2, events };
+          }
+          if (reviewResult.exitCode !== 0) {
+            emitEvent({ step, warning: `review-runner exited with code ${reviewResult.exitCode}` });
+          }
+
+          stateManager.completeStep(stateFile, step);
+          completedSet.add(step);
+          emitEvent({ step, status: "step_complete", progress: `${stepCount}/${totalSteps}`, mode: "bash" });
+          continue;
+        }
       }
 
       // =========================================================
@@ -677,14 +721,137 @@ export class PipelineRunner {
         return { exitCode: 1, events };
       }
 
+      // --- 結果ファイル読み込み ---
+
+      interface DispatchResult {
+        exit_code?: number;
+        errors?: string[];
+        timeout_type?: string;
+        verdict?: string | null;
+        clarifications?: string[];
+      }
+      let dispatchResult: DispatchResult = {};
+      try {
+        if (fileSystem.exists(resultFile)) {
+          dispatchResult = JSON.parse(fileSystem.readFile(resultFile)) as DispatchResult;
+        }
+      } catch { /* no-op */ }
+      fileSystem.removeFile(resultFile);
+
+      // エラー / タイムアウトチェック
+      if ((dispatchResult.errors?.length ?? 0) > 0) {
+        emitEvent({ step, status: "error", errors: dispatchResult.errors });
+        return { exitCode: 1, events };
+      }
+      if (dispatchResult.timeout_type && dispatchResult.timeout_type !== "none") {
+        emitEvent({ step, status: "timeout", timeout_type: dispatchResult.timeout_type });
+        return { exitCode: 1, events };
+      }
+
+      // --- 出力抽出 (specify/suggest/plan/tasks → アーティファクトファイル) ---
+
+      const outputFile = `/tmp/poor-dev-output-${step}-${process.pid}.txt`;
+      const outputArtifacts: Record<string, string> = {
+        specify: path.join(fd, "spec.md"),
+        suggest: path.join(fd, "suggestions.yaml"),
+        plan: path.join(fd, "plan.md"),
+        tasks: path.join(fd, "tasks.md"),
+      };
+      const saveTo = outputArtifacts[step];
+
+      // conditional step 処理のために出力ファイルを先読みしておく
+      let rawOutputContent = "";
+      if (isConditional(step) && fileSystem.exists(outputFile)) {
+        try { rawOutputContent = fileSystem.readFile(outputFile); } catch { /* no-op */ }
+      }
+
+      if (saveTo && fileSystem.exists(outputFile)) {
+        const extractResult = extractOutput(outputFile, saveTo);
+        if (extractResult.status !== "ok") {
+          fileSystem.removeFile(outputFile);
+          emitEvent({ step, status: "error", reason: "output extraction failed", detail: extractResult.error ?? "unknown" });
+          return { exitCode: 1, events };
+        }
+      }
+      fileSystem.removeFile(outputFile);
+
       // --- 成果物バリデーション ---
 
-      if (step === "specify") {
-        const specFile = path.join(fd, "spec.md");
-        if (!fileSystem.exists(specFile)) {
-          emitEvent({ step: "specify", status: "error", reason: "spec.md not extracted" });
-          fileSystem.removeFile(resultFile);
-          return { exitCode: 1, events };
+      if (step === "specify" && !fileSystem.exists(path.join(fd, "spec.md"))) {
+        emitEvent({ step: "specify", status: "error", reason: "spec.md not extracted" });
+        return { exitCode: 1, events };
+      }
+
+      // tasks: フォーマットバリデーション
+      if (step === "tasks" && fileSystem.exists(path.join(fd, "tasks.md"))) {
+        const tasksContent = fileSystem.readFile(path.join(fd, "tasks.md"));
+        const validation = validateTasks(tasksContent);
+        if (!validation.valid) {
+          emitEvent({ step: "tasks", warning: "tasks.md format validation failed", validation });
+        }
+      }
+
+      // --- conditional step 処理 (bugfix/rebuildcheck) ---
+
+      if (isConditional(step)) {
+        switch (step) {
+          case "bugfix": {
+            const reclassifyMatch = /\[RECLASSIFY: ([A-Z]+)\]/.exec(rawOutputContent);
+            const scaleMatch = /\[SCALE: ([A-Z]+)\]/.exec(rawOutputContent);
+            const reclassify = reclassifyMatch?.[1] ?? "";
+            const scale = scaleMatch?.[1] ?? "";
+
+            if (reclassify === "FEATURE") {
+              stateManager.setStatus(stateFile, "paused", "Reclassified as feature");
+              emitEvent({ step, status: "reclassify", target: "feature" });
+              return { exitCode: 2, events };
+            } else if (scale === "SMALL") {
+              const newPipeline = ["bugfix", "planreview", "implement", "qualityreview", "phasereview"];
+              stateManager.setVariant(stateFile, "bugfix-small", { scale: "SMALL" });
+              stateManager.setPipeline(stateFile, newPipeline);
+              pipelineSteps = newPipeline;
+              totalSteps = newPipeline.length;
+            } else if (scale === "LARGE") {
+              const newPipeline = ["bugfix", "plan", "planreview", "tasks", "tasksreview", "implement", "architecturereview", "qualityreview", "phasereview"];
+              stateManager.setVariant(stateFile, "bugfix-large", { scale: "LARGE" });
+              stateManager.setPipeline(stateFile, newPipeline);
+              pipelineSteps = newPipeline;
+              totalSteps = newPipeline.length;
+            }
+            break;
+          }
+          case "rebuildcheck": {
+            const verdictMatch = /\[VERDICT: ([A-Z]+)\]/.exec(rawOutputContent);
+            const rebuildVerdict = verdictMatch?.[1] ?? "";
+
+            if (rebuildVerdict === "REBUILD") {
+              const newPipeline = ["rebuildcheck", "harvest", "plan", "planreview", "tasks", "tasksreview", "implement", "architecturereview", "qualityreview", "phasereview"];
+              stateManager.setVariant(stateFile, "discovery-rebuild", { verdict: "REBUILD" });
+              stateManager.setPipeline(stateFile, newPipeline);
+              pipelineSteps = newPipeline;
+              totalSteps = newPipeline.length;
+            } else if (rebuildVerdict === "CONTINUE") {
+              stateManager.setVariant(stateFile, "discovery-continue", { verdict: "CONTINUE" });
+              stateManager.setStatus(stateFile, "paused", "CONTINUE verdict");
+              emitEvent({ step, status: "paused", verdict: "CONTINUE" });
+              return { exitCode: 0, events };
+            }
+            break;
+          }
+        }
+      }
+
+      // --- review verdict 処理 (GO/CONDITIONAL/NO-GO) ---
+
+      const verdict = dispatchResult.verdict;
+      if (isReview(step) && verdict) {
+        if (verdict === "NO-GO") {
+          stateManager.setStatus(stateFile, "paused", `NO-GO verdict at ${step}`);
+          emitEvent({ action: "pause", step, reason: "NO-GO verdict" });
+          return { exitCode: 2, events };
+        }
+        if (verdict === "CONDITIONAL") {
+          emitEvent({ step, status: "conditional", verdict: "CONDITIONAL" });
         }
       }
 
@@ -708,7 +875,28 @@ export class PipelineRunner {
       stateManager.completeStep(stateFile, step);
       completedSet.add(step);
 
-      fileSystem.removeFile(resultFile);
+      // --- clarification gate (after specify) ---
+
+      const clarifications = dispatchResult.clarifications ?? [];
+      if (step === "specify" && clarifications.length > 0) {
+        fileSystem.writeFile(
+          path.join(fd, "pending-clarifications.json"),
+          JSON.stringify(clarifications, null, 2)
+        );
+        stateManager.setApproval(stateFile, "clarification", step);
+        emitEvent({ step, status: "awaiting-approval", type: "clarification", count: clarifications.length });
+        return { exitCode: 2, events };
+      }
+
+      // --- gate チェック (after-${step}) ---
+
+      const autoApprove = config?.auto_approve ?? false;
+      const gateKey = `after-${step}`;
+      if (config?.gates?.[gateKey] && !autoApprove) {
+        stateManager.setApproval(stateFile, "gate", step);
+        emitEvent({ action: "gate", step, gate: gateKey });
+        return { exitCode: 2, events };
+      }
 
       emitEvent({
         step,
@@ -996,8 +1184,8 @@ export class PipelineRunner {
   }
 
   /**
-   * compose-prompt.sh を外部プロセスとして呼び出す。
-   * P4 移植まではシェルスクリプト呼び出しを維持。
+   * compose-prompt.ts を呼び出してプロンプトファイルを生成する。
+   * compose-prompt.sh から TS 版に移行済み。
    */
   private composePrompt(
     commandFile: string,
@@ -1009,31 +1197,17 @@ export class PipelineRunner {
     summary: string,
     stepCount: number,
     totalSteps: number,
-    config: PoorDevConfig | null,
-    fileSystem: Pick<FileSystem, "exists" | "writeFile" | "readdir">,
+    _config: PoorDevConfig | null,
+    fileSystem: Pick<FileSystem, "exists" | "writeFile" | "readdir" | "removeFile">,
     emit: EventEmitter
   ): void {
-    const scriptDir = path.join(process.cwd(), "lib");
-    const composeScript = path.join(scriptDir, "compose-prompt.sh");
+    const headers = ["non_interactive"];
+    if (step === "specify") headers.push("readonly");
 
-    if (!fs.existsSync(composeScript)) {
-      emit({ step, warning: "compose-prompt.sh not found, skipping prompt composition" });
-      return;
-    }
-
-    const args = [composeScript, commandFile, promptFile, "--header", "non_interactive"];
-
-    if (step === "specify") {
-      args.push("--header", "readonly");
-    }
-
-    // context args
+    // コンテキストファイル収集
     const ctxArgs = contextArgsForStep(step, fd, fileSystem);
-    for (const [key, val] of Object.entries(ctxArgs)) {
-      args.push("--context", `${key}=${val}`);
-    }
 
-    // pipeline metadata context
+    // pipeline メタデータコンテキスト
     const pipelineCtxFile = `/tmp/poor-dev-pipeline-ctx-${step}-${process.pid}.txt`;
     fileSystem.writeFile(
       pipelineCtxFile,
@@ -1044,33 +1218,35 @@ export class PipelineRunner {
         `- Step: ${step} (${stepCount}/${totalSteps})`,
       ].join("\n")
     );
-    args.push("--context", `pipeline=${pipelineCtxFile}`);
+    ctxArgs["pipeline"] = pipelineCtxFile;
 
-    try {
-      execFileSync("bash", args, { stdio: "pipe" });
-    } catch {
-      emit({ step, warning: "compose-prompt.sh failed" });
+    const result = composePromptTs({
+      commandFile,
+      outputFile: promptFile,
+      headers,
+      contexts: ctxArgs,
+    });
+
+    // 一時ファイルをクリーンアップ
+    try { fileSystem.removeFile(pipelineCtxFile); } catch { /* no-op */ }
+
+    if (!result.success) {
+      emit({ step, warning: `compose-prompt failed: ${result.error ?? "unknown"}` });
     }
   }
 
-  /** compose-prompt.sh の最小ラッパー（フェーズ向け） */
+  /** compose-prompt.ts の最小ラッパー（フェーズ向け） */
   private runComposePrompt(
     commandFile: string,
     promptFile: string,
     header: string,
     contextFiles: Record<string, string>
   ): void {
-    const scriptDir = path.join(process.cwd(), "lib");
-    const composeScript = path.join(scriptDir, "compose-prompt.sh");
-    if (!fs.existsSync(composeScript)) return;
-
-    const args = [composeScript, commandFile, promptFile, "--header", header];
-    for (const [key, val] of Object.entries(contextFiles)) {
-      args.push("--context", `${key}=${val}`);
-    }
-
-    try {
-      execFileSync("bash", args, { stdio: "pipe" });
-    } catch { /* no-op */ }
+    composePromptTs({
+      commandFile,
+      outputFile: promptFile,
+      headers: [header],
+      contexts: contextFiles,
+    });
   }
 }

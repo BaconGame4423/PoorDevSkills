@@ -301,23 +301,17 @@ describe("ReviewRunner", () => {
       return "" as unknown as ReturnType<typeof execFileSync>;
     });
 
-    // fs.statSync をスタブして TARGET_FILE がディレクトリとして見えるようにする
-    // （実在しないパスへの statSync は ENOENT を投げるため）
-    const statSyncStub = vi.spyOn(nodeFs, "statSync").mockReturnValue({
-      isDirectory: () => true,
-    } as ReturnType<typeof nodeFs.statSync>);
-
     const fileSystem = makeFileSystem({
       "/project/commands/poor-dev.qualityreview-code.md": "# code review",
       "/project/commands/poor-dev.qualityreview-security.md": "# security review",
     });
 
     const runner = new ReviewRunner({ ...makeDeps(), fileSystem });
-    const promise = runner.run(REVIEW_TYPE, TARGET_FILE, FEATURE_DIR, PROJECT_DIR, () => {});
+    // TARGET_FILE に実在するディレクトリ(/tmp)を使用することで
+    // fs.statSync のモックが不要になる（ESM では vi.spyOn(nodeFs, ...) は不可）
+    const promise = runner.run(REVIEW_TYPE, "/tmp", FEATURE_DIR, PROJECT_DIR, () => {});
     await vi.runAllTimersAsync();
     await promise;
-
-    statSyncStub.mockRestore();
 
     // 一時 promptFile を削除
     for (const call of mockedExecFileSync.mock.calls) {

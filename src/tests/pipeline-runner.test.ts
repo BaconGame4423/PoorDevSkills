@@ -611,11 +611,6 @@ describe("PipelineRunner.run()", () => {
         _max: number,
         resultFile: string
       ) => {
-        // result ファイルに NO-GO を書き込む
-        (fileSystem.writeFile as ReturnType<typeof vi.fn>).getMockImplementation()?.call(
-          null, resultFile,
-          JSON.stringify({ exit_code: 0, errors: [], timeout_type: "none", verdict: "NO-GO", clarifications: [] })
-        );
         // fileSystem を直接操作してファイルを登録
         fileSystem.writeFile(resultFile, JSON.stringify({
           exit_code: 0, errors: [], timeout_type: "none", verdict: "NO-GO", clarifications: [],
@@ -852,8 +847,8 @@ describe("PipelineRunner.run()", () => {
     );
     // pending-clarifications.json が保存されているか
     const writeCalls = (fileSystem.writeFile as ReturnType<typeof vi.fn>).mock.calls;
-    const pendingWrite = writeCalls.find(([p]: [string]) =>
-      p.includes("pending-clarifications.json")
+    const pendingWrite = writeCalls.find(([p]: string[]) =>
+      p?.includes("pending-clarifications.json")
     );
     expect(pendingWrite).toBeDefined();
   });

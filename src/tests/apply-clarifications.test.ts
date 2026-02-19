@@ -92,7 +92,7 @@ describe("applyClarifications - 正常系", () => {
 
     // spec.md が更新されているか
     const writeCalls = (fileSystem.writeFile as ReturnType<typeof vi.fn>).mock.calls;
-    const specWrite = writeCalls.find(([p]: [string]) => p === "/fd/spec.md");
+    const specWrite = writeCalls.find(([p]: string[]) => p === "/fd/spec.md");
     expect(specWrite).toBeDefined();
     const written = specWrite![1] as string;
     expect(written).toContain("## Clarifications");
@@ -114,8 +114,8 @@ describe("applyClarifications - 正常系", () => {
     });
 
     const removeCalls = (fileSystem.removeFile as ReturnType<typeof vi.fn>).mock.calls;
-    const pendingRemoved = removeCalls.some(([p]: [string]) =>
-      p.includes("pending-clarifications.json")
+    const pendingRemoved = removeCalls.some(([p]: string[]) =>
+      p?.includes("pending-clarifications.json")
     );
     expect(pendingRemoved).toBe(true);
   });
@@ -169,7 +169,7 @@ describe("applyClarifications - 正常系", () => {
     });
 
     const writeCalls = (fileSystem.writeFile as ReturnType<typeof vi.fn>).mock.calls;
-    const specWrite = writeCalls.find(([p]: [string]) => p === "/fd/spec.md");
+    const specWrite = writeCalls.find(([p]: string[]) => p === "/fd/spec.md");
     const written = specWrite![1] as string;
     expect(written).toContain("What is the target audience?");
     expect(written).not.toContain("[NEEDS CLARIFICATION:");

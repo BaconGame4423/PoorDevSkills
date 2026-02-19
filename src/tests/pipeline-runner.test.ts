@@ -564,4 +564,297 @@ describe("PipelineRunner.run()", () => {
     // resume 時に clearApproval が呼ばれている
     expect(sm.clearApproval).toHaveBeenCalledWith(STATE_FILE);
   });
+
+  // ---------------------------------------------------------------
+  // review verdict: NO-GO → pause + exitCode=2
+  // ---------------------------------------------------------------
+
+  it("review step で NO-GO verdict → pause イベントを出して exitCode=2", async () => {
+    const FD = "/project/specs/my-feature";
+    const STATE_FILE = `${FD}/pipeline-state.json`;
+    const PLANREVIEW_CMD = "/project/.opencode/command/poor-dev.planreview.md";
+    const PLAN_MD = `${FD}/plan.md`;
+
+    const savedState: PipelineState = {
+      flow: "feature",
+      variant: null,
+      pipeline: ["planreview"],
+      completed: [],
+      current: "planreview",
+      status: "active",
+      pauseReason: null,
+      condition: null,
+      pendingApproval: null,
+      updated: "2026-02-19T00:00:00Z",
+    };
+
+    const sm = makeStateManager({ read: vi.fn(() => ({ ...savedState })) });
+
+    // promptFile をモックに追加（composePromptTs が実際の FS でコマンドファイルを読めないため）
+    const PROMPT_FILE = `/tmp/poor-dev-prompt-planreview-${process.pid}.txt`;
+
+    // resultFile に NO-GO verdict を設定
+    const fileSystem = makeFileSystem({
+      [STATE_FILE]: JSON.stringify(savedState),
+      [PLANREVIEW_CMD]: "# planreview command",
+      [PLAN_MD]: "# Plan",
+      [PROMPT_FILE]: "# composed prompt",
+    });
+
+    // dispatcher は成功 (exitCode=0) を返すが、resultFile には verdict:NO-GO を書き込む
+    const dispatcher = {
+      dispatch: vi.fn(async (
+        _step: string,
+        _dir: string,
+        _prompt: string,
+        _idle: number,
+        _max: number,
+        resultFile: string
+      ) => {
+        // result ファイルに NO-GO を書き込む
+        (fileSystem.writeFile as ReturnType<typeof vi.fn>).getMockImplementation()?.call(
+          null, resultFile,
+          JSON.stringify({ exit_code: 0, errors: [], timeout_type: "none", verdict: "NO-GO", clarifications: [] })
+        );
+        // fileSystem を直接操作してファイルを登録
+        fileSystem.writeFile(resultFile, JSON.stringify({
+          exit_code: 0, errors: [], timeout_type: "none", verdict: "NO-GO", clarifications: [],
+        }));
+        return 0;
+      }),
+    };
+
+    const deps = makeDeps({ fileSystem, stateManager: sm, dispatcher });
+    const runner = new PipelineRunner(deps);
+    const events: unknown[] = [];
+
+    const promise = runner.run({ ...BASE_OPTS, flow: "feature" }, (e) => events.push(e));
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.exitCode).toBe(2);
+    const pauseEvent = events.find(
+      (e): e is { action: string; reason: string } =>
+        typeof e === "object" && e !== null &&
+        "action" in e && (e as { action: string }).action === "pause"
+    );
+    expect(pauseEvent).toBeDefined();
+    expect(sm.setStatus).toHaveBeenCalledWith(expect.any(String), "paused", expect.stringContaining("NO-GO"));
+  });
+
+  // ---------------------------------------------------------------
+  // gate チェック: gates[after-step] が設定されていると pauseして exitCode=2
+  // ---------------------------------------------------------------
+
+  it("gate チェック: after-specify gate が設定された場合 setApproval + exitCode=2", async () => {
+    const FD = "/project/specs/my-feature";
+    const STATE_FILE = `${FD}/pipeline-state.json`;
+    const SPECIFY_CMD = "/project/.opencode/command/poor-dev.specify.md";
+
+    const savedState: PipelineState = {
+      flow: "feature",
+      variant: null,
+      pipeline: ["specify"],
+      completed: [],
+      current: "specify",
+      status: "active",
+      pauseReason: null,
+      condition: null,
+      pendingApproval: null,
+      updated: "2026-02-19T00:00:00Z",
+    };
+
+    const sm = makeStateManager({ read: vi.fn(() => ({ ...savedState })) });
+
+    // promptFile をモックに追加（composePromptTs が実際の FS でコマンドファイルを読めないため）
+    const PROMPT_FILE = `/tmp/poor-dev-prompt-specify-${process.pid}.txt`;
+
+    const fileSystem = makeFileSystem({
+      [STATE_FILE]: JSON.stringify(savedState),
+      [SPECIFY_CMD]: "# specify command",
+      [PROMPT_FILE]: "# composed prompt",
+    });
+
+    // specify 成功、spec.md が存在する、result に clarifications なし
+    const dispatcher = {
+      dispatch: vi.fn(async (
+        _step: string, _dir: string, _prompt: string,
+        _idle: number, _max: number, resultFile: string
+      ) => {
+        fileSystem.writeFile(resultFile, JSON.stringify({
+          exit_code: 0, errors: [], timeout_type: "none", verdict: null, clarifications: [],
+        }));
+        // spec.md を作成（extract-output の代わりに直接）
+        fileSystem.writeFile(`${FD}/spec.md`, "# Spec content");
+        return 0;
+      }),
+    };
+
+    // gates に "after-specify" を設定
+    const config = {
+      polling: { idle_timeout: 120, max_timeout: 600 },
+      gates: { "after-specify": true },
+      auto_approve: false,
+    };
+
+    const deps = makeDeps({ fileSystem, stateManager: sm, dispatcher, config });
+    const runner = new PipelineRunner(deps);
+    const events: unknown[] = [];
+
+    const promise = runner.run(BASE_OPTS, (e) => events.push(e));
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.exitCode).toBe(2);
+    expect(sm.setApproval).toHaveBeenCalledWith(
+      expect.any(String), "gate", "specify"
+    );
+    const gateEvent = events.find(
+      (e): e is { action: string; gate: string } =>
+        typeof e === "object" && e !== null &&
+        "action" in e && (e as { action: string }).action === "gate"
+    );
+    expect(gateEvent).toBeDefined();
+  });
+
+  // ---------------------------------------------------------------
+  // auto_approve=true の場合 gate をスキップする
+  // ---------------------------------------------------------------
+
+  it("auto_approve=true の場合 gate をスキップして step_complete になる", async () => {
+    const FD = "/project/specs/my-feature";
+    const STATE_FILE = `${FD}/pipeline-state.json`;
+    const SPECIFY_CMD = "/project/.opencode/command/poor-dev.specify.md";
+
+    const savedState: PipelineState = {
+      flow: "feature",
+      variant: null,
+      pipeline: ["specify"],
+      completed: [],
+      current: "specify",
+      status: "active",
+      pauseReason: null,
+      condition: null,
+      pendingApproval: null,
+      updated: "2026-02-19T00:00:00Z",
+    };
+
+    const sm = makeStateManager({ read: vi.fn(() => ({ ...savedState })) });
+
+    // promptFile をモックに追加（composePromptTs が実際の FS でコマンドファイルを読めないため）
+    const PROMPT_FILE = `/tmp/poor-dev-prompt-specify-${process.pid}.txt`;
+
+    const fileSystem = makeFileSystem({
+      [STATE_FILE]: JSON.stringify(savedState),
+      [SPECIFY_CMD]: "# specify command",
+      [PROMPT_FILE]: "# composed prompt",
+    });
+
+    const dispatcher = {
+      dispatch: vi.fn(async (
+        _step: string, _dir: string, _prompt: string,
+        _idle: number, _max: number, resultFile: string
+      ) => {
+        fileSystem.writeFile(resultFile, JSON.stringify({
+          exit_code: 0, errors: [], timeout_type: "none", verdict: null, clarifications: [],
+        }));
+        fileSystem.writeFile(`${FD}/spec.md`, "# Spec content");
+        return 0;
+      }),
+    };
+
+    // auto_approve=true + gates あり
+    const config = {
+      polling: { idle_timeout: 120, max_timeout: 600 },
+      gates: { "after-specify": true },
+      auto_approve: true,
+    };
+
+    const deps = makeDeps({ fileSystem, stateManager: sm, dispatcher, config });
+    const runner = new PipelineRunner(deps);
+    const events: unknown[] = [];
+
+    const promise = runner.run(BASE_OPTS, (e) => events.push(e));
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    // gate があっても auto_approve なので step_complete
+    expect(result.exitCode).toBe(0);
+    const stepComplete = events.find(
+      (e): e is { step: string; status: string } =>
+        typeof e === "object" && e !== null &&
+        "status" in e && (e as { status: string }).status === "step_complete"
+    );
+    expect(stepComplete).toBeDefined();
+  });
+
+  // ---------------------------------------------------------------
+  // clarification gate: specify 後に clarifications があると awaiting-approval
+  // ---------------------------------------------------------------
+
+  it("specify 後に clarifications がある場合 setApproval + exitCode=2", async () => {
+    const FD = "/project/specs/my-feature";
+    const STATE_FILE = `${FD}/pipeline-state.json`;
+    const SPECIFY_CMD = "/project/.opencode/command/poor-dev.specify.md";
+
+    const savedState: PipelineState = {
+      flow: "feature",
+      variant: null,
+      pipeline: ["specify"],
+      completed: [],
+      current: "specify",
+      status: "active",
+      pauseReason: null,
+      condition: null,
+      pendingApproval: null,
+      updated: "2026-02-19T00:00:00Z",
+    };
+
+    const sm = makeStateManager({ read: vi.fn(() => ({ ...savedState })) });
+
+    // promptFile をモックに追加（composePromptTs が実際の FS でコマンドファイルを読めないため）
+    const PROMPT_FILE = `/tmp/poor-dev-prompt-specify-${process.pid}.txt`;
+
+    const fileSystem = makeFileSystem({
+      [STATE_FILE]: JSON.stringify(savedState),
+      [SPECIFY_CMD]: "# specify command",
+      [PROMPT_FILE]: "# composed prompt",
+    });
+
+    const dispatcher = {
+      dispatch: vi.fn(async (
+        _step: string, _dir: string, _prompt: string,
+        _idle: number, _max: number, resultFile: string
+      ) => {
+        fileSystem.writeFile(resultFile, JSON.stringify({
+          exit_code: 0,
+          errors: [],
+          timeout_type: "none",
+          verdict: null,
+          clarifications: ["[NEEDS CLARIFICATION: What is the scope?]"],
+        }));
+        fileSystem.writeFile(`${FD}/spec.md`, "# Spec content");
+        return 0;
+      }),
+    };
+
+    const deps = makeDeps({ fileSystem, stateManager: sm, dispatcher });
+    const runner = new PipelineRunner(deps);
+    const events: unknown[] = [];
+
+    const promise = runner.run(BASE_OPTS, (e) => events.push(e));
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result.exitCode).toBe(2);
+    expect(sm.setApproval).toHaveBeenCalledWith(
+      expect.any(String), "clarification", "specify"
+    );
+    // pending-clarifications.json が保存されているか
+    const writeCalls = (fileSystem.writeFile as ReturnType<typeof vi.fn>).mock.calls;
+    const pendingWrite = writeCalls.find(([p]: [string]) =>
+      p.includes("pending-clarifications.json")
+    );
+    expect(pendingWrite).toBeDefined();
+  });
 });

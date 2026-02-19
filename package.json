@@ -9,6 +9,7 @@
   "files": [
     "bin/",
     "lib/",
+    "dist/",
     "commands/",
     "agents/",
     "templates/",
@@ -31,11 +32,19 @@
     "url": "git+https://github.com/BaconGame4423/PoorDevSkills.git"
   },
   "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

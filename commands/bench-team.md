@@ -118,13 +118,26 @@ fi
 
 プロンプト送信:
 ```bash
-BEFORE=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
 tmux set-buffer -b bench "$PROMPT"
 tmux paste-buffer -p -t $TARGET -b bench -d
+sleep 1
 tmux send-keys -t $TARGET Enter
-sleep 2
-AFTER=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
-if [ "$BEFORE" = "$AFTER" ]; then
+```
+
+送信確認（リトライ付き）— ペインに `esc to interrupt` が表示されれば処理開始済み:
+```bash
+SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
+while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
+  if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "esc to interrupt"; then
+    echo "OK: プロンプト送信確認"
+    break
+  fi
+  # まだ入力欄にいる場合は Enter を再送
+  tmux send-keys -t $TARGET Enter
+  sleep 2
+  SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
+done
+if [ $SUBMIT_WAITED -ge $SUBMIT_TIMEOUT ]; then
   echo "WARNING: プロンプト送信が反映されていない可能性があります"
 fi
 ```

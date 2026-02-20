@@ -150,18 +150,34 @@ REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' ben
 PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
 ```
 
-送信（変化確認付き）:
+送信（リトライ付き確認）:
 ```bash
-# 送信前のペイン内容を取得
-BEFORE=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
-# paste-buffer 送信
 tmux set-buffer -b bench "$PROMPT"
 tmux paste-buffer -p -t $TARGET -b bench -d
+sleep 1
 tmux send-keys -t $TARGET Enter
-sleep 2
-# 送信後のペイン内容を比較
-AFTER=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum)
-if [ "$BEFORE" = "$AFTER" ]; then
+```
+
+送信確認 — CLI 種別に応じた処理開始検知パターンで確認し、未送信なら Enter をリトライ:
+```bash
+# claude: "esc to interrupt" / opencode: プロンプト行消失
+SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
+while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
+  PANE=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+  if echo "$PANE" | grep -q "esc to interrupt"; then
+    echo "OK: プロンプト送信確認"
+    break
+  fi
+  # opencode の場合: プロンプト行が消えていれば処理開始
+  if [ "$CLI" = "opencode" ] && ! echo "$PANE" | grep -q "^>"; then
+    echo "OK: プロンプト送信確認 (opencode)"
+    break
+  fi
+  tmux send-keys -t $TARGET Enter
+  sleep 2
+  SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
+done
+if [ $SUBMIT_WAITED -ge $SUBMIT_TIMEOUT ]; then
   echo "WARNING: プロンプト送信が反映されていない可能性があります"
 fi
 ```

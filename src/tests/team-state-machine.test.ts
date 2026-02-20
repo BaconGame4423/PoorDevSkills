@@ -161,6 +161,65 @@ describe("computeNextInstruction", () => {
     });
   });
 
+  describe("status ガード", () => {
+    it("paused 状態で user_gate (resume/abort) を返す", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          status: "paused",
+          current: "implement",
+          pauseReason: "Reclassified as feature",
+        }),
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("user_gate");
+      if (action.action === "user_gate") {
+        expect(action.step).toBe("implement");
+        expect(action.message).toBe("Reclassified as feature");
+        expect(action.options).toContain("resume");
+        expect(action.options).toContain("abort");
+      }
+    });
+
+    it("awaiting-approval 状態で user_gate (approve/reject) を返す", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          status: "awaiting-approval",
+          pendingApproval: { type: "review", step: "planreview" },
+        }),
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("user_gate");
+      if (action.action === "user_gate") {
+        expect(action.step).toBe("planreview");
+        expect(action.message).toContain("review");
+        expect(action.options).toContain("approve");
+        expect(action.options).toContain("reject");
+      }
+    });
+
+    it("completed 状態で done を返す", () => {
+      const ctx = makeCtx({
+        state: makeState({ status: "completed" }),
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("done");
+      if (action.action === "done") {
+        expect(action.summary).toContain("already completed");
+      }
+    });
+
+    it("paused で pauseReason が null の場合デフォルトメッセージを返す", () => {
+      const ctx = makeCtx({
+        state: makeState({ status: "paused", pauseReason: null }),
+      });
+      const action = computeNextInstruction(ctx, mockFs());
+      expect(action.action).toBe("user_gate");
+      if (action.action === "user_gate") {
+        expect(action.message).toBe("Pipeline paused");
+      }
+    });
+  });
+
   describe("done アクションの artifacts", () => {
     it("存在するアーティファクトファイルを収集する", () => {
       const ctx = makeCtx({

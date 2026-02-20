@@ -104,3 +104,78 @@ describe("installer dist copy (update)", () => {
     expect(json.flow).toBe("bugfix");
   });
 });
+
+describe("poor-dev-next CLI subcommands", () => {
+  let tmpDir: string;
+  let stateDir: string;
+  const nextBin = () => join(tmpDir, DIST_BIN);
+
+  beforeAll(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "pd-e2e-cli-"));
+    execSync("git init", { cwd: tmpDir, stdio: "pipe" });
+    execSync(`node ${BIN_PATH} init ${tmpDir}`, { stdio: "pipe" });
+    stateDir = join(tmpDir, "specs/010");
+    await mkdir(stateDir, { recursive: true });
+  });
+
+  afterAll(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("--gate-response skip: skips current step", () => {
+    // Init feature flow
+    execSync(`node ${nextBin()} --init --flow feature --state-dir ${stateDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    // Gate response skip
+    const output = execSync(
+      `node ${nextBin()} --gate-response skip --state-dir ${stateDir} --project-dir ${tmpDir}`,
+      { encoding: "utf8" }
+    );
+    // Should return the next action (suggest step or user_gate for missing prereq)
+    const lines = output.trim().split("\n");
+    const lastJson = JSON.parse(lines[lines.length - 1]!);
+    expect(lastJson.action).toBeDefined();
+    // specify should be completed (skipped)
+    expect(lastJson.step).not.toBe("specify");
+  });
+
+  it("--gate-response abort: returns done", () => {
+    // Re-init
+    execSync(`node ${nextBin()} --init --flow feature --state-dir ${stateDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    const output = execSync(
+      `node ${nextBin()} --gate-response abort --state-dir ${stateDir} --project-dir ${tmpDir}`,
+      { encoding: "utf8" }
+    );
+    const lines = output.trim().split("\n");
+    const lastJson = JSON.parse(lines[lines.length - 1]!);
+    expect(lastJson.action).toBe("done");
+    expect(lastJson.summary).toContain("abort");
+  });
+
+  it("--set-conditional with valid key: replaces pipeline", () => {
+    const condDir = join(tmpDir, "specs/011");
+    execSync(`mkdir -p ${condDir}`, { stdio: "pipe" });
+    execSync(`node ${nextBin()} --init --flow bugfix --state-dir ${condDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    // Complete bugfix step then set conditional
+    execSync(`node ${nextBin()} --step-complete bugfix --state-dir ${condDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    const output = execSync(
+      `node ${nextBin()} --set-conditional "bugfix:SCALE_SMALL" --state-dir ${condDir} --project-dir ${tmpDir}`,
+      { encoding: "utf8" }
+    );
+    const lines = output.trim().split("\n");
+    const lastJson = JSON.parse(lines[lines.length - 1]!);
+    // Pipeline should be replaced, next step after bugfix should be planreview
+    expect(["create_team", "create_review_team", "user_gate"]).toContain(lastJson.action);
+  });
+
+  it("--set-conditional with unknown key: exits with error", () => {
+    const condDir2 = join(tmpDir, "specs/012");
+    execSync(`mkdir -p ${condDir2}`, { stdio: "pipe" });
+    execSync(`node ${nextBin()} --init --flow bugfix --state-dir ${condDir2} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    expect(() => {
+      execSync(
+        `node ${nextBin()} --set-conditional "bugfix:UNKNOWN" --state-dir ${condDir2} --project-dir ${tmpDir}`,
+        { encoding: "utf8", stdio: "pipe" }
+      );
+    }).toThrow();
+  });
+});

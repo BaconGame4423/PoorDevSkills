@@ -39,6 +39,32 @@ export function computeNextInstruction(
   fs: Pick<FileSystem, "exists" | "readFile">
 ): TeamAction {
   const { state, featureDir, projectDir, flowDef, useAgentTeams } = ctx;
+
+  // status ガード: paused / awaiting-approval / completed では次ステップに進まない
+  if (state.status === "paused") {
+    return {
+      action: "user_gate",
+      step: state.current ?? "unknown",
+      message: state.pauseReason ?? "Pipeline paused",
+      options: ["resume", "abort"],
+    };
+  }
+  if (state.status === "awaiting-approval") {
+    return {
+      action: "user_gate",
+      step: state.pendingApproval?.step ?? "unknown",
+      message: `Awaiting ${state.pendingApproval?.type ?? "unknown"} approval`,
+      options: ["approve", "reject"],
+    };
+  }
+  if (state.status === "completed") {
+    return {
+      action: "done",
+      summary: `Flow "${state.flow}" already completed.`,
+      artifacts: [],
+    };
+  }
+
   const fd = path.join(projectDir, featureDir);
   const completedSet = new Set(state.completed ?? []);
   const pipeline = state.pipeline?.length > 0 ? state.pipeline : flowDef.steps;

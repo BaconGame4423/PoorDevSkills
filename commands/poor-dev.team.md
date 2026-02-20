@@ -9,6 +9,7 @@ Orchestrate development workflows using Claude Code Agent Teams.
 ## Phase 0: Discussion
 
 Before creating any teams:
+0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
 1. Classify the user's request into a flow type (feature, bugfix, investigation, roadmap, discovery)
 2. Discuss scope and requirements with the user
 3. Create `discussion-summary.md` in the feature directory
@@ -22,10 +23,31 @@ After Phase 0, execute the pipeline via TS helper:
 2. Parse the JSON output and execute the action:
    - `create_team` → TeamCreate + Task(spawn teammates) + monitor + TeamDelete
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
-   - `user_gate` → Ask user the question, then `--gate-response`
+   - `user_gate` → See §User Gates below
+   - `dispatch_step` → (Legacy path) Run the step directly without team orchestration
    - `done` → Report completion to user
-3. After action completes: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
+3. After action completes: see §Conditional Steps below
 4. Return to step 1
+
+### Conditional Steps
+
+When a step is in the flow's `conditionals` list (e.g., bugfix, rebuildcheck):
+1. After teammate completes work, scan output for conditional markers:
+   - `[SCALE: SMALL]` → key: `<step>:SCALE_SMALL`
+   - `[SCALE: LARGE]` → key: `<step>:SCALE_LARGE`
+   - `[RECLASSIFY: FEATURE]` → key: `<step>:RECLASSIFY_FEATURE`
+   - `[VERDICT: REBUILD]` → key: `<step>:REBUILD`
+   - `[VERDICT: CONTINUE]` → key: `<step>:CONTINUE`
+2. If marker found: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --set-conditional "<key>" --state-dir <DIR> --project-dir .`
+3. If no marker found: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
+
+### User Gates
+
+When the TS helper returns `user_gate`:
+1. Display the `message` to the user
+2. Present `options` as choices
+3. After user responds: `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <response> --state-dir <DIR> --project-dir .`
+4. Parse the returned action and continue the Core Loop
 
 ## Review Loop (Opus-Mediated)
 
@@ -57,3 +79,9 @@ Format: `pd-<step>-<NNN>` where NNN is from the feature directory name.
 
 All git operations (commit, push, checkout, clean) are performed by Opus only.
 Teammates NEVER execute git commands.
+
+### When to Commit
+- After `create_team` for `implement` step completes: stage and commit all implementation changes
+- After fixer reports modifications in a review loop: stage and commit the fixes
+- After `create_team` for artifact-producing steps (specify, suggest, plan, tasks, testdesign): commit the generated artifact
+- Commit message format: `type: 日本語タイトル` (per CLAUDE.md conventions)

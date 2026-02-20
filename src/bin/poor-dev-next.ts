@@ -26,7 +26,6 @@ interface CliArgs {
   stateDir?: string;
   projectDir: string;
   stepComplete?: string;
-  reviewUpdate: boolean;
   setConditional?: string;
   gateResponse?: string;
   init: boolean;
@@ -36,7 +35,6 @@ interface CliArgs {
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     projectDir: process.cwd(),
-    reviewUpdate: false,
     init: false,
     useAgentTeams: true,
   };
@@ -56,9 +54,6 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--step-complete":
         args.stepComplete = next();
-        break;
-      case "--review-update":
-        args.reviewUpdate = true;
         break;
       case "--set-conditional":
         args.setConditional = next();
@@ -121,6 +116,31 @@ function main(): void {
     stateManager.completeStep(stateFile, args.stepComplete);
     process.stdout.write(JSON.stringify({ status: "step_completed", step: args.stepComplete }) + "\n");
 
+    // --set-conditional が同時指定されている場合、conditional も適用
+    if (args.setConditional) {
+      const st = stateManager.read(stateFile);
+      const fd = resolveFlow(st.flow, projectDir, fs) ?? getFlowDefinition(st.flow);
+      if (fd) {
+        const branch = fd.conditionalBranches?.[args.setConditional];
+        if (branch) {
+          switch (branch.action) {
+            case "replace-pipeline":
+              if (branch.variant) stateManager.setVariant(stateFile, branch.variant, args.setConditional);
+              if (branch.pipeline) stateManager.setPipeline(stateFile, branch.pipeline);
+              break;
+            case "pause":
+              stateManager.setStatus(stateFile, "paused", branch.pauseReason ?? "Paused by conditional");
+              break;
+            case "continue":
+              break;
+          }
+        } else {
+          process.stderr.write(JSON.stringify({ error: `Unknown conditional: ${args.setConditional}` }) + "\n");
+          process.exit(1);
+        }
+      }
+    }
+
     // 完了後に次のアクションも返す
     const state = stateManager.read(stateFile);
     const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
@@ -132,6 +152,89 @@ function main(): void {
       );
       process.stdout.write(JSON.stringify(action) + "\n");
     }
+    return;
+  }
+
+  // --gate-response: ユーザーゲート応答処理
+  if (args.gateResponse) {
+    if (!fs.exists(stateFile)) {
+      process.stderr.write(JSON.stringify({ error: "pipeline-state.json not found" }) + "\n");
+      process.exit(1);
+    }
+    const response = args.gateResponse;
+
+    if (response === "abort") {
+      stateManager.setStatus(stateFile, "completed", "Aborted by user");
+      process.stdout.write(JSON.stringify({ action: "done", summary: "Pipeline aborted by user.", artifacts: [] }) + "\n");
+      return;
+    }
+
+    if (response === "skip") {
+      const st = stateManager.read(stateFile);
+      if (st.current) {
+        stateManager.completeStep(stateFile, st.current);
+      }
+    } else if (response !== "retry") {
+      // approve or custom response → clear approval and continue
+      stateManager.clearApproval(stateFile);
+    }
+    // retry: no state change, just re-compute
+
+    const state = stateManager.read(stateFile);
+    const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
+    if (!flowDef) {
+      process.stderr.write(JSON.stringify({ error: `Unknown flow: ${state.flow}` }) + "\n");
+      process.exit(1);
+    }
+    const featureDir = path.relative(projectDir, stateDir);
+    const action = computeNextInstruction(
+      { state, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+      fs
+    );
+    process.stdout.write(JSON.stringify(action) + "\n");
+    return;
+  }
+
+  // --set-conditional: 条件分岐処理
+  if (args.setConditional) {
+    if (!fs.exists(stateFile)) {
+      process.stderr.write(JSON.stringify({ error: "pipeline-state.json not found" }) + "\n");
+      process.exit(1);
+    }
+    const state = stateManager.read(stateFile);
+    const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
+    if (!flowDef) {
+      process.stderr.write(JSON.stringify({ error: `Unknown flow: ${state.flow}` }) + "\n");
+      process.exit(1);
+    }
+
+    const branch = flowDef.conditionalBranches?.[args.setConditional];
+    if (!branch) {
+      process.stderr.write(JSON.stringify({ error: `Unknown conditional: ${args.setConditional}` }) + "\n");
+      process.exit(1);
+    }
+
+    switch (branch.action) {
+      case "replace-pipeline":
+        if (branch.variant) stateManager.setVariant(stateFile, branch.variant, args.setConditional);
+        if (branch.pipeline) stateManager.setPipeline(stateFile, branch.pipeline);
+        break;
+      case "pause":
+        stateManager.setStatus(stateFile, "paused", branch.pauseReason ?? "Paused by conditional");
+        break;
+      case "continue":
+        // noop
+        break;
+    }
+
+    // Return next action after state update
+    const updatedState = stateManager.read(stateFile);
+    const featureDir = path.relative(projectDir, stateDir);
+    const nextAction = computeNextInstruction(
+      { state: updatedState, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+      fs
+    );
+    process.stdout.write(JSON.stringify(nextAction) + "\n");
     return;
   }
 

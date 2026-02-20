@@ -89,10 +89,10 @@ jq --arg c "<combo>" --arg p "$TARGET" \
   "$BENCH_STATE" > "${BENCH_STATE}.tmp" && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
 ```
 
-CLI 起動（常に claude）:
+CLI 起動（常に claude + 全権限自動許諾）:
 ```bash
 ORCH_MODEL=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .orchestrator' benchmarks/benchmarks.json | xargs -I{} jq -r --arg o "{}" '.models[$o].model_id' benchmarks/benchmarks.json)
-tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --model $ORCH_MODEL" Enter
+tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
 ```
 
 パスは絶対パスに解決してから送信すること。

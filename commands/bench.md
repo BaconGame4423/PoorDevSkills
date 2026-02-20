@@ -98,7 +98,7 @@ jq --arg c "<combo>" --arg p "$TARGET" \
   ```
 - claude の場合:
   ```bash
-  tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --model $ORCH_MODEL" Enter
+  tmux send-keys -t $TARGET "cd benchmarks/<combo> && env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
   ```
 
 `env -u CLAUDECODE` は親 Claude Code の環境変数干渉を防止。

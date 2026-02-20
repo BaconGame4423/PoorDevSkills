@@ -475,6 +475,18 @@ setup_environment() {
   chmod -R a-w "$TARGET_DIR/commands"
   ok "commands/ を読み取り専用コピー"
 
+  # team モード用: .poor-dev/dist/ コピー
+  if [[ "$MODE" == "team" ]]; then
+    if [[ -d "$DEVSKILLS_DIR/dist" ]]; then
+      mkdir -p "$TARGET_DIR/.poor-dev/dist"
+      rm -rf "$TARGET_DIR/.poor-dev/dist"
+      cp -rL "$DEVSKILLS_DIR/dist" "$TARGET_DIR/.poor-dev/dist"
+      ok ".poor-dev/dist/ をコピー"
+    else
+      warn ".poor-dev/dist/ が見つかりません。npm run build を実行してください"
+    fi
+  fi
+
   # 5) git commit（.git が存在する場合のみ）
   if [[ -d "$TARGET_DIR/.git" ]]; then
     (

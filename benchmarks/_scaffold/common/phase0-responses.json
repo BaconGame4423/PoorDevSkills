@@ -5,12 +5,19 @@
     "scope": "HTML/JS/CSS の単一ページアプリ。外部ライブラリ最小限。"
   },
   "responses": [
-    { "pattern": "フロー|flow|分類|classify", "response": "feature フローでお願いします" },
-    { "pattern": "スコープ|scope|範囲", "response": "FR-001〜FR-013 の全要件を実装。HTML/JS/CSS 単一ページアプリ。" },
-    { "pattern": "確認|進めて|始め|proceed|start", "response": "はい、進めてください" },
-    { "pattern": "技術|ライブラリ|framework", "response": "バニラ JS + Canvas/SVG。外部ライブラリは最小限。" },
-    { "pattern": "テスト|test", "response": "手動テストのみで十分です" }
+    { "pattern": "フロー|flow|分類|classify|種類|タイプ|type", "response": "feature フローでお願いします。新規機能の開発です。" },
+    { "pattern": "スコープ|scope|範囲|対象|boundary", "response": "FR-001〜FR-013 の全13要件を実装してください。HTML/JS/CSS の単一ページアプリ（index.html 1ファイル）で、外部ライブラリは使わずバニラ JS で実装。" },
+    { "pattern": "確認|進めて|始め|proceed|start|ready|準備|開始", "response": "はい、そのまま進めてください。" },
+    { "pattern": "技術|ライブラリ|framework|フレームワーク|ツール|選定|stack", "response": "バニラ JS + HTML5 Canvas でお願いします。React/Vue 等のフレームワークは不要。数式パーサーも自前実装で。eval() は使わないでください。" },
+    { "pattern": "テスト|test|検証|品質", "response": "ブラウザで開いて手動テストのみで十分です。自動テストフレームワークは不要。" },
+    { "pattern": "デザイン|UI|UX|見た目|レイアウト|色|テーマ", "response": "ダークテーマベースのモダンなデザインでお願いします。レスポンシブ対応必須（FR-011）。アクセシビリティも考慮してください。" },
+    { "pattern": "微分|導関数|derivative|接線|tangent", "response": "数値微分（中央差分法）で実装してください。導関数のグラフ重畳表示（FR-008）と接線表示（FR-010）が必須要件です。" },
+    { "pattern": "パフォーマンス|performance|最適化|optimize", "response": "Canvas 再描画の最適化（requestAnimationFrame、オフスクリーンキャッシュ等）を適宜行ってください。" },
+    { "pattern": "エラー|error|バリデーション|validation|不正", "response": "数式パーサーでの構文エラー検出と、ユーザーへのわかりやすいエラーメッセージ表示（FR-012）をお願いします。" },
+    { "pattern": "ファイル|構成|structure|アーキテクチャ|architecture", "response": "index.html 1ファイルに HTML/CSS/JS をすべて含めてください。外部ファイル分割は不要です。" },
+    { "pattern": "優先|priority|順番|order|フェーズ|phase", "response": "全13要件を実装してください。優先順位はお任せしますが、コア機能（グラフ描画・数式パース）→ インタラクション → 微分・接線 → UI改善 の順が自然です。" },
+    { "pattern": "質問|聞きたい|不明|unclear|clarif", "response": "特にありません。要件 FR-001〜FR-013 に従って実装を進めてください。判断に迷う点はベストプラクティスに従ってください。" }
   ],
   "max_turns": 5,
-  "fallback": "お任せします。ベストな判断で進めてください。"
+  "fallback": "要件 FR-001〜FR-013 に従って実装を進めてください。HTML/JS/CSS 単一ファイル、バニラ JS、Canvas 描画、eval() 不使用。判断に迷う点はベストプラクティスで進めてください。"
 }

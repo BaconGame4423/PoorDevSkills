@@ -6,13 +6,6 @@
  * テスト対象: src/lib/benchmark/phase0-responder.ts
  * - matchResponse
  * - respondToPhase0
- *
- * Phase0Config 型:
- * - flow_type: string
- * - discussion_context: { task_ref: string; scope: string }
- * - responses: Array<{ pattern: string; response: string }>
- * - max_turns: number
- * - fallback: string
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -63,6 +56,14 @@ function makeDefaultConfig(overrides?: Partial<Phase0Config>): Phase0Config {
   };
 }
 
+/**
+ * TUI のプロンプト待ち状態をシミュレートするペイン内容を生成。
+ * respondToPhase0 は ❯ プロンプトが表示されている場合のみ応答する。
+ */
+function withPrompt(questionText: string): string {
+  return `${questionText}\n\n❯ \n\n  ⏵⏵ bypass permissions on (shift+tab to cycle)`;
+}
+
 describe("phase0-responder", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,7 +80,6 @@ describe("phase0-responder", () => {
   describe("matchResponse", () => {
     it("パターンにマッチする場合 → 対応する response を返す", async () => {
       const { matchResponse } = await importResponder();
-      // matchResponse は includes で文字列一致（正規表現ではない）
       const config = makeDefaultConfig({
         responses: [
           { pattern: "scope", response: "この機能のゴールは〇〇です" },
@@ -101,7 +101,6 @@ describe("phase0-responder", () => {
         ],
       });
 
-      // "scope" が先にマッチする
       const result = matchResponse("scope と 目的 どちらも含む", config);
 
       expect(result).toBe("first match");
@@ -116,19 +115,18 @@ describe("phase0-responder", () => {
       expect(result).toBeNull();
     });
 
-    it("includes による部分文字列マッチが動く", async () => {
+    it("OR パターン (|) が正規表現として動作する", async () => {
       const { matchResponse } = await importResponder();
-      // 実装は includes() で文字列一致。パイプ(|)は正規表現ではなくリテラル文字列
       const config = makeDefaultConfig({
         responses: [
-          { pattern: "hello", response: "hello matched" },
-          { pattern: "world", response: "world matched" },
+          { pattern: "scope|目的|ゴール", response: "matched via OR" },
         ],
       });
 
-      expect(matchResponse("hello there", config)).toBe("hello matched");
-      expect(matchResponse("world peace", config)).toBe("world matched");
-      expect(matchResponse("no match here", config)).toBeNull();
+      expect(matchResponse("scopeを教えて", config)).toBe("matched via OR");
+      expect(matchResponse("目的は何?", config)).toBe("matched via OR");
+      expect(matchResponse("ゴール設定", config)).toBe("matched via OR");
+      expect(matchResponse("無関係テキスト", config)).toBeNull();
     });
 
     it("空のコンテンツ → null を返す", async () => {
@@ -146,12 +144,8 @@ describe("phase0-responder", () => {
         ],
       });
 
-      // 実装がケースインセンシティブの場合のテスト
-      // もし区別する場合はこのテストを調整
       const result = matchResponse("scope を教えて", config);
-      // パターンがそのまま使われる場合は null、i フラグがあれば match
-      // ここでは実装に依存せず、パターンがマッチすれば OK
-      expect(result).not.toBeUndefined();
+      expect(result).toBe("case insensitive match");
     });
   });
 
@@ -160,28 +154,42 @@ describe("phase0-responder", () => {
   // ---------------------------------------------------------------
 
   describe("respondToPhase0", () => {
-    it("質問がある場合 (? 含む) → 応答を送信、responded=true", async () => {
+    it("プロンプト待ちで質問がある場合 → 応答を送信、responded=true", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // ペインコンテンツに質問 (?) を含む
-      mockedCapturePaneContent.mockReturnValue("この機能の scope は何ですか?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("この機能の scope は何ですか?")
+      );
 
       const result = respondToPhase0("test-pane", config, 0);
 
       expect(result.responded).toBe(true);
       expect(result.done).toBe(false);
       expect(result.turnCount).toBe(1);
-      // tmux 関数が呼ばれたことを確認
       expect(mockedCapturePaneContent).toHaveBeenCalledWith("test-pane");
+    });
+
+    it("プロンプトなし（処理中）→ responded=false", async () => {
+      const { respondToPhase0 } = await importResponder();
+      const config = makeDefaultConfig();
+
+      // ❯ がない = Claude が処理中
+      mockedCapturePaneContent.mockReturnValue("この scope は?\n\n✻ Churned for 1m");
+
+      const result = respondToPhase0("test-pane", config, 0);
+
+      expect(result.responded).toBe(false);
+      expect(result.done).toBe(false);
     });
 
     it("質問がない場合 → responded=false", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // 質問マークなし
-      mockedCapturePaneContent.mockReturnValue("承認しました。次に進みます。");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("承認しました。次に進みます。")
+      );
 
       const result = respondToPhase0("test-pane", config, 0);
 
@@ -193,7 +201,9 @@ describe("phase0-responder", () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig({ max_turns: 3 });
 
-      mockedCapturePaneContent.mockReturnValue("質問がありますか?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("質問がありますか?")
+      );
 
       const result = respondToPhase0("test-pane", config, 3);
 
@@ -204,14 +214,14 @@ describe("phase0-responder", () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig({ max_turns: 2 });
 
-      mockedCapturePaneContent.mockReturnValue("質問?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("質問?")
+      );
 
-      // turnCount=0 → responded, turnCount becomes 1, done=false
       const result1 = respondToPhase0("test-pane", config, 0);
       expect(result1.turnCount).toBe(1);
       expect(result1.done).toBe(false);
 
-      // turnCount=1 → responded, turnCount becomes 2 == max_turns, done=true
       const result2 = respondToPhase0("test-pane", config, 1);
       expect(result2.turnCount).toBe(2);
       expect(result2.done).toBe(true);
@@ -221,16 +231,16 @@ describe("phase0-responder", () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig({
         fallback: "カスタムフォールバック応答",
-        responses: [],  // マッチするパターンなし
+        responses: [],
       });
 
-      mockedCapturePaneContent.mockReturnValue("未知の質問ですか?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("未知の質問ですか?")
+      );
 
       const result = respondToPhase0("test-pane", config, 0);
 
       expect(result.responded).toBe(true);
-      // fallback が使用されたことを確認
-      // 実際の送信方法は実装依存だが、pasteBuffer または sendKeys が呼ばれる
       expect(
         mockedPasteBuffer.mock.calls.length > 0 ||
         mockedSendKeys.mock.calls.length > 0
@@ -241,12 +251,16 @@ describe("phase0-responder", () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      mockedCapturePaneContent.mockReturnValue("質問1?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("scopeの質問?")
+      );
 
       const result1 = respondToPhase0("test-pane", config, 0);
       expect(result1.turnCount).toBe(1);
 
-      mockedCapturePaneContent.mockReturnValue("質問2?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("技術の質問?")
+      );
       const result2 = respondToPhase0("test-pane", config, result1.turnCount);
       expect(result2.turnCount).toBe(2);
     });
@@ -262,16 +276,14 @@ describe("phase0-responder", () => {
       expect(result.responded).toBe(false);
     });
 
-    it("Opus からの応答待ち状態（...のみ）→ responded=false", async () => {
+    it("Opus からの応答待ち状態（thinking）→ responded=false", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // Opus が考え中の状態
-      mockedCapturePaneContent.mockReturnValue("Opus thinking...");
+      mockedCapturePaneContent.mockReturnValue("Opus thinking...\n✻ Churned for 30s");
 
       const result = respondToPhase0("test-pane", config, 0);
 
-      // "?" がないので responded=false
       expect(result.responded).toBe(false);
     });
 
@@ -283,16 +295,62 @@ describe("phase0-responder", () => {
         ],
       });
 
-      mockedCapturePaneContent.mockReturnValue("テストについてどう思いますか?");
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("テストについてどう思いますか?")
+      );
 
       const result = respondToPhase0("test-pane", config, 0);
 
       expect(result.responded).toBe(true);
-      // 何らかの送信が行われたことを確認
       expect(
         mockedPasteBuffer.mock.calls.length > 0 ||
         mockedSendKeys.mock.calls.length > 0
       ).toBe(true);
+    });
+
+    it("Phase 0 終了パターン検出 → done=true", async () => {
+      const { respondToPhase0 } = await importResponder();
+      const config = makeDefaultConfig();
+
+      // TeamCreate が出現 = パイプライン開始済み
+      mockedCapturePaneContent.mockReturnValue(
+        withPrompt("TeamCreate で pd-specify-001 を作成? ❯")
+      );
+
+      const result = respondToPhase0("test-pane", config, 0);
+
+      expect(result.done).toBe(true);
+      expect(result.responded).toBe(false);
+    });
+
+    it("poor-dev-next.js が出現 → Phase 0 終了", async () => {
+      const { respondToPhase0 } = await importResponder();
+      const config = makeDefaultConfig();
+
+      mockedCapturePaneContent.mockReturnValue(
+        "node .poor-dev/dist/bin/poor-dev-next.js --flow feature\n❯\n  ⏵⏵ bypass permissions on"
+      );
+
+      const result = respondToPhase0("test-pane", config, 0);
+
+      expect(result.done).toBe(true);
+      expect(result.responded).toBe(false);
+    });
+
+    it("古い出力の ? では応答しない（最新20行のみ対象）", async () => {
+      const { respondToPhase0 } = await importResponder();
+      const config = makeDefaultConfig();
+
+      // 質問は古い出力に埋もれている（20行以上前）
+      const oldLines = Array(25).fill("これは古い出力行です").join("\n");
+      mockedCapturePaneContent.mockReturnValue(
+        `この scope は何ですか?\n${oldLines}\n❯ \n\n  ⏵⏵ bypass permissions on`
+      );
+
+      const result = respondToPhase0("test-pane", config, 0);
+
+      // 最新20行に ? がないので responded=false
+      expect(result.responded).toBe(false);
     });
   });
 });

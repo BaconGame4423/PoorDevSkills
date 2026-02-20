@@ -33,6 +33,7 @@
     "url": "git+https://github.com/BaconGame4423/PoorDevSkills.git"
   },
   "scripts": {
+    "prepare": "tsc",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",

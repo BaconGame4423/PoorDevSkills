@@ -18,13 +18,13 @@ Before creating any teams:
 
 After Phase 0, execute the pipeline via TS helper:
 
-1. Run: `npx poor-dev-next --flow <FLOW> --state-dir <DIR> --project-dir .`
+1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
 2. Parse the JSON output and execute the action:
    - `create_team` → TeamCreate + Task(spawn teammates) + monitor + TeamDelete
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
    - `user_gate` → Ask user the question, then `--gate-response`
    - `done` → Report completion to user
-3. After action completes: `npx poor-dev-next --step-complete <step>`
+3. After action completes: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
 4. Return to step 1
 
 ## Review Loop (Opus-Mediated)
@@ -47,7 +47,7 @@ For `create_review_team` actions:
 - All teammates fail simultaneously → rate limit suspected → 120s wait → retry (max 3)
 - Review loop > max_iterations → user confirmation required
 - Fixer output validation failure → retry (max 2) → user confirmation
-- Crash recovery → pipeline-state.json + `npx poor-dev-next` to resume
+- Crash recovery → pipeline-state.json + `node .poor-dev/dist/bin/poor-dev-next.js` to resume
 
 ## Team Naming
 

@@ -37,10 +37,10 @@
 
 ## Agent Teams フロー (poor-dev.team)
 
-- `/poor-dev.team` 実行中は TS ヘルパー (`npx poor-dev-next`) の JSON 指示に従う
+- `/poor-dev.team` 実行中は TS ヘルパー (`node .poor-dev/dist/bin/poor-dev-next.js`) の JSON 指示に従う
 - Phase 0 はチームメイト不使用。Opus が直接ユーザーと議論
 - レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（直接通信しない）
-- compaction 後の回復: `pipeline-state.json` を読み、`npx poor-dev-next` 再実行
+- compaction 後の回復: `pipeline-state.json` を読み、`node .poor-dev/dist/bin/poor-dev-next.js` 再実行
 - チーム名: `pd-<step>-<NNN>`
 - カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能
 

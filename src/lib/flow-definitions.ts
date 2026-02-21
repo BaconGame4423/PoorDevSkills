@@ -33,7 +33,10 @@ const TASKSREVIEW_TEAM: StepTeamConfig = {
 const ARCH_REVIEW_TEAM: StepTeamConfig = {
   type: "parallel-review",
   teammates: [
-    { role: "reviewer-arch-unified", writeAccess: false },
+    { role: "architecturereview-architect", writeAccess: false },
+    { role: "architecturereview-security", writeAccess: false },
+    { role: "architecturereview-performance", writeAccess: false },
+    { role: "architecturereview-sre", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,
@@ -43,7 +46,10 @@ const ARCH_REVIEW_TEAM: StepTeamConfig = {
 const QUALITY_REVIEW_TEAM: StepTeamConfig = {
   type: "parallel-review",
   teammates: [
-    { role: "reviewer-quality-unified", writeAccess: false },
+    { role: "qualityreview-code", writeAccess: false },
+    { role: "qualityreview-qa", writeAccess: false },
+    { role: "qualityreview-security", writeAccess: false },
+    { role: "qualityreview-testdesign", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,
@@ -53,7 +59,10 @@ const QUALITY_REVIEW_TEAM: StepTeamConfig = {
 const PHASE_REVIEW_TEAM: StepTeamConfig = {
   type: "parallel-review",
   teammates: [
-    { role: "reviewer-phase-unified", writeAccess: false },
+    { role: "phasereview-qa", writeAccess: false },
+    { role: "phasereview-regression", writeAccess: false },
+    { role: "phasereview-docs", writeAccess: false },
+    { role: "phasereview-ux", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,

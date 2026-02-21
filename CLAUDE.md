@@ -44,6 +44,12 @@
 - チーム名: `pd-<step>-<NNN>`
 - カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能
 
+## 実装の並列化ルール
+
+- Plan 承認後の実装は、必ず複数の TeamMate で並列実行する
+- 独立したファイル群・Phase 単位でタスクを分割し、TeamCreate + Task で並列にディスパッチする
+- 単一エージェントでの逐次実装は禁止
+
 ## ベンチマーク
 
 - ベンチマーク基盤の詳細は [docs/benchmarks.md](docs/benchmarks.md) を参照

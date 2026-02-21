@@ -18,9 +18,13 @@ function execTmuxSafe(args: string[]): string | null {
 }
 
 export function capturePaneContent(paneId: string): string {
-  return execTmux(["capture-pane", "-t", paneId, "-p"]);
+  return execTmux(["capture-pane", "-t", paneId, "-p", "-S", "-100"]);
 }
 
+/**
+ * 単一キー送信用。テキスト送信は sendKeysLiteral を使う。
+ * keys はスペース区切りで複数キーを指定可能（例: "C-c Enter"）。
+ */
 export function sendKeys(paneId: string, keys: string): void {
   execTmux(["send-keys", "-t", paneId, ...keys.split(" ")]);
 }
@@ -34,8 +38,7 @@ export function pasteBuffer(
   bufferName: string,
   text: string
 ): void {
-  const escapedText = text.replace(/'/g, "'\\''");
-  execTmux(["set-buffer", "-b", bufferName, `'${escapedText}'`]);
+  execTmux(["set-buffer", "-b", bufferName, text]);
   execTmux(["paste-buffer", "-p", "-t", paneId, "-b", bufferName, "-d"]);
 }
 

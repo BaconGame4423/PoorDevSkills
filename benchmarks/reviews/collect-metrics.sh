@@ -113,9 +113,9 @@ echo "--- Git History ---"
 if [ -d "$DIR_PATH/.git" ]; then
     git -C "$DIR_PATH" log --oneline --all --format='%h %ai %s' --max-count=20 2>/dev/null || echo "  (no commits)"
 
-    first_commit=$(git -C "$DIR_PATH" log --all --reverse --format='%ai' --max-count=1 2>/dev/null)
-    last_commit=$(git -C "$DIR_PATH" log --all --format='%ai' --max-count=1 2>/dev/null)
-    commit_count=$(git -C "$DIR_PATH" rev-list --all --count 2>/dev/null || echo 0)
+    first_commit=$(git -C "$DIR_PATH" log --reverse --format='%ai' --max-count=1 2>/dev/null)
+    last_commit=$(git -C "$DIR_PATH" log --format='%ai' --max-count=1 2>/dev/null)
+    commit_count=$(git -C "$DIR_PATH" rev-list HEAD --count 2>/dev/null || echo 0)
     echo ""
     echo "  Commits: $commit_count"
     echo "  First: $first_commit"
@@ -132,7 +132,7 @@ echo "--- Timing Estimation ---"
 
 # Try to get timing from git or file modification times
 if [ -d "$DIR_PATH/.git" ]; then
-    first_ts=$(git -C "$DIR_PATH" log --all --reverse --format='%at' --max-count=1 2>/dev/null)
+    first_ts=$(git -C "$DIR_PATH" log --reverse --format='%at' --max-count=1 2>/dev/null)
 else
     # Fallback: use oldest output file modification time (recursive)
     earliest_mod=""

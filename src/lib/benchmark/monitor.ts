@@ -1,43 +1,42 @@
 import type { MonitorOptions, MonitorResult, Phase0Config } from "./types.js";
-import { capturePaneContent, sendKeys, paneExists } from "./tmux.js";
+import { capturePaneContent, paneExists } from "./tmux.js";
 import { respondToPhase0 } from "./phase0-responder.js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
-
-function extractPermissionPath(paneContent: string): string | null {
-  const lines = paneContent.split("\n");
-  for (const line of lines) {
-    if (line.includes("←")) {
-      const match = line.match(/←\s*(\S+)/);
-      if (match?.[1]) {
-        return match[1];
-      }
-    }
-  }
-  return null;
-}
-
-function isPathSafe(path: string, projectRoot: string): boolean {
-  if (!path.startsWith(projectRoot)) {
-    return false;
-  }
-  if (/(?:^|\/)(?:lib|commands)\//.test(path)) {
-    return false;
-  }
-  return true;
-}
+import path from "node:path";
 
 function loadPhase0Config(path: string): Phase0Config {
   const content = readFileSync(path, "utf-8");
   return JSON.parse(content) as Phase0Config;
 }
 
+/**
+ * Find pipeline-state.json file.
+ * Search order: features subdirs, .poor-dev/, then comboDir root.
+ */
+function findPipelineState(comboDir: string): string | null {
+  const featuresDir = path.join(comboDir, "features");
+  if (existsSync(featuresDir)) {
+    for (const entry of readdirSync(featuresDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        const candidate = path.join(featuresDir, entry.name, "pipeline-state.json");
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+  }
+  const legacyPath = path.join(comboDir, ".poor-dev", "pipeline-state.json");
+  if (existsSync(legacyPath)) return legacyPath;
+  const directPath = path.join(comboDir, "pipeline-state.json");
+  if (existsSync(directPath)) return directPath;
+  return null;
+}
+
 function checkPipelineState(comboDir: string): {
   complete: boolean;
   error: boolean;
 } {
-  const statePath = `${comboDir}/pipeline-state.json`;
-  if (!existsSync(statePath)) {
+  const statePath = findPipelineState(comboDir);
+  if (!statePath) {
     return { complete: false, error: false };
   }
 
@@ -67,9 +66,11 @@ function checkPipelineState(comboDir: string): {
 
 function hasArtifacts(comboDir: string): boolean {
   try {
-    const files = execSync(`find "${comboDir}" -maxdepth 2 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\)`, {
-      encoding: "utf-8",
-    }).trim();
+    const files = execSync(
+      `find "${comboDir}" -maxdepth 2 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
+      `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*'`,
+      { encoding: "utf-8" }
+    ).trim();
     return files.length > 0;
   } catch {
     return false;
@@ -117,7 +118,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
     const paneContent = capturePaneContent(options.targetPane);
 
     if (!phase0Done) {
-      const result = respondToPhase0(options.targetPane, phase0Config, turnCount);
+      const result = respondToPhase0(options.targetPane, phase0Config, turnCount, paneContent);
       turnCount = result.turnCount;
       if (result.done) {
         phase0Done = true;
@@ -128,22 +129,9 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       }
     }
 
+    // Permission prompts should not occur with --dangerously-skip-permissions
     if (paneContent.includes("Permission required")) {
-      const permPath = extractPermissionPath(paneContent);
-      if (permPath) {
-        if (isPathSafe(permPath, options.projectRoot)) {
-          logs.push(`Auto-approving permission: ${permPath}`);
-          sendKeys(options.targetPane, "Right");
-          await sleep(500);
-          sendKeys(options.targetPane, "Enter");
-          await sleep(500);
-          sendKeys(options.targetPane, "y");
-          await sleep(500);
-          sendKeys(options.targetPane, "Enter");
-        } else {
-          logs.push(`Unsafe permission denied: ${permPath}`);
-        }
-      }
+      logs.push("Permission prompt detected (unexpected)");
     }
 
     if (elapsed - lastPipelineCheck >= pipelineCheckIntervalMs) {
@@ -160,19 +148,28 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       }
 
       if (pipelineState.complete) {
-        return {
-          exitReason: "pipeline_complete",
-          elapsedSeconds,
-          combo: options.combo,
-          logs: [...logs, "Pipeline completed"],
-        };
+        logs.push("Pipeline completed");
+        if (options.postCommand) {
+          try {
+            logs.push(`Running post-processing: ${options.postCommand}`);
+            const postOutput = execSync(options.postCommand, {
+              encoding: "utf-8",
+              timeout: 300_000,
+              cwd: options.projectRoot,
+            });
+            logs.push(`Post-processing complete: ${postOutput.slice(0, 500)}`);
+          } catch (e) {
+            logs.push(`Post-processing failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        return { exitReason: "pipeline_complete", elapsedSeconds, combo: options.combo, logs };
       }
     }
 
     if (elapsed >= idleCheckStartMs && elapsed - lastIdleCheck >= idleCheckIntervalMs) {
       lastIdleCheck = elapsed;
 
-      if (paneContent.includes(">")) {
+      if (paneContent.includes("❯")) {
         idleDetected = true;
         if (hasArtifacts(options.comboDir)) {
           return {

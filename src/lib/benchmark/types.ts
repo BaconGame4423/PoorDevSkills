@@ -77,6 +77,7 @@ export interface MonitorOptions {
   phase0ConfigPath: string;
   timeoutSeconds: number;
   projectRoot: string;
+  postCommand?: string;
 }
 
 // --- tmux ラッパー型 ---

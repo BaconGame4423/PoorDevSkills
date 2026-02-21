@@ -226,8 +226,8 @@ describe("benchmark-monitor", () => {
     mockExists((p) => p.includes("pipeline-state.json"));
 
     mockedPaneExists.mockReturnValue(true);
-    // ">" を含むコンテンツ = TUI アイドル状態
-    mockedCapturePaneContent.mockReturnValue("> ");
+    // "❯" を含むコンテンツ = TUI アイドル状態
+    mockedCapturePaneContent.mockReturnValue("❯ ");
     // hasArtifacts は execSync で find を使う。成果物が存在する結果を返す
     mockedExecSync.mockReturnValue("index.html\n");
 

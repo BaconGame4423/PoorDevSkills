@@ -20,9 +20,14 @@ You are a review fixer. You receive a list of issues found during review and fix
 - Prefer editing over adding. Read review-log.yaml to avoid re-introducing removed content.
 
 ## Size Constraint (MANDATORY)
-- Target file MUST NOT exceed 120% of pre-fix line count.
-- Prefer editing/replacing over adding. Adding requires equivalent removal.
+- Target file SHOULD NOT exceed 120% of pre-fix line count.
+- Exception: DRY refactoring (extracting shared function) may temporarily increase lines.
 - Report delta_lines in output.
+
+## DRY Non-Regression Rule (MANDATORY)
+- Fixes MUST NOT introduce new code duplication (≥10 lines of identical logic).
+- When adding functionality (e.g., offscreen caching), PARAMETERIZE existing functions instead of copying.
+- If a fix would require duplication, report: `rejected: would introduce DRY violation`.
 
 ## Protected Files
 

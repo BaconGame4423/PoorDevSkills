@@ -636,6 +636,7 @@ ANALYSIS_EOF
     (cd "$TARGET_DIR" && env -u CLAUDECODE claude -p \
       --model "$ORCH_MODEL" \
       --output-format text \
+      --dangerously-skip-permissions \
       <<< "$analysis_prompt") || warn "分析フェーズ失敗"
   else
     (cd "$TARGET_DIR" && opencode run \
@@ -820,7 +821,13 @@ if [[ "$COLLECT_ONLY" == true ]]; then
 fi
 
 if [[ "$SETUP_ONLY" == true ]]; then
-  # --setup モード: 環境セットアップのみ
+  # --setup モード: 既存ランがあればアーカイブ
+  if has_existing_run "$TARGET_DIR"; then
+    info "既存ランをアーカイブ..."
+    archive_run "$TARGET_DIR"
+    clean_run "$TARGET_DIR"
+  fi
+  # 環境セットアップのみ
   if [[ "$MODE" == "baseline" ]]; then
     setup_baseline_environment
   else

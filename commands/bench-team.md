@@ -21,6 +21,11 @@ AskUserQuestion で combo を選択させる。
 
 左ペイン（Claude Code 側）で同期実行。
 
+セットアップ前に TS ビルドが最新か確認:
+```bash
+npm run build 2>/dev/null || true
+```
+
 ```bash
 ./benchmarks/run-benchmark.sh --setup <combo>
 ```
@@ -124,16 +129,28 @@ sleep 1
 tmux send-keys -t $TARGET Enter
 ```
 
-送信確認（リトライ付き）— ペインに `esc to inter` が表示されれば処理開始済み（行末 truncate 対策で部分一致）:
+送信確認（リトライ付き）— ペインに `esc to inter` が表示されれば処理開始済み（行末 truncate 対策で部分一致）。`Streaming` / `Tool` 処理中パターンも確認に使用:
 ```bash
-SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
+SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0; ENTER_RETRIES=0; MAX_ENTER_RETRIES=3
 while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
-  if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "esc to inter"; then
+  PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+  if echo "$PANE_CONTENT" | grep -q "esc to inter"; then
     echo "OK: プロンプト送信確認"
     break
   fi
-  # まだ入力欄にいる場合は Enter を再送
-  tmux send-keys -t $TARGET Enter
+  # Streaming / Tool 処理中なら待機
+  if echo "$PANE_CONTENT" | grep -qE "(Streaming|Tool)"; then
+    echo "INFO: 処理中を検出、待機..."
+    sleep 2
+    SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
+    continue
+  fi
+  # まだ入力欄にいる場合は Enter を再送（最大3回）
+  if [ $ENTER_RETRIES -lt $MAX_ENTER_RETRIES ]; then
+    tmux send-keys -t $TARGET Enter
+    ENTER_RETRIES=$((ENTER_RETRIES + 1))
+    echo "INFO: Enter 再送 ($ENTER_RETRIES/$MAX_ENTER_RETRIES)"
+  fi
   sleep 2
   SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
 done
@@ -145,11 +162,12 @@ fi
 ## Step 6: TS 監視プロセス起動（バックグラウンド）
 
 ```bash
-node dist/benchmark/bin/bench-team-monitor.js \
+node dist/lib/benchmark/bin/bench-team-monitor.js \
   --combo <combo> \
   --target $TARGET \
   --combo-dir benchmarks/<combo> \
   --phase0-config benchmarks/_scaffold/common/phase0-responses.json \
+  --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
   --timeout 7200
 ```
 
@@ -161,24 +179,13 @@ Bash(run_in_background) で実行。
 - 進捗は右ペインで確認可能なこと
 - 完了後は自動でポスト処理が実行されること
 
-## Step 7: 完了時ポスト処理
+## Step 7: 完了時通知
 
-監視プロセス完了後:
-```bash
-./benchmarks/run-benchmark.sh --post <combo>
-```
+監視プロセスが完了したらユーザーに通知:
+- ベンチマーク実行が完了したこと
+- `/bench-team --results <combo>` で結果確認を案内
 
-ベンチペイン状態のクリーンアップ:
-```bash
-BENCH_STATE="/tmp/bench-active-panes.json"
-if [ -f "$BENCH_STATE" ]; then
-  jq --arg c "<combo>" 'del(.[$c])' "$BENCH_STATE" > "${BENCH_STATE}.tmp" \
-    && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
-  [ "$(jq 'length' "$BENCH_STATE" 2>/dev/null)" = "0" ] && rm -f "$BENCH_STATE"
-fi
-```
-
-ユーザーに完了を通知し、`/bench-team --results <combo>` で結果確認を案内する。
+※ ポスト処理はモニターが `--post-command` で自動実行済み。
 
 ## Step 8: 結果表示（`--results` モード）
 

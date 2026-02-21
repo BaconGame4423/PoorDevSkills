@@ -15,6 +15,18 @@ const PHASE0_EXIT_PATTERNS = [
   "pipeline-state.json",
 ];
 
+/**
+ * UI タイプを検出する。
+ * AskUserQuestion の selection UI と通常のテキストプロンプトを区別。
+ */
+function detectUIType(recentContent: string): "text" | "selection" | "unknown" {
+  const lines = recentContent.split("\n");
+  const hasOptions = lines.some(l => /^\s{2,}[○●▸▹►◆◇>\[\(]/.test(l));
+  if (hasOptions) return "selection";
+  if (lines.some(l => l.trim().startsWith("❯"))) return "text";
+  return "unknown";
+}
+
 export function matchResponse(
   paneContent: string,
   config: Phase0Config
@@ -61,30 +73,40 @@ function isWaitingForInput(paneContent: string): boolean {
 export function respondToPhase0(
   paneId: string,
   config: Phase0Config,
-  turnCount: number
+  turnCount: number,
+  paneContent?: string
 ): { responded: boolean; turnCount: number; done: boolean } {
   if (turnCount >= config.max_turns) {
     return { responded: false, turnCount, done: true };
   }
 
-  const paneContent = capturePaneContent(paneId);
+  const content = paneContent ?? capturePaneContent(paneId);
 
   // Phase 0 終了検出: パイプライン実行が始まっていれば応答停止
   for (const exitPattern of PHASE0_EXIT_PATTERNS) {
-    if (paneContent.includes(exitPattern)) {
+    if (content.includes(exitPattern)) {
       return { responded: false, turnCount, done: true };
     }
   }
 
   // TUI がプロンプト待ちでなければ応答しない
-  if (!isWaitingForInput(paneContent)) {
+  if (!isWaitingForInput(content)) {
     return { responded: false, turnCount, done: false };
   }
 
   // 最近の出力（最後20行）に質問マーカーがあるか
-  const recentContent = getRecentLines(paneContent, 20);
+  const recentContent = getRecentLines(content, 20);
   if (!recentContent.includes("?") && !recentContent.includes("？")) {
     return { responded: false, turnCount, done: false };
+  }
+
+  // UI タイプ検出: selection UI の場合はデフォルト(Enter)のみ送信
+  const uiType = detectUIType(recentContent);
+  if (uiType === "selection") {
+    sendKeys(paneId, "Enter");
+    const newTurnCount = turnCount + 1;
+    const done = newTurnCount >= config.max_turns;
+    return { responded: true, turnCount: newTurnCount, done };
   }
 
   const response = matchResponse(recentContent, config);

@@ -28,6 +28,9 @@ const { values } = parseArgs({
       type: "string",
       short: "r",
     },
+    "post-command": {
+      type: "string",
+    },
   },
   strict: true,
 });
@@ -45,6 +48,7 @@ const options: MonitorOptions = {
   phase0ConfigPath: values["phase0-config"],
   timeoutSeconds: parseInt(values.timeout ?? "7200", 10),
   projectRoot: values["project-root"] ?? process.cwd(),
+  ...(values["post-command"] ? { postCommand: values["post-command"] } : {}),
 };
 
 runMonitor(options)

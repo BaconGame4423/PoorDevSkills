@@ -49,19 +49,27 @@ When the TS helper returns `user_gate`:
 3. After user responds: `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <response> --state-dir <DIR> --project-dir .`
 4. Parse the returned action and continue the Core Loop
 
-## Review Loop (Opus-Mediated)
+## Review Loop (Opus-Mediated, Parallel Reviewers)
 
-For `create_review_team` actions:
-1. TeamCreate with reviewers + fixer
-2. Assign review task to reviewer(s)
-3. Reviewer sends ISSUE:/VERDICT: output via SendMessage
-4. Parse with review-aggregate logic:
-   - No VERDICT line → ask reviewer to retry (max 2)
-   - C=0, H=0 → step complete → TeamDelete
-   - C>0 or H>0 → summarize issues → send to fixer
-5. Fixer reports fixed/rejected YAML → Opus updates review-log
-6. Loop back to step 2 (max iterations from config)
-7. Exceeded max → user_gate → TeamDelete
+For `create_review_team` with multiple reviewers:
+1. TeamCreate with N reviewers + 1 fixer
+2. Assign review task to ALL N reviewers simultaneously (parallel)
+3. Wait for all N to respond (or timeout 5min each)
+4. Aggregate results:
+   a. Merge all ISSUE: lines into unified list
+   b. Deduplicate: same file:line + same severity → keep first
+   c. Combine VERDICT: take the WORST verdict (NO-GO > CONDITIONAL > GO)
+   d. If any reviewer returned no VERDICT → retry that reviewer (max 2)
+5. If C=0, H=0 across ALL reviewers → step complete → TeamDelete
+6. If C>0 or H>0 → summarize deduplicated issues → send to fixer
+7. Fixer reports fixed/rejected YAML → Opus reviews the diff:
+   a. Read the modified files
+   b. Verify: no new code duplication ≥10 lines introduced
+   c. Verify: no debug statements (console.*, debugger) added
+   d. If violations found: send back to fixer with specific rejection
+   e. If clean: update review-log and commit
+8. Loop back to step 2 (max iterations from config)
+9. Exceeded max → user_gate → TeamDelete
 
 ## Error Handling
 

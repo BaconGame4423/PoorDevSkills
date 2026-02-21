@@ -44,6 +44,11 @@ For `light` mode: use only the personas listed in `light_personas` (defined per 
    Set NEXT_ID = 1.
 5. Record TARGET_LINES_INITIAL = line count of `$ARGUMENTS`.
 
+## STEP 0.7: Cross-Step Context (if previous review exists)
+Read review-log.yaml. If a previous review step has entries:
+- Summarize changes made by previous fixer in ≤5 bullet points.
+- Include in reviewer prompt: "Previous review modified: [summary]. Do NOT re-introduce fixed issues."
+
 ## Review Log Windowing (1.3)
 
 When preparing review-log for persona dispatch:

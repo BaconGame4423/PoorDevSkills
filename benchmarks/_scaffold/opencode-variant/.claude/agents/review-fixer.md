@@ -53,7 +53,8 @@ If a fix requires modifying a protected file, output instead:
 5. Fix issues in priority order: C → H → M → L
 6. Make minimal, focused changes
 7. Do not introduce new issues
-8. Output summary of fixes applied
+8. If a fix requires capabilities you don't have (network access, external tools), report as cannot_fix
+9. Output summary of fixes applied
 
 ## Output
 ```yaml
@@ -63,6 +64,9 @@ fixed:
 rejected:
   - id: XX-003
     reason: "out of scope"
+cannot_fix:
+  - id: XX-002
+    reason: "requires external tool/network access"
 remaining:
   - id: XX-004
     reason: "needs spec clarification"

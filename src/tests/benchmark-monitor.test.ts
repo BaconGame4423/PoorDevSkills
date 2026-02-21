@@ -29,7 +29,6 @@ vi.mock("../lib/benchmark/tmux.js", () => ({
   splitWindow: vi.fn(),
   listPanes: vi.fn(),
   killPane: vi.fn(),
-  paneExists: vi.fn(),
 }));
 
 // phase0-responder.ts をモック
@@ -40,14 +39,13 @@ vi.mock("../lib/benchmark/phase0-responder.js", () => ({
 
 import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { capturePaneContent, paneExists } from "../lib/benchmark/tmux.js";
+import { capturePaneContent } from "../lib/benchmark/tmux.js";
 import { respondToPhase0 } from "../lib/benchmark/phase0-responder.js";
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedExecSync = vi.mocked(execSync);
 const mockedCapturePaneContent = vi.mocked(capturePaneContent);
-const mockedPaneExists = vi.mocked(paneExists);
 const mockedRespondToPhase0 = vi.mocked(respondToPhase0);
 
 async function importMonitor() {
@@ -122,7 +120,6 @@ describe("benchmark-monitor", () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
 
-    mockedPaneExists.mockReturnValue(true);
     mockedCapturePaneContent.mockReturnValue("TUI content");
     mockedExecSync.mockReturnValue("");
     mockedExistsSync.mockReturnValue(false);
@@ -157,7 +154,9 @@ describe("benchmark-monitor", () => {
     const { runMonitor } = await importMonitor();
     const options = makeDefaultOptions();
 
-    mockedPaneExists.mockReturnValue(false);
+    mockedCapturePaneContent.mockImplementation(() => {
+      throw new Error("tmux command failed: pane not found");
+    });
 
     const promise = runMonitor(options);
     await vi.runAllTimersAsync();
@@ -202,7 +201,7 @@ describe("benchmark-monitor", () => {
     setPipelineState("active");
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    mockedPaneExists.mockReturnValue(true);
+
     let captureCount = 0;
     mockedCapturePaneContent.mockImplementation(() => {
       captureCount++;
@@ -225,7 +224,7 @@ describe("benchmark-monitor", () => {
     setPipelineState("active");
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    mockedPaneExists.mockReturnValue(true);
+
     // "❯" を含むコンテンツ = TUI アイドル状態
     mockedCapturePaneContent.mockReturnValue("❯ ");
     // hasArtifacts は execSync で find を使う。成果物が存在する結果を返す
@@ -261,7 +260,7 @@ describe("benchmark-monitor", () => {
     });
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    mockedPaneExists.mockReturnValue(true);
+
     mockedRespondToPhase0.mockReturnValue({ responded: true, turnCount: 1, done: true });
 
     const promise = runMonitor(options);
@@ -297,7 +296,7 @@ describe("benchmark-monitor", () => {
     setPipelineState("active");
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    mockedPaneExists.mockReturnValue(true);
+
     let count = 0;
     mockedCapturePaneContent.mockImplementation(() => {
       count++;
@@ -319,7 +318,7 @@ describe("benchmark-monitor", () => {
     setPipelineState("active");
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    mockedPaneExists.mockReturnValue(true);
+
     mockedCapturePaneContent.mockReturnValue("Same content");
 
     const promise = runMonitor(options);

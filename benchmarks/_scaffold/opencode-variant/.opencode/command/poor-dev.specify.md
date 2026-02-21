@@ -42,9 +42,13 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
    ```
    Set `FEATURE_DIR=specs/NNN-short-name`, `SPEC_FILE=FEATURE_DIR/spec.md`.
 
-3. **Write spec** using the template below. Replace all placeholders with concrete details from `$ARGUMENTS`.
+3. **Load context**:
+   - Read `discussion-summary.md` if present. User constraints stated during discussion are **MUST** requirements.
+     If input.txt contradicts discussion-summary.md, discussion-summary.md takes precedence.
 
-4. **Execution flow**:
+4. **Write spec** using the template below. Replace all placeholders with concrete details from `$ARGUMENTS`.
+
+5. **Execution flow**:
    1. Parse feature description. If empty: ERROR.
    2. Extract actors, actions, data, constraints.
    3. For unclear aspects: make informed guesses. Only mark with `[NEEDS CLARIFICATION: question]` if the choice significantly impacts scope/UX and no reasonable default exists. **Max 3 markers.**
@@ -53,7 +57,7 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
    6. Define measurable, technology-agnostic Success Criteria.
    7. Identify Key Entities (if data involved).
 
-5. **Spec Quality Validation**: After writing, validate against the checklist below. Generate `FEATURE_DIR/checklists/requirements.md`.
+6. **Spec Quality Validation**: After writing, validate against the checklist below. Generate `FEATURE_DIR/checklists/requirements.md`.
 
    - Run validation. If items fail (excluding NEEDS CLARIFICATION): fix and re-validate (max 3 iterations).
    - If `[NEEDS CLARIFICATION]` markers remain (max 3): present each as a question with options table:
@@ -70,7 +74,7 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
      ```
      Wait for user responses, update spec, re-validate.
 
-6. Report: branch name, spec path, checklist results, readiness for `/poor-dev.suggest` (next phase) or `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
+7. Report: branch name, spec path, checklist results, readiness for `/poor-dev.suggest` (next phase) or `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
 
 ## Spec Template
 

@@ -1,12 +1,12 @@
 import type { MonitorOptions, MonitorResult, Phase0Config } from "./types.js";
-import { capturePaneContent, paneExists } from "./tmux.js";
+import { capturePaneContent } from "./tmux.js";
 import { respondToPhase0 } from "./phase0-responder.js";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import path from "node:path";
 
-function loadPhase0Config(path: string): Phase0Config {
-  const content = readFileSync(path, "utf-8");
+function loadPhase0Config(configPath: string): Phase0Config {
+  const content = readFileSync(configPath, "utf-8");
   return JSON.parse(content) as Phase0Config;
 }
 
@@ -80,13 +80,23 @@ function hasArtifacts(comboDir: string): boolean {
 export async function runMonitor(options: MonitorOptions): Promise<MonitorResult> {
   const logs: string[] = [];
   const startTime = Date.now();
-  const phase0Config = loadPhase0Config(options.phase0ConfigPath);
+
+  let phase0Config: Phase0Config;
+  try {
+    phase0Config = loadPhase0Config(options.phase0ConfigPath);
+  } catch (e) {
+    return {
+      exitReason: "pipeline_error",
+      elapsedSeconds: 0,
+      combo: options.combo,
+      logs: [`Failed to load phase0 config: ${e instanceof Error ? e.message : String(e)}`],
+    };
+  }
 
   let turnCount = 0;
   let phase0Done = false;
   let lastPipelineCheck = 0;
   let lastIdleCheck = 0;
-  let idleDetected = false;
 
   const intervalMs = 10_000;
   const pipelineCheckIntervalMs = 60_000;
@@ -106,7 +116,11 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       };
     }
 
-    if (!paneExists(options.targetPane)) {
+    // capturePaneContent throws if pane no longer exists
+    let paneContent: string;
+    try {
+      paneContent = capturePaneContent(options.targetPane);
+    } catch {
       return {
         exitReason: "pane_lost",
         elapsedSeconds,
@@ -115,73 +129,85 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       };
     }
 
-    const paneContent = capturePaneContent(options.targetPane);
-
-    if (!phase0Done) {
-      const result = respondToPhase0(options.targetPane, phase0Config, turnCount, paneContent);
-      turnCount = result.turnCount;
-      if (result.done) {
-        phase0Done = true;
-        logs.push(`Phase 0 max turns reached (${turnCount})`);
-      }
-      if (result.responded) {
-        logs.push(`Phase 0 response sent (turn ${turnCount})`);
-      }
-    }
-
-    // Permission prompts should not occur with --dangerously-skip-permissions
-    if (paneContent.includes("Permission required")) {
-      logs.push("Permission prompt detected (unexpected)");
-    }
-
-    if (elapsed - lastPipelineCheck >= pipelineCheckIntervalMs) {
-      lastPipelineCheck = elapsed;
-      const pipelineState = checkPipelineState(options.comboDir);
-
-      if (pipelineState.error) {
-        return {
-          exitReason: "pipeline_error",
-          elapsedSeconds,
-          combo: options.combo,
-          logs: [...logs, "Pipeline error detected"],
-        };
-      }
-
-      if (pipelineState.complete) {
-        logs.push("Pipeline completed");
-        if (options.postCommand) {
-          try {
-            logs.push(`Running post-processing: ${options.postCommand}`);
-            const postOutput = execSync(options.postCommand, {
-              encoding: "utf-8",
-              timeout: 300_000,
-              cwd: options.projectRoot,
-            });
-            logs.push(`Post-processing complete: ${postOutput.slice(0, 500)}`);
-          } catch (e) {
-            logs.push(`Post-processing failed: ${e instanceof Error ? e.message : String(e)}`);
-          }
+    try {
+      if (!phase0Done) {
+        const result = respondToPhase0(options.targetPane, phase0Config, turnCount, paneContent);
+        turnCount = result.turnCount;
+        if (result.done) {
+          phase0Done = true;
+          logs.push(`Phase 0 max turns reached (${turnCount})`);
         }
-        return { exitReason: "pipeline_complete", elapsedSeconds, combo: options.combo, logs };
+        if (result.responded) {
+          logs.push(`Phase 0 response sent (turn ${turnCount})`);
+        }
       }
-    }
 
-    if (elapsed >= idleCheckStartMs && elapsed - lastIdleCheck >= idleCheckIntervalMs) {
-      lastIdleCheck = elapsed;
+      // Permission prompts should not occur with --dangerously-skip-permissions
+      if (paneContent.includes("Permission required")) {
+        logs.push("Permission prompt detected (unexpected)");
+      }
 
-      if (paneContent.includes("❯")) {
-        idleDetected = true;
-        if (hasArtifacts(options.comboDir)) {
+      if (elapsed - lastPipelineCheck >= pipelineCheckIntervalMs) {
+        lastPipelineCheck = elapsed;
+        const pipelineState = checkPipelineState(options.comboDir);
+
+        if (pipelineState.error) {
           return {
-            exitReason: "tui_idle",
+            exitReason: "pipeline_error",
             elapsedSeconds,
             combo: options.combo,
-            logs: [...logs, "TUI idle with artifacts present"],
+            logs: [...logs, "Pipeline error detected"],
           };
         }
-        logs.push("TUI idle but no artifacts yet");
+
+        if (pipelineState.complete) {
+          logs.push("Pipeline completed");
+          if (options.postCommand) {
+            try {
+              logs.push(`Running post-processing: ${options.postCommand}`);
+              const postOutput = execSync(options.postCommand, {
+                encoding: "utf-8",
+                timeout: 300_000,
+                cwd: options.projectRoot,
+              });
+              logs.push(`Post-processing complete: ${postOutput.slice(0, 500)}`);
+            } catch (e) {
+              logs.push(`Post-processing failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+          return { exitReason: "pipeline_complete", elapsedSeconds, combo: options.combo, logs };
+        }
       }
+
+      if (elapsed >= idleCheckStartMs && elapsed - lastIdleCheck >= idleCheckIntervalMs) {
+        lastIdleCheck = elapsed;
+
+        if (paneContent.includes("❯")) {
+          if (hasArtifacts(options.comboDir)) {
+            return {
+              exitReason: "tui_idle",
+              elapsedSeconds,
+              combo: options.combo,
+              logs: [...logs, "TUI idle with artifacts present"],
+            };
+          }
+          logs.push("TUI idle but no artifacts yet");
+        }
+      }
+    } catch (e) {
+      logs.push(`Monitor loop error: ${e instanceof Error ? e.message : String(e)}`);
+      return {
+        exitReason: "pipeline_error",
+        elapsedSeconds,
+        combo: options.combo,
+        logs,
+      };
     }
+
+    // Intermediate status on stderr for visibility
+    process.stderr.write(
+      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s phase0=${phase0Done ? "done" : "active"} pipeline=polling\n`
+    );
 
     await sleep(intervalMs);
   }

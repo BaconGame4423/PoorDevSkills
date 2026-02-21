@@ -178,6 +178,7 @@ Output progress markers at key milestones:
 - Use absolute paths
 - ERROR on gate failures or unresolved clarifications
 - Phase 1 requires research.md; skip with warning if missing
+- Code examples: function signature + max 3-line pseudocode. Leave full implementation to implement step.
 
 ### Dashboard Update
 

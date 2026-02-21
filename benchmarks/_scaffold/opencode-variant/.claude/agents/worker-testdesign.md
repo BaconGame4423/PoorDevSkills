@@ -16,9 +16,51 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 
 ### Your Step: testdesign
 
-Execute test design planning based on spec.md, plan.md, and tasks.md to produce test-plan.md.
+#### Team Mode Override
+1. **FEATURE_DIR**: Task description の「Feature directory:」行のパスをそのまま使用する
+2. **git 操作不要**: branch 作成・checkout・fetch・commit・push は supervisor が実施済み
+3. **Dashboard Update 不要**: Dashboard Update セクションは全て無視する
+4. **Commit & Push 不要**: Commit & Push Confirmation セクションは無視する
+5. **Branch Merge 不要**: Branch Merge & Cleanup セクションは無視する
+6. **Context**: Task description の「Context:」セクションに前ステップの成果物内容が含まれる
+7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
-<!-- SYNC:BEGIN source=commands/poor-dev.testdesign.md -->
-Refer to the command file for detailed instructions.
-Execute the testdesign step as described in commands/poor-dev.testdesign.md.
+<!-- SYNC:INLINED source=commands/poor-dev.testdesign.md date=2026-02-21 -->
+
+## Inputs
+
+Read the following artifacts from FEATURE_DIR (provided in Task description):
+- `spec.md` -- Feature specification
+- `plan.md` -- Implementation plan
+- `tasks.md` -- Task breakdown
+
+## Process
+
+1. **Analyze the tech stack**: Detect testing framework from plan.md or existing project files
+2. **Design test categories**:
+   - Unit tests for core logic
+   - Integration tests for component interactions
+   - Edge case tests from spec.md requirements
+   - Error handling tests
+3. **Generate test plan**: Document in `test-plan.md`
+4. **Generate test skeletons**: Create skeleton test files with:
+   - Test descriptions (it/describe blocks)
+   - Setup/teardown stubs
+   - Assertion placeholders
+   - Comments referencing spec.md sections
+
+## Output
+
+Write `test-plan.md` to FEATURE_DIR with:
+- Test strategy overview
+- Test categories and counts
+- Priority ordering
+- Framework-specific skeleton code blocks
+
+## Constraints
+
+- Do NOT implement actual test logic -- only skeletons
+- Reference specific sections of spec.md and tasks.md
+- Follow the project's existing test patterns if available
+
 <!-- SYNC:END -->

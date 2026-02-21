@@ -11,7 +11,10 @@ Orchestrate development workflows using Claude Code Agent Teams.
 Before creating any teams:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
 1. Classify the user's request into a flow type (feature, bugfix, investigation, roadmap, discovery)
-2. Discuss scope and requirements with the user
+2. Discuss scope and requirements with the user via AskUserQuestion:
+   - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
+   - 技術スタック: 必要なら選択肢を提示
+   - 質問が不要なほど要件が明確な場合はスキップ可
 3. Create `discussion-summary.md` in the feature directory
 4. No teammates are spawned during this phase
 
@@ -21,15 +24,34 @@ After Phase 0, execute the pipeline via TS helper:
 
 1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
 2. Parse the JSON output and execute the action:
-   - `create_team` → TeamCreate + Task(spawn teammates) + monitor + TeamDelete
-     **Context injection**: JSON の Context に列挙された各ファイルを Read し、
-     Task の description 末尾に `## Context: {key}\n{content}` として追記する。
-     50,000文字を超えるファイルは先頭50,000文字で切り詰める。
+   - `create_team` → 以下の手順を厳守:
+     1. **Cleanup**: TeamDelete (既存チームがあれば削除。エラーは無視)
+     2. **TeamCreate**: `team_name` は JSON の `team_name` フィールドをそのまま使用
+     3. **Spawn**: JSON の `teammates[]` 毎に Task ツールで spawn:
+        - `name` = `teammates[].role`, `team_name` = 上記チーム名
+        - `subagent_type` = `"general-purpose"` (Claude Code が `.claude/agents/{role}.md` を自動ロード)
+        - `prompt` は最小限 (role と step の説明のみ)。詳細指示は agent file から自動注入される
+     4. **TaskCreate**: JSON の `tasks[]` 毎に:
+        - `subject` = `tasks[].subject`
+        - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
+        - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
+        - `owner` = `tasks[].assignTo`
+     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)
+     6. **Commit**: JSON の `artifacts[]` に列挙されたファイルを `git add -f` && commit
+     7. **Step complete**: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
+     8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
+     9. **TeamDelete**
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
    - `user_gate` → See §User Gates below
    - `done` → Report completion to user
 3. After action completes: see §Conditional Steps below
 4. Return to step 1
+
+### 禁止事項 (Pipeline Step Execution)
+- パイプラインステップの作業を Opus が直接実行してはならない（Write/Edit でのファイル生成、直接レビュー等）
+- Task サブエージェント（`team_name` なし）でパイプラインステップを実行してはならない
+- JSON の `tasks[].description` を独自プロンプトで置き換えてはならない（Context injection の追記のみ許可）
+- TeamMate 応答失敗時に「残りステップは直接実行」等の方針転換は禁止 → §Error Handling に従う
 
 ### Conditional Steps
 
@@ -57,8 +79,10 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 
 ### Step 1: Dispatch
 - `iteration += 1`
-- Assign review tasks to ALL N reviewers simultaneously (TaskCreate per reviewer)
-- Include target files + previous review-log context in task description
+- **初回のみ**: 上記 `create_team` 手順の 1-4 を実行してチーム作成
+- **2回目以降** (fix 後のリトライ): 既存チームで TaskCreate 再発行
+- reviewer は read-only、fixer は write-enabled
+- target files + 前回 review-log を task description に含める
 
 ### Step 2: Collect & Parse
 - Reviewer メッセージ待ち。TaskList を使って完了状況を確認可能
@@ -94,6 +118,14 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
    c. respawn カウント（teammate 毎最大3回）
 5. 3回 respawn 後も失敗 → その reviewer なしで続行（graceful degradation）
 6. 全 teammate 同時失敗 → rate limit 疑い → 120s 待機 → リトライ（最大3回）
+
+### TeamCreate / Teammate Failure
+- "Already leading team" エラー → TeamDelete → 5秒待機 → TeamCreate 再試行（最大2回）
+- Teammate タイムアウト (120秒応答なし):
+  1. SendMessage で状態確認
+  2. 応答なし → shutdown_request 送信
+  3. 同じ `teammates[]` spec で再 spawn → TaskCreate で同じタスク再割当
+  4. respawn 3回失敗 → `[ERROR: {role} failed after 3 respawns]` 出力して **停止**（直接実行に切り替えない）
 
 ### Other
 - Review loop > max_iterations → user confirmation required

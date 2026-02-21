@@ -71,6 +71,8 @@ function isWaitingForInput(paneContent: string): boolean {
     if (trimmed.includes("Enter to select") || trimmed.includes("↑/↓ to navigate")) continue;
     // "N. Chat about this" 等の selection UI 末尾行はスキップ
     if (/^\d+\.\s/.test(trimmed)) continue;
+    // Claude Code TUI のセパレータ行（ボックスドローイング文字のみ）はスキップ
+    if (/^[─━═┄┅┈┉\-]+$/.test(trimmed)) continue;
     // それ以外の実質的な行がある = まだ出力中
     return false;
   }

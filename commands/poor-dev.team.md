@@ -11,7 +11,10 @@ Orchestrate development workflows using Claude Code Agent Teams.
 Before creating any teams:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
 1. Classify the user's request into a flow type (feature, bugfix, investigation, roadmap, discovery)
-2. Discuss scope and requirements with the user
+2. Discuss scope and requirements with the user via AskUserQuestion:
+   - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
+   - 技術スタック: 必要なら選択肢を提示
+   - 質問が不要なほど要件が明確な場合はスキップ可
 3. Create `discussion-summary.md` in the feature directory
 4. No teammates are spawned during this phase
 

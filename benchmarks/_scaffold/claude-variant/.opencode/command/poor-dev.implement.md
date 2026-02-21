@@ -117,6 +117,16 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **DAG construction**: Build dependency graph from `depends:` + Phase ordering
    - **Parallel groups**: Identify `[P:group]` tasks within each Phase
 
+## Code Quality Principles (MANDATORY)
+
+Before implementing any task, adhere to these principles:
+
+1. **DRY**: Do not duplicate ≥10 lines of logic. Extract shared functions.
+2. **No debug artifacts**: Remove all console.log/debug/error before completion.
+3. **Accessibility**: Every interactive element MUST have keyboard equivalent + ARIA attributes.
+4. **Parameterize**: Use function parameters instead of copy-paste with small changes.
+5. **Spec compliance**: innerHTML prohibited if spec says textContent. Follow spec constraints exactly.
+
 6. Execute implementation following the DAG-based task plan:
 
    **6a. Sequential phases** (no [P] tasks): Execute tasks in order within the phase.
@@ -182,7 +192,13 @@ You **MUST** consider the user input before proceeding (if not empty).
    - For parallel tasks [P], continue with successful tasks, report failed ones
    - Provide clear error messages with context for debugging
    - Suggest next steps if implementation cannot proceed
-   - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
+
+## Task Completion Verification (MANDATORY)
+
+- After implementing each task, verify ALL acceptance criteria (`- [ ]` items)
+- Mark each verified AC as `- [x]` in tasks.md
+- Mark the task itself as `[X]` only when ALL its ACs are `[x]`
+- NEVER mark a task as [X] if any AC remains [ ]
 
 10. Completion validation:
    - Verify all required tasks are completed

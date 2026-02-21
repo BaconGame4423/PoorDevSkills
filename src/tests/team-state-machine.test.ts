@@ -43,7 +43,6 @@ function makeCtx(overrides: Partial<ComputeContext> = {}): ComputeContext {
     featureDir: "specs/001-test",
     projectDir: "/proj",
     flowDef: FEATURE_FLOW,
-    useAgentTeams: true,
     ...overrides,
   };
 }
@@ -123,19 +122,6 @@ describe("computeNextInstruction", () => {
       if (action.action === "user_gate") {
         expect(action.step).toBe("suggest");
         expect(action.message).toContain("spec.md");
-      }
-    });
-  });
-
-  describe("レガシーパス", () => {
-    it("useAgentTeams=false で dispatch_step を返す", () => {
-      const ctx = makeCtx({ useAgentTeams: false });
-      const action = computeNextInstruction(ctx, mockFs());
-
-      expect(action.action).toBe("dispatch_step");
-      if (action.action === "dispatch_step") {
-        expect(action.step).toBe("specify");
-        expect(action.commandFile).toContain("poor-dev.specify.md");
       }
     });
   });

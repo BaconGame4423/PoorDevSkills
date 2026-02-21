@@ -26,28 +26,14 @@ At the end, exactly one verdict line:
 VERDICT: {GO|CONDITIONAL|NO-GO}
 ```
 
-### Verdict Criteria (MANDATORY)
-- GO: C=0, H=0
-- CONDITIONAL: H=0, C≤3 (fixable without architectural change)
-- NO-GO: H≥1 or C>3
-
-### Scope Boundary
-- Only raise issues that affect the CURRENT implementation
-- Do NOT raise issues about: test coverage (if tests are out of scope), future scalability, style preferences
-- Check spec.md for what is explicitly required vs nice-to-have
-
-### Dedup Pass
-- Read review-log.yaml (if exists) before reviewing
-- Do NOT re-raise issues that were already fixed or rejected in previous iterations
-
 ### Personas
 
 #### 1. CODE (Code Reviewer)
-- DRY principle: Any function/block ≥10 lines duplicated? (= H severity)
-- innerHTML/eval prohibition: Any innerHTML usage? (check spec for explicit prohibition)
-- console.*/debugger: Any debug statements remaining?
-- Dead code: Any unreferenced variables, functions, or config values?
+- Code style: Does this follow our style guide?
+- DRY principle: Is code duplication minimized?
+- SOLID principles: Are SOLID principles followed?
 - Naming conventions: Are names clear and consistent?
+- Complexity: Is the code unnecessarily complex?
 
 #### 2. QA (Quality Assurance)
 - Test coverage: Is test coverage adequate?

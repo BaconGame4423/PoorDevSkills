@@ -7,6 +7,12 @@
 - benchmarks/ を npm パッケージに同梱（ソースのみ、生成物は除外）
 - ベンチマーク出力ディレクトリの git 追跡を有効化
 
+### Removed
+- レガシーパイプライン実行パス (`poor-dev.pipeline` / `poor-dev.md` / `poor-dev-simple.md`) を削除
+- Bash lib/ スクリプト 20 ファイルを削除（独立ユーティリティの .mjs は残存）
+- src/lib/ のレガシー TS ファイル 14 ファイルと対応テスト 6 ファイルを削除
+- `team-state-machine.ts` のレガシーパス分岐（`useAgentTeams` / `DispatchStepAction` / `buildDispatchAction`）を削除
+
 ## [1.1.0] - 2026-02-13
 ### Added
 - モデルティアシステム（T1/T2/T3）— ステップ別に最適モデルを自動選択（Plan-and-Execute）

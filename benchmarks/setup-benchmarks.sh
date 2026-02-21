@@ -99,9 +99,6 @@ sync_scaffold() {
 
   echo "--- Syncing DevSkills → scaffold ---"
 
-  # pipeline.md はベンチマーク不要なので除外
-  local exclude_files="poor-dev.pipeline.md"
-
   for variant_dir in "$SCAFFOLD/opencode-variant" "$SCAFFOLD/claude-variant"; do
     local vname
     vname=$(basename "$variant_dir")
@@ -110,9 +107,7 @@ sync_scaffold() {
     rm -rf "$variant_dir/.opencode/command"
     mkdir -p "$variant_dir/.opencode/command"
     for f in "$DEVSKILLS_DIR/.opencode/command"/poor-dev*.md; do
-      local fname
-      fname=$(basename "$f")
-      [[ "$exclude_files" == *"$fname"* ]] && continue
+      [[ -f "$f" ]] || continue
       cp "$f" "$variant_dir/.opencode/command/"
     done
 
@@ -203,7 +198,7 @@ HOOK_EOF
 
   # 4b) team モード: scaffold に含まれないスキルファイルを直接コピー
   if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-    for team_file in poor-dev.team.md poor-dev.pipeline.md; do
+    for team_file in poor-dev.team.md; do
       local src="$DEVSKILLS_DIR/.opencode/command/$team_file"
       if [[ -f "$src" ]]; then
         cp "$src" "$target/.opencode/command/"
@@ -411,7 +406,7 @@ ENDJSON
 
     # 7b) team モード: scaffold に含まれないスキルファイルを直接コピー
     if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-      for team_file in poor-dev.team.md poor-dev.pipeline.md; do
+      for team_file in poor-dev.team.md; do
         src="$DEVSKILLS_DIR/.opencode/command/$team_file"
         if [[ -f "$src" ]]; then
           cp "$src" "$target/.opencode/command/"

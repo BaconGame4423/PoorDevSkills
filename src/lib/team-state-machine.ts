@@ -25,7 +25,6 @@ export interface ComputeContext {
   featureDir: string;
   projectDir: string;
   flowDef: FlowDefinition;
-  useAgentTeams: boolean;
 }
 
 /**
@@ -38,7 +37,7 @@ export function computeNextInstruction(
   ctx: ComputeContext,
   fs: Pick<FileSystem, "exists" | "readFile">
 ): TeamAction {
-  const { state, featureDir, projectDir, flowDef, useAgentTeams } = ctx;
+  const { state, featureDir, projectDir, flowDef } = ctx;
 
   // status ガード: paused / awaiting-approval / completed では次ステップに進まない
   if (state.status === "paused") {
@@ -93,23 +92,17 @@ export function computeNextInstruction(
     };
   }
 
-  // Agent Teams パス
-  if (useAgentTeams) {
-    const teamConfig = flowDef.teamConfig?.[nextStep];
-    if (!teamConfig) {
-      // teamConfig がないステップ → エラー（Agent Teams パスでは全ステップに必要）
-      return {
-        action: "user_gate",
-        step: nextStep,
-        message: `Step "${nextStep}" has no teamConfig. Cannot proceed in Agent Teams mode.`,
-        options: ["skip", "abort"],
-      };
-    }
-    return buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+  // teamConfig チェック
+  const teamConfig = flowDef.teamConfig?.[nextStep];
+  if (!teamConfig) {
+    return {
+      action: "user_gate",
+      step: nextStep,
+      message: `Step "${nextStep}" has no teamConfig. Cannot proceed.`,
+      options: ["skip", "abort"],
+    };
   }
-
-  // レガシーパス
-  return buildDispatchAction(nextStep, fd, projectDir, flowDef, fs);
+  return buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
 }
 
 // --- 内部ヘルパー ---
@@ -229,34 +222,3 @@ function collectReviewTargets(
   return targets.length > 0 ? targets : [fd];
 }
 
-function buildDispatchAction(
-  step: string,
-  _fd: string,
-  projectDir: string,
-  flowDef: FlowDefinition,
-  _fs: Pick<FileSystem, "exists" | "readFile">
-): TeamAction {
-  const isReviewStep = flowDef.reviews?.includes(step) ?? false;
-  const isConditionalStep = flowDef.conditionals?.includes(step) ?? false;
-
-  // コマンドファイルパスを推定
-  const commandFile = path.join(projectDir, "commands", `poor-dev.${step}.md`);
-
-  // コンテキストファイル
-  const contextFiles: Record<string, string> = {};
-  const staticCtx = flowDef.context?.[step];
-  if (staticCtx) {
-    for (const [key, filename] of Object.entries(staticCtx)) {
-      contextFiles[key] = filename;
-    }
-  }
-
-  return {
-    action: "dispatch_step",
-    step,
-    commandFile,
-    contextFiles,
-    isReview: isReviewStep,
-    isConditional: isConditionalStep,
-  };
-}

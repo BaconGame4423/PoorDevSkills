@@ -24,7 +24,6 @@ After Phase 0, execute the pipeline via TS helper:
    - `create_team` → TeamCreate + Task(spawn teammates) + monitor + TeamDelete
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
    - `user_gate` → See §User Gates below
-   - `dispatch_step` → (Legacy path) Run the step directly without team orchestration
    - `done` → Report completion to user
 3. After action completes: see §Conditional Steps below
 4. Return to step 1

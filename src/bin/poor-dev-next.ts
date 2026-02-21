@@ -29,14 +29,12 @@ interface CliArgs {
   setConditional?: string;
   gateResponse?: string;
   init: boolean;
-  useAgentTeams: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     projectDir: process.cwd(),
     init: false,
-    useAgentTeams: true,
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -63,9 +61,6 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--init":
         args.init = true;
-        break;
-      case "--legacy":
-        args.useAgentTeams = false;
         break;
     }
   }
@@ -147,7 +142,7 @@ function main(): void {
     if (flowDef) {
       const featureDir = path.relative(projectDir, stateDir);
       const action = computeNextInstruction(
-        { state, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+        { state, featureDir, projectDir, flowDef },
         fs
       );
       process.stdout.write(JSON.stringify(action) + "\n");
@@ -188,7 +183,7 @@ function main(): void {
     }
     const featureDir = path.relative(projectDir, stateDir);
     const action = computeNextInstruction(
-      { state, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+      { state, featureDir, projectDir, flowDef },
       fs
     );
     process.stdout.write(JSON.stringify(action) + "\n");
@@ -231,7 +226,7 @@ function main(): void {
     const updatedState = stateManager.read(stateFile);
     const featureDir = path.relative(projectDir, stateDir);
     const nextAction = computeNextInstruction(
-      { state: updatedState, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+      { state: updatedState, featureDir, projectDir, flowDef },
       fs
     );
     process.stdout.write(JSON.stringify(nextAction) + "\n");
@@ -263,7 +258,7 @@ function main(): void {
 
   const featureDir = path.relative(projectDir, stateDir);
   const action = computeNextInstruction(
-    { state, featureDir, projectDir, flowDef, useAgentTeams: args.useAgentTeams },
+    { state, featureDir, projectDir, flowDef },
     fs
   );
 

@@ -44,6 +44,14 @@
 - チーム名: `pd-<step>-<NNN>`
 - カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能
 
+## Agent Teams アーキテクチャ
+
+- poor-dev.team が唯一のパイプライン実行パス（レガシーパスは削除済み）
+- TeamMate のモデルは `CLAUDE_CODE_TEAMMATE_COMMAND` 環境変数でプロセスレベル差し替え
+  - Orchestrator (Opus) = Anthropic API
+  - TeamMate (GLM-5) = Z.AI API (`scripts/setup-glm-teammate.sh` で構成)
+- config.json の overrides/tiers は poor-dev.config コマンドの設定管理用に残存するが、team パスのモデル選択には使われない
+
 ## 実装の並列化ルール
 
 - Plan 承認後の実装は、必ず複数の TeamMate で並列実行する

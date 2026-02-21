@@ -26,7 +26,6 @@ export interface TaskSpec {
 export type TeamAction =
   | CreateTeamAction
   | CreateReviewTeamAction
-  | DispatchStepAction
   | UserGateAction
   | DoneAction;
 
@@ -50,16 +49,6 @@ export interface CreateReviewTeamAction {
   target_files: string[];
   max_iterations: number;
   communication: "direct" | "opus-mediated";
-}
-
-/** レガシーパス用ディスパッチ (poor-dev.pipeline からのみ使用) */
-export interface DispatchStepAction {
-  action: "dispatch_step";
-  step: string;
-  commandFile: string;
-  contextFiles: Record<string, string>;
-  isReview: boolean;
-  isConditional: boolean;
 }
 
 /** ユーザー確認ゲート */

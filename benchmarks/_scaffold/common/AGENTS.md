@@ -5,9 +5,9 @@
 /poor-dev コマンドを受け取った場合、**直接コードを書くことは絶対に禁止**。
 必ず以下の手順に従うこと:
 
-1. ユーザー入力を分類する（poor-dev.md の Step 1-2 に従う）
-2. 分類結果に応じて bash lib/intake.sh を実行する（poor-dev.md の Step 3 に従う）
-3. intake.sh の結果を報告して完了
+1. ユーザー入力を分類する（poor-dev.team フローに従う）
+2. 分類結果に応じて poor-dev.team の Phase 0 を実行する
+3. 結果を報告して完了
 
 直接 HTML/JS/CSS/Python 等のコードファイルを作成してはならない。
 パイプラインの実行は全て lib/intake.sh が自動で行う。

@@ -469,6 +469,15 @@ setup_environment() {
     warn "pipeline.md が見つかりません"
   fi
 
+  # lib/*.sh 存在チェック（レガシーパス削除後は存在しない可能性）
+  if ! ls "$DEVSKILLS_DIR"/lib/*.sh &>/dev/null; then
+    warn "lib/*.sh が見つかりません（レガシーパス削除済み）。pipeline モードは非対応です"
+    if [[ "$MODE" != "team" ]]; then
+      err "pipeline モードには lib/*.sh が必要です。team モードを使用してください"
+      exit 1
+    fi
+  fi
+
   # lib/ 読み取り専用コピー（symlink ではなく実体コピー + 書き込み不可）
   chmod -R u+w "$TARGET_DIR/lib" 2>/dev/null || true
   rm -rf "$TARGET_DIR/lib"

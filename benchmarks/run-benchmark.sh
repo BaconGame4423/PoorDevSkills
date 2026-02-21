@@ -605,9 +605,10 @@ analyze_poordev() {
 成果物を分析し、PoorDevSkills 自体の問題点と改善案を特定してください。
 
 ## 分析対象ファイル（存在するものを全て読んでください）
-- spec.md, plan.md, tasks.md, review-log.yaml
-- *.html, *.js, *.css, *.ts, *.py（生成コード）
-- .poor-dev/pipeline-state.json
+- _runs/*/spec.md, _runs/*/plan.md, _runs/*/tasks.md (team モード)
+- spec.md, plan.md, tasks.md, review-log.yaml (legacy モード)
+- *.html, *.js, *.css, *.ts, *.py（生成コード — _runs/ 配下も含む）
+- _runs/*/pipeline-state.json または .poor-dev/pipeline-state.json
 - git log --oneline --all（Bash で実行）
 
 ## 評価観点
@@ -734,7 +735,7 @@ collect_and_summarize() {
   echo -e "${CYAN}--- 成果物 ---${NC}"
   for artifact in spec.md plan.md tasks.md review-log.yaml poordev-analysis.yaml; do
     local found
-    found=$(find "$TARGET_DIR" -name "$artifact" -not -path '*/_runs/*' -not -path '*/.git/*' 2>/dev/null | head -1)
+    found=$(find "$TARGET_DIR" -name "$artifact" -not -path '*/_runs/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*' -not -path '*/.git/*' 2>/dev/null | head -1)
     if [[ -n "$found" ]]; then
       local relpath="${found#$TARGET_DIR/}"
       echo -e "  ${GREEN}[x]${NC} $artifact ($relpath)"
@@ -756,7 +757,7 @@ collect_and_summarize() {
     total_lines=$((total_lines + lines))
     local relpath="${f#$TARGET_DIR/}"
     printf "  %-40s %6d lines\n" "$relpath" "$lines"
-  done < <(find "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/*' 2>/dev/null | sort)
+  done < <(find "$TARGET_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' -not -path '*/_runs/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*' 2>/dev/null | sort)
   echo "  合計: ${file_count} ファイル, ${total_lines} 行"
   echo ""
 

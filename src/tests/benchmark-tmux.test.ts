@@ -287,6 +287,37 @@ describe("tmux utilities", () => {
   });
 
   // ---------------------------------------------------------------
+  // listAllPanes
+  // ---------------------------------------------------------------
+
+  describe("listAllPanes", () => {
+    it("全セッションのペイン一覧を返す (-a フラグ付き)", async () => {
+      mockedExecFileSync.mockReturnValue("%0\n%1\n%2\n%3" as any);
+
+      const { listAllPanes } = await importTmux();
+      const result = listAllPanes();
+
+      expect(mockedExecFileSync).toHaveBeenCalledWith(
+        "tmux",
+        ["list-panes", "-a", "-F", "#{pane_id}"],
+        expect.any(Object)
+      );
+      expect(result).toEqual(["%0", "%1", "%2", "%3"]);
+    });
+
+    it("エラー時は空配列を返す", async () => {
+      mockedExecFileSync.mockImplementation(() => {
+        throw new Error("no server");
+      });
+
+      const { listAllPanes } = await importTmux();
+      const result = listAllPanes();
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------
   // killPane
   // ---------------------------------------------------------------
 

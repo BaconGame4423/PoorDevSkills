@@ -2,7 +2,7 @@
 import { parseArgs } from "node:util";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { runMonitor } from "../monitor.js";
-import { killPane, paneExists } from "../tmux.js";
+import { killPane, paneExists, listAllPanes } from "../tmux.js";
 import type { MonitorOptions } from "../types.js";
 
 const { values } = parseArgs({
@@ -37,6 +37,9 @@ const { values } = parseArgs({
       type: "boolean",
       default: false,
     },
+    "caller-pane": {
+      type: "string",
+    },
   },
   strict: true,
 });
@@ -47,7 +50,24 @@ if (!values.combo || !values.target || !values["combo-dir"] || !values["phase0-c
   process.exit(1);
 }
 
+// Snapshot panes at startup for differential cleanup
+const startPanes = new Set(listAllPanes());
+const callerPane = values["caller-pane"];
+
 function cleanup(targetPane: string, combo: string): void {
+  // Kill panes spawned after monitor start (teammate panes)
+  try {
+    const currentPanes = listAllPanes();
+    for (const pane of currentPanes) {
+      if (startPanes.has(pane)) continue;     // existed before bench → protect
+      if (pane === callerPane) continue;       // caller pane → protect
+      try { killPane(pane); } catch { /* best effort */ }
+    }
+  } catch {
+    // best effort
+  }
+
+  // Also ensure orchestrator pane is killed
   try {
     if (paneExists(targetPane)) killPane(targetPane);
   } catch {

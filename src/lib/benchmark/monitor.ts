@@ -20,9 +20,10 @@ function loadPhase0Config(configPath: string): Phase0Config {
 
 /**
  * Find pipeline-state.json file.
- * Search order: features subdirs, .poor-dev/, then comboDir root.
+ * Search order: features subdirs, _runs/ subdirs (team mode), .poor-dev/, then comboDir root.
  */
 function findPipelineState(comboDir: string): string | null {
+  // 1. features/*/
   const featuresDir = path.join(comboDir, "features");
   if (existsSync(featuresDir)) {
     for (const entry of readdirSync(featuresDir, { withFileTypes: true })) {
@@ -32,8 +33,20 @@ function findPipelineState(comboDir: string): string | null {
       }
     }
   }
+  // 2. _runs/*/ (team mode) — exclude archive dirs (YYYYMMDD-*)
+  const runsDir = path.join(comboDir, "_runs");
+  if (existsSync(runsDir)) {
+    for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && !/^\d{8}-/.test(entry.name)) {
+        const candidate = path.join(runsDir, entry.name, "pipeline-state.json");
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+  }
+  // 3. .poor-dev/
   const legacyPath = path.join(comboDir, ".poor-dev", "pipeline-state.json");
   if (existsSync(legacyPath)) return legacyPath;
+  // 4. root
   const directPath = path.join(comboDir, "pipeline-state.json");
   if (existsSync(directPath)) return directPath;
   return null;
@@ -115,7 +128,7 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
 function hasArtifacts(comboDir: string): boolean {
   try {
     const files = execSync(
-      `find "${comboDir}" -maxdepth 2 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
+      `find "${comboDir}" -maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
       `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*'`,
       { encoding: "utf-8" }
     ).trim();
@@ -233,6 +246,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   const pipelineCheckIntervalMs = 60_000;
   const idleCheckStartMs = 120_000;
   const idleCheckIntervalMs = 60_000;
+  const phase0TimeoutMs = 600_000;
 
   // Team stall detection state
   let lastTeamStallCheck = 0;
@@ -272,14 +286,24 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
 
     try {
       if (!phase0Done) {
-        const result = respondToPhase0(options.targetPane, phase0Config, turnCount, paneContent);
-        turnCount = result.turnCount;
-        if (result.done) {
+        // Phase 0 timeout: force transition after 10 minutes
+        if (elapsed >= phase0TimeoutMs) {
           phase0Done = true;
-          logs.push(`Phase 0 max turns reached (${turnCount})`);
-        }
-        if (result.responded) {
-          logs.push(`Phase 0 response sent (turn ${turnCount})`);
+          logs.push(`Phase 0 timeout after ${Math.floor(elapsed / 1000)}s`);
+        // pipeline-state.json existence = pipeline started = phase 0 is done
+        } else if (findPipelineState(options.comboDir) !== null) {
+          phase0Done = true;
+          logs.push("Phase 0 done: pipeline-state.json detected");
+        } else {
+          const result = respondToPhase0(options.targetPane, phase0Config, turnCount, paneContent);
+          turnCount = result.turnCount;
+          if (result.done) {
+            phase0Done = true;
+            logs.push(`Phase 0 max turns reached (${turnCount})`);
+          }
+          if (result.responded) {
+            logs.push(`Phase 0 response sent (turn ${turnCount})`);
+          }
         }
       }
 

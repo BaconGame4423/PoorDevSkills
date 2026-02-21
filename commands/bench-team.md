@@ -169,7 +169,8 @@ node dist/lib/benchmark/bin/bench-team-monitor.js \
   --phase0-config benchmarks/_scaffold/common/phase0-responses.json \
   --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
   --timeout 7200 \
-  --enable-team-stall-detection
+  --enable-team-stall-detection \
+  --caller-pane $CURRENT
 ```
 
 Bash(run_in_background) で実行。

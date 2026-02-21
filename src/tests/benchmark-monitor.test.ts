@@ -30,6 +30,7 @@ vi.mock("../lib/benchmark/tmux.js", () => ({
   pasteBuffer: vi.fn(),
   splitWindow: vi.fn(),
   listPanes: vi.fn(),
+  listAllPanes: vi.fn(),
   killPane: vi.fn(),
   paneExists: vi.fn(),
 }));
@@ -416,6 +417,74 @@ describe("benchmark-monitor", () => {
     expect(result.logs.length).toBeGreaterThanOrEqual(0);
   });
 
+  describe("findPipelineState via readPipelineInfo", () => {
+    it("_runs/ 配下の pipeline-state.json を発見する (team mode)", async () => {
+      const { readPipelineInfo } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+
+      mockedExistsSync.mockImplementation(((p: PathLike) => {
+        const s = String(p);
+        // features/ does not exist
+        if (s.endsWith("features")) return false;
+        // _runs/ exists
+        if (s.endsWith("_runs")) return true;
+        // _runs/001-function-visualizer/pipeline-state.json exists
+        if (s.includes("_runs/001-function-visualizer/pipeline-state.json")) return true;
+        return false;
+      }) as typeof existsSync);
+
+      mockedReaddirSync.mockImplementation(((dirPath: string) => {
+        if (String(dirPath).endsWith("_runs")) {
+          return [
+            { name: "001-function-visualizer", isDirectory: () => true },
+          ] as any;
+        }
+        return [] as any;
+      }) as any);
+
+      mockReadFile((p) => {
+        if (p.includes("pipeline-state.json")) {
+          return JSON.stringify({
+            flow: "feature",
+            current: "implement",
+            completed: ["specify", "plan"],
+            pipeline: ["specify", "plan", "implement", "review"],
+          });
+        }
+        return "{}";
+      });
+
+      const info = readPipelineInfo("/tmp/combo/test-combo");
+      expect(info).not.toBeNull();
+      expect(info!.current).toBe("implement");
+      expect(info!.stateDir).toContain("_runs/001-function-visualizer");
+    });
+
+    it("_runs/ のアーカイブディレクトリ (YYYYMMDD-*) は除外する", async () => {
+      const { readPipelineInfo } = await importMonitor();
+      const mockedReaddirSync = vi.mocked(readdirSync);
+
+      mockedExistsSync.mockImplementation(((p: PathLike) => {
+        const s = String(p);
+        if (s.endsWith("features")) return false;
+        if (s.endsWith("_runs")) return true;
+        return false;
+      }) as typeof existsSync);
+
+      mockedReaddirSync.mockImplementation(((dirPath: string) => {
+        if (String(dirPath).endsWith("_runs")) {
+          return [
+            { name: "20260221-143000", isDirectory: () => true },
+          ] as any;
+        }
+        return [] as any;
+      }) as any);
+
+      const info = readPipelineInfo("/tmp/combo/test-combo");
+      expect(info).toBeNull();
+    });
+  });
+
   describe("readPipelineInfo", () => {
     it("pipeline-state.json から正しく情報を読む", async () => {
       const { readPipelineInfo } = await importMonitor();
@@ -578,6 +647,71 @@ describe("benchmark-monitor", () => {
       expect(mockedSendKeys).toHaveBeenCalledWith("test-pane", "Enter");
     });
   });
+
+  it("Phase 0 タイムアウト (10分) で自動遷移する", async () => {
+    const { runMonitor } = await importMonitor();
+    const options = makeDefaultOptions({ timeoutSeconds: 700 });
+
+    // pipeline-state.json は存在しないが、Phase 0 が完了しない設定
+    mockedExistsSync.mockReturnValue(false);
+    mockedRespondToPhase0.mockReturnValue({ responded: false, turnCount: 0, done: false });
+
+    // Pipeline completes after phase0 timeout
+    let phase0TimedOut = false;
+    mockedCapturePaneContent.mockImplementation(() => {
+      if (phase0TimedOut) return "TUI content";
+      return "Phase 0 still going...";
+    });
+
+    const promise = runMonitor(options);
+    // Advance past 600s (phase0 timeout)
+    await vi.advanceTimersByTimeAsync(610_000);
+    phase0TimedOut = true;
+
+    // Then timeout at 700s
+    await vi.advanceTimersByTimeAsync(100_000);
+    const result = await promise as MonitorResult;
+
+    expect(result.logs.some((l: string) => l.includes("Phase 0 timeout"))).toBe(true);
+  }, 10_000);
+
+  it("pipeline-state.json 出現で Phase 0 完了を検出する", async () => {
+    const { runMonitor } = await importMonitor();
+    const options = makeDefaultOptions({ timeoutSeconds: 30 });
+
+    // Phase 0 が done しないが、pipeline-state.json が途中で出現
+    mockedRespondToPhase0.mockReturnValue({ responded: false, turnCount: 0, done: false });
+
+    let pipelineExists = false;
+    mockedExistsSync.mockImplementation(((p: PathLike) => {
+      const s = String(p);
+      if (s.includes("pipeline-state.json")) return pipelineExists;
+      if (s.endsWith("features") || s.endsWith("_runs")) return false;
+      return false;
+    }) as typeof existsSync);
+
+    mockReadFile((p) => {
+      if (p.includes("pipeline-state.json")) {
+        return JSON.stringify({ flow: "feature", status: "completed", completed: ["specify"], current: null, pipeline: ["specify"] });
+      }
+      if (p.includes("phase0")) {
+        return JSON.stringify({ flow_type: "feature", max_turns: 99, responses: [], fallback: "ok" });
+      }
+      return "{}";
+    });
+
+    mockedCapturePaneContent.mockReturnValue("some content");
+
+    const promise = runMonitor(options);
+    // After 15s, pipeline-state.json appears
+    await vi.advanceTimersByTimeAsync(15_000);
+    pipelineExists = true;
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    const result = await promise as MonitorResult;
+
+    expect(result.logs.some((l: string) => l.includes("pipeline-state.json detected"))).toBe(true);
+  }, 10_000);
 
   it("enableTeamStallDetection 無効時はスタックチェックしない", async () => {
     const { runMonitor } = await importMonitor();

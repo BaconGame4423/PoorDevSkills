@@ -74,6 +74,18 @@ export function listPanes(): string[] {
     .filter((s) => s.length > 0);
 }
 
+export function listAllPanes(): string[] {
+  const result = execTmuxSafe(["list-panes", "-a", "-F", "#{pane_id}"]);
+  if (!result) {
+    return [];
+  }
+  return result
+    .trim()
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 export function killPane(paneId: string): void {
   execTmux(["kill-pane", "-t", paneId]);
 }

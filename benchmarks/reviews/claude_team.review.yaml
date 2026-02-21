@@ -1,5 +1,5 @@
 # ============================================================
-# benchLLM レビュー - Claude Team (Agent Teams)
+# benchLLM レビュー - Claude Team (Agent Teams) — Run 2
 # ============================================================
 
 meta:
@@ -9,110 +9,102 @@ meta:
     secondary: "Claude Opus 4.6 (teammates via Agent Teams)"
     role: "team"
   reviewer: "human + claude-opus-4-6"
-  review_date: "2026-02-20"
+  review_date: "2026-02-21"
+  run: 2
   status: "completed"
+  notes: "Run 1 (2026-02-20) → Run 2 (2026-02-21)。Phase 0 自動応答修正 (8fab7b0) 後の再実行"
 
 # ============================================================
 # 1. Process Adherence (プロセス遵守) - 15%
 # ============================================================
-# 全11ステップ成功（通常の8段階 + suggest, testdesign, tasksreview を追加）
+# 全11ステップ成功。レビュー fix は planreview(1回) + tasksreview(1回) のみ。
+# コードレビュー3ステップは全て1回目 PASS。
 process:
   stages:
     specify:
       completed: true
       artifacts: [spec.md]
-      notes: "4cabeb1 - 仕様書作成完了"
+      notes: "578d4d9 - 仕様書作成完了。math.js CDN 許可を含む"
     suggest:
       completed: true
       artifacts: [suggestions.yaml]
-      notes: "6f4c059 - 技術選定調査完了"
+      notes: "cdfb53d - 技術選定調査完了"
     plan:
       completed: true
       artifacts: [plan.md]
-      notes: "c951504 - 実装計画作成"
+      notes: "874b7ad - 実装計画作成"
     planreview:
       completed: true
       artifacts: [plan.md]
-      notes: "e7c0ed7 - 4件指摘修正 (FR-007整合性・色覚多様性・互換性テスト・DoS防御)"
+      notes: "83c46ff - 6件指摘修正 (スケーリング統合・CDNフォールバック・初期状態定義)。FAIL→PASS 2回目"
     tasks:
       completed: true
       artifacts: [tasks.md]
-      notes: "4e1c3ea - タスクリスト作成"
+      notes: "8c93cb6 - 36タスク7フェーズ作成"
     tasksreview:
       completed: true
       artifacts: [tasks.md]
-      notes: "6519f1d - 3件修正 (互換性テストタスク追加・AC整合性)"
+      notes: "94d46ae - 7件修正 (実装手法明確化・CDNローディング・境界値・XSS対策)。FAIL→PASS 2回目"
     testdesign:
       completed: true
       artifacts: [test-plan.md]
-      notes: "8e38f9e - テスト計画作成"
+      notes: "ea74037 - 58テストケース作成"
     implement:
       completed: true
       artifacts: [index.html]
-      notes: "b058267 - 1605行の単一HTMLファイル"
+      notes: "9aad608 - 1516行の単一HTMLファイル。math.js使用で6分で完了"
     architecturereview:
       completed: true
-      artifacts: [review-log.yaml]
-      notes: "c92074e - Canvas最適化・DERIVATIVE_H整合・二重描画解消"
+      artifacts: []
+      notes: "PASS (1回目, M=1, L=3)。fix サイクルなし"
     qualityreview:
       completed: true
-      artifacts: [review-log.yaml]
-      notes: "17eed91 - 接線式表示・ゼロ除算エラー・キャッシュテスト追加"
+      artifacts: []
+      notes: "PASS (1回目, C=0, H=0, M=1, L=2)。fix サイクルなし"
     phasereview:
       completed: true
-      artifacts: [review-log.yaml]
-      notes: "5f58753 - エラーメッセージ整合・スケール累積防止・接線式改善"
+      artifacts: []
+      notes: "PASS (1回目, M=1)。fix サイクルなし"
   stages_completed: 11
   score: 95
-  notes: "全11ステップ成功。-5点: Phase 0での監視プロセスの自動応答テキスト漏洩（影響軽微）"
+  notes: "全11ステップ成功。-5: review-log.yaml 未生成（レビュー指摘内容の追跡不能）、Phase 0 AskUserQuestion との応答互換性問題"
 
 # ============================================================
 # 2. Code Quality (コード品質) - 25%
 # ============================================================
+# Run 1 の5問題 (CQ-001〜005) が全て解消。math.js 採用 + fix サイクル 0回が主因。
 code_quality:
   issues:
-    - id: CQ-001
-      severity: M
-      category: structure
-      location: "index.html:913-942 vs 1192-1220"
-      description: "drawGrid/drawAxes と _drawGridToContext/_drawAxesToContext の30行完全重複。architecturereview fix (c92074e) でoffscreen caching追加時にパラメータ化せず複製で実装"
-      impact: "メンテナンス負荷増大、バグ修正の二重適用リスク"
-      suggestion: "共通関数に ctx パラメータを渡すパターンにリファクタリング"
-    - id: CQ-002
-      severity: L
-      category: structure
-      location: "index.html:586-589"
-      description: "Parser が mutable shared state (pos, tokens) で非リエントラント"
-      impact: "並行パース不可（現状は単一スレッドなので実害なし）"
-      suggestion: "パース状態をクロージャまたはオブジェクトに閉じ込める"
-    - id: CQ-003
-      severity: M
-      category: bug
-      location: "index.html:1569,1581"
-      description: "formatTangentEquation の b<0 時に二重負号 y = x - -3.0000。bStr が負号含み + bSign が '-' で重複"
-      impact: "接線の方程式表示が不正（特定条件下）"
-      suggestion: "bSign の判定で bStr の符号を考慮するロジック追加"
-    - id: CQ-004
+    - id: CQ-R2-001
       severity: L
       category: style
-      location: "index.html:813"
-      description: "console.debug 残存。architecturereview fix (c92074e) で導入"
-      impact: "本番コードにデバッグ出力が残る"
-      suggestion: "console.debug を削除"
-    - id: CQ-005
+      location: "index.html:1121"
+      description: "TooltipManager.update() で innerHTML を使用。ただし content は toFixed(3) の数値のみで XSS リスクは実質なし"
+      impact: "セキュリティポリシー(innerHTML禁止)との不整合"
+      suggestion: "textContent + DOM 操作に置換"
+    - id: CQ-R2-002
+      severity: L
+      category: structure
+      location: "index.html:1203,1212"
+      description: "EventManager.listeners 配列への push で fn が空アロー関数 () => {} になっている（checkbox, preset 等）。destroy() でのクリーンアップが不完全"
+      impact: "メモリリーク（軽微、SPA なので影響小）"
+      suggestion: "実際のリスナー関数を保持するか、AbortController パターンを使用"
+    - id: CQ-R2-003
       severity: M
       category: structure
-      location: "index.html:768"
-      description: "ゼロ除算処理が3回変更で振動。implement: return NaN → qualityreview fix: throw Error(テンプレートリテラル) → phasereview fix: throw Error(文字列リテラル)。各レビューが独立判断し非収束"
-      impact: "コードの安定性に疑問。明確な基準なしに判断がブレる"
-      suggestion: "constitution.md にゼロ除算ポリシーを明記し、レビュー間で基準を共有"
+      location: "tasks.md:27-508"
+      description: "217個の AC が全て [ ] のまま。implement ステップが AC マークオフを行わない"
+      impact: "品質ゲートが機能しない。実装完了の検証なし"
+      suggestion: "implement プロンプトに AC チェック必須ルールを追加"
   strengths:
-    - "単一HTMLファイル1605行で全機能を完結。外部依存ゼロ"
-    - "数式パーサーが演算子優先度を正しく処理（加減乗除・べき乗・単項マイナス）"
-    - "微分の数値計算が中央差分法で実装され、基本関数すべてに対応"
-    - "Canvas描画でoffscreen cachingを実装（パフォーマンス最適化）"
-  score: 78
-  notes: "M3件・L2件。M問題は構造的（DRY違反・バグ・振動）で品質に影響。レビューfix時に新たな問題を導入するパターンが顕著"
+    - "math.js 使用により数式パーサーが堅牢。自前実装の state management 問題を回避"
+    - "DRY: drawGrid/drawAxes が各1個のみ。Run 1 の30行完全重複を回避"
+    - "console.error のみ（debug/log 残存なし）"
+    - "CDN SRI + onerror ハンドラで graceful degradation 実装"
+    - "Pointer Events API で mouse/touch 統合対応"
+    - "モジュール分離が良い（Config/State/ExpressionParser/CanvasManager/AutoScaler/DerivativeCalculator/GraphRenderer/TooltipManager/EventManager/UIController の10モジュール）"
+  score: 88
+  notes: "Run 1 (78) → Run 2 (88)。M1件(AC未チェック)+L2件。math.js採用+fixサイクル0回でRun 1の構造的問題が全解消"
 
 # ============================================================
 # 3. Completeness (完全性) - 25%
@@ -122,61 +114,61 @@ completeness:
     FR-001:
       name: "インタラクティブ関数グラフ表示"
       status: "pass"
-      notes: "Canvas ベースのグラフ表示、ドラッグでパン、ホイールでズーム"
+      notes: "Canvas ベースのグラフ表示。適応的サンプリング + 不連続点検出"
     FR-002:
       name: "数式入力フィールド"
       status: "pass"
-      notes: "テキスト入力フィールド + リアルタイムパース"
+      notes: "テキスト入力 + math.js による安全な数式評価"
     FR-003:
       name: "リアルタイムグラフ更新"
       status: "pass"
-      notes: "入力変更時に即座に再描画"
+      notes: "300ms debounce 付きリアルタイム再描画"
     FR-004:
       name: "自動ズーム/スケール"
       status: "pass"
-      notes: "ホイールズームとドラッグパン対応"
+      notes: "Nice Number Algorithm による自動Y軸スケール"
     FR-005:
       name: "軸ラベルとグリッド線"
       status: "pass"
-      notes: "動的グリッド線と軸ラベル表示"
+      notes: "動的グリッド線 + 軸ラベル + 原点マーカー"
     FR-006:
       name: "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)"
       status: "pass"
-      notes: "全7関数をパーサーが認識・計算"
+      notes: "math.js が全7関数をネイティブサポート"
     FR-007:
       name: "微分（導関数）の計算と表示"
       status: "pass"
-      notes: "中央差分法による数値微分"
+      notes: "中央差分法 + 適応的ステップサイズ h=max(|x|*1e-8, 1e-8)"
     FR-008:
       name: "導関数のグラフ重畳表示"
       status: "pass"
-      notes: "破線スタイルで元関数に重畳表示"
+      notes: "元関数(青) + 導関数(赤) 同一Canvas上描画。凡例付き"
     FR-009:
       name: "カーソル追従ツールチップ (x, f(x), f'(x))"
       status: "pass"
-      notes: "マウスホバーで座標・関数値・導関数値を表示"
+      notes: "Pointer Events でマウス/タッチ両対応。画面外クランプ処理あり"
     FR-010:
       name: "接線表示"
       status: "pass"
-      notes: "カーソル位置での接線をリアルタイム描画"
+      notes: "カーソル位置での接線を破線スタイルで描画 + 接点マーカー"
     FR-011:
       name: "レスポンシブデザイン"
       status: "pass"
-      notes: "CSS Grid + resize イベントで対応"
+      notes: "ResizeObserver + メディアクエリ (768px)。touch-action: none 設定済み"
     FR-012:
       name: "エラーハンドリング（不正入力）"
       status: "pass"
-      notes: "パースエラー時にエラーメッセージ表示"
+      notes: "構文エラー・未定義変数・ゼロ除算を日本語メッセージで表示。aria-live で SR 対応"
     FR-013:
       name: "プリセット関数ボタン"
       status: "pass"
-      notes: "5種類のプリセットボタン実装"
+      notes: "7種類 (sin,cos,tan,log,exp,x²,√x)。ワンクリックで入力+自動描画"
   passed: 13
   partial: 0
   failed: 0
   bugged: 0
   score: 100
-  notes: "全13要件をpass。機能面では完全な実装"
+  notes: "全13要件をpass。Run 1 と同等の完全な実装"
 
 # ============================================================
 # 4. UX / Visual Quality - 15%
@@ -184,22 +176,22 @@ completeness:
 ux:
   visual_design:
     score: 4
-    notes: "モダンなダークテーマ、グラデーション背景、良好な配色"
+    notes: "ライトテーマ、クリーンなデザイン。CSS変数で色管理。phase0-responses の指示はダークテーマだったが反映されず"
   responsive:
     score: 4
-    notes: "CSS Grid + resize イベントで概ね対応。ただし極小画面での操作性は未検証"
+    notes: "ResizeObserver + メディアクエリ + touch-action:none。HiDPI 対応"
   usability:
     score: 4
-    notes: "直感的な操作。プリセットボタンが便利。ただしツールチップがマウスホバーのみ"
+    notes: "直感的操作。7種プリセットボタン、導関数/接線のトグル。Pointer Events で統合入力"
   error_feedback:
-    score: 4
-    notes: "パースエラーメッセージが適切に表示される"
+    score: 5
+    notes: "日本語エラーメッセージ、aria-live、入力フィールドの赤枠フィードバック、CDN障害時のgraceful degradation"
   accessibility:
     score: 3
-    notes: "タッチイベント未実装(UX-001)、キーボード操作未実装(UX-002)、ARIA不完全(UX-003)、ハイコントラスト未対応(UX-005)"
-  average: 3.8
-  score: 76
-  notes: "視覚的品質は高いが、アクセシビリティに重大なギャップ。Task 25(a11y)が Phase 5(Polish) に配置され、3AC全て未チェックのまま通過"
+    notes: "改善: skip-link, aria-label, role=group, focus-visible, aria-live。残存: Canvas キーボード操作なし、ARIA role=img 未設定"
+  average: 4.0
+  score: 80
+  notes: "Run 1 (76) → Run 2 (80)。Pointer Events + ARIA 改善。ただし Canvas キーボード操作は依然未実装"
 
 # ============================================================
 # 5. Constitution Compliance (憲章準拠) - 10%
@@ -208,7 +200,7 @@ constitution:
   principles:
     III_review_driven_quality:
       compliant: true
-      notes: "3段階レビュー (arch/quality/phase) を全て実施。各レビューで修正コミット作成"
+      notes: "3段階レビュー (arch/quality/phase) を全て実施"
     V_incremental_delivery:
       compliant: true
       notes: "11ステップの段階的実行。各ステップで成果物をコミット"
@@ -216,24 +208,27 @@ constitution:
       compliant: true
       notes: "planreview, tasksreview, 3段階コードレビューの全ゲートを通過"
     X_documentation_as_code:
-      compliant: true
-      notes: "spec.md, plan.md, tasks.md, test-plan.md, review-log.yaml を生成"
-  compliant_count: 4
-  score: 100
-  notes: "全4原則に準拠。パイプラインの全ゲートを通過"
+      compliant: partial
+      notes: "spec/plan/tasks/test-plan を生成。ただし review-log.yaml が未生成"
+  compliant_count: 3.5
+  score: 95
+  notes: "Run 1 (100) → Run 2 (95)。-5: review-log.yaml 未生成でレビュー追跡性が欠如"
 
 # ============================================================
 # 6. Efficiency (効率) - 10%
 # ============================================================
 efficiency:
-  wall_clock_seconds: 4541
+  wall_clock_seconds: 4920
+  wall_clock_notes: "82分 (23:09→00:31)。Phase 0: 17min, specify→implement: 51min, reviews: 11min"
   session_count: 1
-  output_lines: 4756
-  output_bytes: 0
-  lines_per_second: 1.05
-  files_created: 9
-  score: 70
-  notes: "壁時計75分41秒。index.html 1605行 + docs 3151行 = 4756行出力。13コミット（setup 2 + pipeline 11）。team モードのオーバーヘッド（Agent Teams の spawn/通信）が効率を低下"
+  output_lines: 4701
+  output_bytes: 45071
+  lines_per_second: 0.96
+  files_created: 8
+  commits: 10
+  commits_notes: "setup 2 + pipeline 8 (Run 1: 13 commits、fix 3回分が減少)"
+  score: 68
+  notes: "壁時計82分（Run 1: 75分より長い）。ただし fix サイクル 0回で実質的に効率的。implement 6分は math.js 効果"
 
 # ============================================================
 # 総合スコア
@@ -248,13 +243,34 @@ scoring:
     efficiency: 0.10
   component_scores:
     process: 95
-    code_quality: 78
+    code_quality: 88
     completeness: 100
-    ux: 76
-    constitution: 100
-    efficiency: 70
-  total: 87.15
-  grade: "B"
+    ux: 80
+    constitution: 95
+    efficiency: 68
+  total: 90.05
+  grade: "A-"
+
+# ============================================================
+# Run 比較
+# ============================================================
+run_comparison:
+  run1:
+    date: "2026-02-20"
+    total: 87.15
+    grade: "B"
+    key_issues: "CQ-001(DRY違反), CQ-003(二重負号), CQ-005(ゼロ除算振動), UX-001(タッチ未実装), UX-002(キーボード未実装)"
+    parser: "自前実装"
+    review_fix_cycles: 3
+  run2:
+    date: "2026-02-21"
+    total: 90.05
+    grade: "A-"
+    key_issues: "CQ-R2-003(AC未チェック), Canvas キーボード操作なし, review-log.yaml 未生成"
+    parser: "math.js (CDN)"
+    review_fix_cycles: 0
+  delta: "+2.90"
+  primary_factor: "Phase 0 応答ミスで math.js 許可 → 自前パーサー問題回避 + fix サイクル 0回"
 
 # ============================================================
 # サマリ
@@ -262,42 +278,44 @@ scoring:
 summary:
   strengths:
     - "全13要件pass、全11パイプラインステップ成功の高い完全性"
-    - "数式パーサーが演算子優先度を正しく処理し、7種の数学関数に対応"
-    - "3段階レビュー（arch/quality/phase）で段階的に品質を向上"
-    - "Agent Teams による Opus 同士のチーム編成で安定したパイプライン実行"
+    - "math.js 採用でコード品質が大幅向上（Run 1 の5問題が全解消）"
+    - "Pointer Events API で mouse/touch 統合、ARIA 改善でアクセシビリティ向上"
+    - "レビュー fix サイクル 0回 → fix 起因の品質低下パターンを完全回避"
+    - "モジュール分離が良好（10モジュール構成）"
   weaknesses:
-    - "レビュー修正が新たなコード品質問題を導入（CQ-001: DRY違反、CQ-004: console.debug）"
-    - "ゼロ除算処理が3回変更で振動（CQ-005）— レビュー間で基準が共有されていない"
-    - "アクセシビリティ（タッチ・キーボード・ARIA）が未実装 — Task 25のACが全て未チェックで通過"
-    - "team モードのオーバーヘッドで効率が低下（4541秒）"
+    - "tasks.md の 217 AC が全て [ ] のまま — implement ステップが AC チェックを行わない (2回連続再現)"
+    - "review-log.yaml 未生成 — レビュー指摘内容の追跡不能"
+    - "Canvas キーボード操作が未実装"
+    - "Phase 0 自動応答と AskUserQuestion の非互換性で意図した技術指示が伝播しない"
+    - "壁時計 82分（Run 1 の 75分より長い）"
   critical_issues: []
   recommendations:
-    - "implement プロンプトに AC 未チェック完了防止ガードを追加（Task 25が3AC全て未完了で通過した問題）"
-    - "レビューループに convergence 判定を追加（同一行のN回変更=振動を検出）"
-    - "review-fixer に DRY不退行ルールを追加（修正で新たな重複コード導入を禁止）"
-    - "phasereview UX ペルソナを強化（WCAG 2.1 AA、タッチイベント、キーボードナビゲーション明記）"
+    - "implement プロンプトに AC チェック必須ルール追加 (2回連続再現の O-1)"
+    - "review-loop.md に review-log.yaml 書き出しを必須化"
+    - "phase0-responder に AskUserQuestion 選択肢 UI 対応ロジック追加"
+    - "phasereview UX ペルソナ強化 (Canvas keyboard nav, WCAG 2.1 AA)"
   observations:
     - id: O-1
       target: "poor-dev.implement.md"
-      finding: "AC 未チェック完了防止なし — Task 25が3AC全て [ ] のまま通過"
+      finding: "AC 未チェック完了防止なし — 217 AC 全て [ ] のまま通過 (Run 1, Run 2 で再現)"
       recommendation: "implement ステップで [X] マーク検証を必須化"
     - id: O-2
-      target: "review-loop convergence"
-      finding: "ゼロ除算処理が3 commitで3回変更（NaN→throw→throw書換）。各レビューの独立判断が非収束"
-      recommendation: "同一行のN回変更を振動として検出し、Opus にエスカレーション"
+      target: "phase0-responder + AskUserQuestion"
+      finding: "AskUserQuestion は選択肢 UI。phase0-responder の paste+Enter はテキスト入力ではなく選択肢確定として機能。「自前実装」指示が伝播せず math.js 許可に"
+      recommendation: "AskUserQuestion 検出ロジック追加。選択肢 UI を正しく操作するか、パターンマッチで適切な選択肢を選ぶ"
     - id: O-3
-      target: "architecturereview fix"
-      finding: "offscreen caching追加時にdrawGrid/drawAxesを複製作成（CQ-001: 30行完全重複×2組）"
-      recommendation: "review-fixer.md に DRY不退行ルール追加。fixer出力のDRY検証をOrchestrator が実施"
+      target: "review-loop.md"
+      finding: "arch/quality/phase の3レビューが全て1回目 PASS でも review-log.yaml が生成されない"
+      recommendation: "PASS でも指摘内容 (M/L) を review-log.yaml に記録。追跡可能性を確保"
     - id: O-4
-      target: "phasereview UX persona"
-      finding: "キーボード操作・タッチイベント未実装を検出できず。spec定義済みのa11y要件を見逃し"
-      recommendation: "phasereview-ux.md に touch event, keyboard nav, WCAG 2.1 AA, aria-* を明記"
+      target: "math.js vs 自前パーサー"
+      finding: "math.js 採用で CQ が +10pt 向上。suggest ステップの推奨が実装品質に直結する好例"
+      recommendation: "suggest ステップの外部ライブラリ推奨をもっと活用。spec との一貫性を Phase 0 で確保"
     - id: O-5
-      target: "unified reviewer vs individual persona"
-      finding: "unified reviewer (58行, 4ペルソナ統合) は個別ペルソナ (50行, 単一焦点) より DRY検出・UX検出が弱い。GLM5向けに Verdict Criteria, Scope Boundary, Dedup pass が欠如"
-      recommendation: "P-1a: unified に個別ペルソナの品質パターン移植。P-1b (中期): unified→個別4並列に切替"
+      target: "fix サイクルと品質"
+      finding: "Run 1 は fix 3回で CQ 78、Run 2 は fix 0回で CQ 88。fix サイクル自体が品質低下リスク"
+      recommendation: "元コードの品質を上げる方が fix サイクルを改善するより効果的"
     - id: O-6
-      target: "implement prompt (poor-dev.implement.md)"
-      finding: "233行中 コード品質/UX 言及ゼロ。DRY, SOLID, refactor, a11y が一切出現しない"
-      recommendation: "P-8: コード品質5原則追加 (DRY 10行閾値, 状態不変性, a11y必須, パラメータ化優先, console.*禁止)"
+      target: "3 reviews all PASS (1st round)"
+      finding: "arch(M=1,L=3), quality(M=1,L=2), phase(M=1) と指摘はあるがH=0でPASS。指摘の詳細が不明"
+      recommendation: "PASS 判定でも指摘内容をログに残し、傾向分析に活用"

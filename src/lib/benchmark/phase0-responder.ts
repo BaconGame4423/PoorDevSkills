@@ -60,6 +60,8 @@ function getRecentLines(paneContent: string, n: number): string {
  */
 function isWaitingForInput(paneContent: string): boolean {
   const lines = paneContent.split("\n");
+  // Selection UI は常にユーザー入力待ち状態
+  if (lines.some(l => l.includes("Enter to select"))) return true;
   // 最後の非空行から ❯ を探す
   for (let i = lines.length - 1; i >= 0; i--) {
     const trimmed = lines[i]!.trim();

@@ -22,6 +22,9 @@ After Phase 0, execute the pipeline via TS helper:
 1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
 2. Parse the JSON output and execute the action:
    - `create_team` → TeamCreate + Task(spawn teammates) + monitor + TeamDelete
+     **Context injection**: JSON の Context に列挙された各ファイルを Read し、
+     Task の description 末尾に `## Context: {key}\n{content}` として追記する。
+     50,000文字を超えるファイルは先頭50,000文字で切り詰める。
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
    - `user_gate` → See §User Gates below
    - `done` → Report completion to user
@@ -59,7 +62,7 @@ For `create_review_team` with multiple reviewers:
    b. Deduplicate: same file:line + same severity → keep first
    c. Combine VERDICT: take the WORST verdict (NO-GO > CONDITIONAL > GO)
    d. If any reviewer returned no VERDICT → retry that reviewer (max 2)
-5. If C=0, H=0 across ALL reviewers → step complete → TeamDelete
+5. If C=0, H=0 across ALL reviewers → **append findings (including M/L) to review-log.yaml** → step complete → TeamDelete
 6. If C>0 or H>0 → summarize deduplicated issues → send to fixer
 7. Fixer reports fixed/rejected YAML → Opus reviews the diff:
    a. Read the modified files
@@ -67,7 +70,7 @@ For `create_review_team` with multiple reviewers:
    c. Verify: no debug statements (console.*, debugger) added
    d. If violations found: send back to fixer with specific rejection
    e. If clean: update review-log and commit
-8. Loop back to step 2 (max iterations from config)
+8. Loop back to step 2 (max iterations from config) → update review-log.yaml and commit
 9. Exceeded max → user_gate → TeamDelete
 
 ## Error Handling

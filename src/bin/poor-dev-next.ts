@@ -68,6 +68,41 @@ function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
+// --- 条件分岐解決 ---
+
+function resolveConditionalBranch(
+  conditionalKey: string,
+  stateFile: string,
+  projectDir: string,
+  stateManager: FilePipelineStateManager,
+  fs: NodeFileSystem,
+): void {
+  const state = stateManager.read(stateFile);
+  const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
+  if (!flowDef) {
+    process.stderr.write(JSON.stringify({ error: `Unknown flow: ${state.flow}` }) + "\n");
+    process.exit(1);
+  }
+
+  const branch = flowDef.conditionalBranches?.[conditionalKey];
+  if (!branch) {
+    process.stderr.write(JSON.stringify({ error: `Unknown conditional: ${conditionalKey}` }) + "\n");
+    process.exit(1);
+  }
+
+  switch (branch.action) {
+    case "replace-pipeline":
+      if (branch.variant) stateManager.setVariant(stateFile, branch.variant, conditionalKey);
+      if (branch.pipeline) stateManager.setPipeline(stateFile, branch.pipeline);
+      break;
+    case "pause":
+      stateManager.setStatus(stateFile, "paused", branch.pauseReason ?? "Paused by conditional");
+      break;
+    case "continue":
+      break;
+  }
+}
+
 // --- メイン ---
 
 function main(): void {
@@ -113,27 +148,7 @@ function main(): void {
 
     // --set-conditional が同時指定されている場合、conditional も適用
     if (args.setConditional) {
-      const st = stateManager.read(stateFile);
-      const fd = resolveFlow(st.flow, projectDir, fs) ?? getFlowDefinition(st.flow);
-      if (fd) {
-        const branch = fd.conditionalBranches?.[args.setConditional];
-        if (branch) {
-          switch (branch.action) {
-            case "replace-pipeline":
-              if (branch.variant) stateManager.setVariant(stateFile, branch.variant, args.setConditional);
-              if (branch.pipeline) stateManager.setPipeline(stateFile, branch.pipeline);
-              break;
-            case "pause":
-              stateManager.setStatus(stateFile, "paused", branch.pauseReason ?? "Paused by conditional");
-              break;
-            case "continue":
-              break;
-          }
-        } else {
-          process.stderr.write(JSON.stringify({ error: `Unknown conditional: ${args.setConditional}` }) + "\n");
-          process.exit(1);
-        }
-      }
+      resolveConditionalBranch(args.setConditional, stateFile, projectDir, stateManager, fs);
     }
 
     // 完了後に次のアクションも返す
@@ -196,34 +211,15 @@ function main(): void {
       process.stderr.write(JSON.stringify({ error: "pipeline-state.json not found" }) + "\n");
       process.exit(1);
     }
-    const state = stateManager.read(stateFile);
-    const flowDef = resolveFlow(state.flow, projectDir, fs) ?? getFlowDefinition(state.flow);
-    if (!flowDef) {
-      process.stderr.write(JSON.stringify({ error: `Unknown flow: ${state.flow}` }) + "\n");
-      process.exit(1);
-    }
-
-    const branch = flowDef.conditionalBranches?.[args.setConditional];
-    if (!branch) {
-      process.stderr.write(JSON.stringify({ error: `Unknown conditional: ${args.setConditional}` }) + "\n");
-      process.exit(1);
-    }
-
-    switch (branch.action) {
-      case "replace-pipeline":
-        if (branch.variant) stateManager.setVariant(stateFile, branch.variant, args.setConditional);
-        if (branch.pipeline) stateManager.setPipeline(stateFile, branch.pipeline);
-        break;
-      case "pause":
-        stateManager.setStatus(stateFile, "paused", branch.pauseReason ?? "Paused by conditional");
-        break;
-      case "continue":
-        // noop
-        break;
-    }
+    resolveConditionalBranch(args.setConditional, stateFile, projectDir, stateManager, fs);
 
     // Return next action after state update
     const updatedState = stateManager.read(stateFile);
+    const flowDef = resolveFlow(updatedState.flow, projectDir, fs) ?? getFlowDefinition(updatedState.flow);
+    if (!flowDef) {
+      process.stderr.write(JSON.stringify({ error: `Unknown flow: ${updatedState.flow}` }) + "\n");
+      process.exit(1);
+    }
     const featureDir = path.relative(projectDir, stateDir);
     const nextAction = computeNextInstruction(
       { state: updatedState, featureDir, projectDir, flowDef },

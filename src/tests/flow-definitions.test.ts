@@ -71,9 +71,9 @@ describe("FEATURE_FLOW", () => {
 
   it("context に全主要ステップのマッピングがある", () => {
     const ctx = FEATURE_FLOW.context!;
-    expect(ctx["specify"]).toEqual({ input: "input.txt" });
+    expect(ctx["specify"]).toEqual({ input: "input.txt", discussion: "discussion-summary.md" });
     expect(ctx["plan"]).toEqual({ spec: "spec.md", suggestions: "suggestions.yaml" });
-    expect(ctx["implement"]).toEqual({ tasks: "tasks.md", plan: "plan.md" });
+    expect(ctx["implement"]).toEqual({ tasks: "tasks.md", plan: "plan.md", testplan: "test-plan.md" });
   });
 
   it("prerequisites が正しく定義されている", () => {

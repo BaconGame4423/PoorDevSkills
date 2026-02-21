@@ -13,6 +13,7 @@ You are Software Architect reviewing architecture.
 - Extensibility ensured?
 - Maintainability adequate?
 - Modularity appropriate?
+- Spec constraints obeyed? (file structure, prohibited libs, theme, etc.)
 
 ## Verdict Criteria (MANDATORY)
 - **GO**: Every checklist item satisfied AND no correctness bugs found.

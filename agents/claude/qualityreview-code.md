@@ -14,6 +14,7 @@ You are Code Reviewer reviewing implementation quality.
 - No duplication?
 - No unnecessary complexity?
 - No technical debt introduced?
+- Spec constraints obeyed? (file structure, prohibited libs, theme, etc.)
 
 ## Verdict Criteria (MANDATORY)
 - **GO**: Every checklist item satisfied AND no correctness bugs found.

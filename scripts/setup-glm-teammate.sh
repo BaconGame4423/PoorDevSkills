@@ -51,7 +51,6 @@ export ZAI_API_KEY
 
 # ─── 3. /usr/local/bin/glm ラッパー生成（sudo） ───
 # API キーは実行時に展開して直接埋め込む（Teammate プロセスは .bashrc を読まないため）
-# --model intercept: Agent Teams が --model claude-opus-4-6 等のリテラル名を渡す問題を回避
 sudo tee /usr/local/bin/glm > /dev/null << WRAPPER
 #!/usr/bin/env bash
 # Claude Code wrapper for Z.AI (智谱AI GLM) API
@@ -66,35 +65,10 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="GLM-5"
 
-# --model <literal> をエイリアスに置換
-# 親(Agent Teams)が --model claude-opus-4-6 等のリテラル名を渡すため、
-# ANTHROPIC_DEFAULT_*_MODEL のエイリアスマッピングがバイパスされる。
-# リテラル名をエイリアスに変換して Claude Code のマッピングを有効にする。
-args=()
-skip_next=false
-for arg in "\$@"; do
-  if \$skip_next; then
-    skip_next=false
-    case "\$arg" in
-      *opus*)   args+=("opus") ;;
-      *sonnet*) args+=("sonnet") ;;
-      *haiku*)  args+=("haiku") ;;
-      *)        args+=("\$arg") ;;
-    esac
-    continue
-  fi
-  if [[ "\$arg" == "--model" ]]; then
-    skip_next=true
-    args+=("--model")
-    continue
-  fi
-  args+=("\$arg")
-done
-
-exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
+exec claude --mcp-config ~/.claude/glm-mcp.json "\$@"
 WRAPPER
 sudo chmod +x /usr/local/bin/glm
-echo "[OK] /usr/local/bin/glm 生成完了（キー埋め込み + model intercept + MCP）"
+echo "[OK] /usr/local/bin/glm 生成完了（キー埋め込み + MCP）"
 
 # ─── 4. ~/.claude/glm-mcp.json.template 作成 ───
 mkdir -p "$HOME/.claude"
@@ -166,7 +140,7 @@ chmod 600 "$OUTPUT"
 echo "[OK] MCP 設定を再生成: $OUTPUT"
 echo "  MCP servers: $(jq -r '.mcpServers | keys[]' "$OUTPUT" 2>/dev/null | tr '\n' ' ')"
 
-# glm ラッパーを再生成（キー埋め込み + model intercept）
+# glm ラッパーを再生成（キー埋め込み + MCP）
 sudo tee /usr/local/bin/glm > /dev/null << GLM_INNER
 #!/usr/bin/env bash
 # Claude Code wrapper for Z.AI (智谱AI GLM) API
@@ -181,28 +155,7 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="GLM-5"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="GLM-5"
 
-args=()
-skip_next=false
-for arg in "\$@"; do
-  if \$skip_next; then
-    skip_next=false
-    case "\$arg" in
-      *opus*)   args+=("opus") ;;
-      *sonnet*) args+=("sonnet") ;;
-      *haiku*)  args+=("haiku") ;;
-      *)        args+=("\$arg") ;;
-    esac
-    continue
-  fi
-  if [[ "\$arg" == "--model" ]]; then
-    skip_next=true
-    args+=("--model")
-    continue
-  fi
-  args+=("\$arg")
-done
-
-exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
+exec claude --mcp-config ~/.claude/glm-mcp.json "\$@"
 GLM_INNER
 sudo chmod +x /usr/local/bin/glm
 echo "[OK] glm ラッパーを再生成（キー埋め込み済み）"

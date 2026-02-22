@@ -262,14 +262,18 @@ function isSelectionUIActive(content: string): boolean {
  * Check if the TUI is truly idle (showing ❯ input prompt, NOT a selection UI or streaming).
  * Claude Code always shows ❯ at the bottom — even during active processing.
  * Distinguish by checking for streaming indicators:
- * - "esc to inter" (truncated "esc to interrupt") only appears during active streaming
+ * - "esc to int" (truncated "esc to interrupt") only appears during active streaming
+ *   (shortened from "esc to inter" for truncate resilience in narrow panes)
+ * - "⎿  Running" appears when Bash tool is executing (e.g., glm -p long-running command)
  * - Selection UI means AskUserQuestion is displayed
  */
 function isTUIIdle(content: string): boolean {
   if (!content.includes("❯")) return false;
   if (isSelectionUIActive(content)) return false;
-  // "esc to inter" (truncated) only appears during active streaming/processing
-  if (content.includes("esc to inter")) return false;
+  // "esc to int" (truncated) only appears during active streaming/processing
+  if (content.includes("esc to int")) return false;
+  // Bash tool execution in progress (e.g., glm -p long-running command)
+  if (content.includes("⎿  Running")) return false;
   return true;
 }
 

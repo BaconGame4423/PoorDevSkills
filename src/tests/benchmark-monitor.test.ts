@@ -714,6 +714,74 @@ describe("benchmark-monitor", () => {
     expect(result.logs.some((l: string) => l.includes("pipeline-state.json detected"))).toBe(true);
   }, 10_000);
 
+  describe("isTUIIdle — Bash Dispatch / truncate 耐性", () => {
+    it("'esc to int…' (truncated) でも idle 判定されない", async () => {
+      const { runMonitor } = await importMonitor();
+      const options = makeDefaultOptions({ timeoutSeconds: 20 });
+
+      setPipelineState("active", ["specify"], "plan");
+      mockExists((p) => p.includes("pipeline-state.json"));
+
+      // 50% 幅ペインで truncate された TUI 出力
+      mockedCapturePaneContent.mockReturnValue(
+        "⏵⏵ bypass permissions on (shift+tab to cycle) · esc to int…\n❯ "
+      );
+      mockedExecSync.mockReturnValue("index.html\n");
+
+      const promise = runMonitor(options);
+      await vi.advanceTimersByTimeAsync(25_000);
+      const result = await promise as MonitorResult;
+
+      // "esc to int" マッチで active 判定 → idle exit ではなく timeout
+      expect(result.exitReason).toBe("timeout");
+    });
+
+    it("'⎿  Running…' を含む場合に idle 判定されない", async () => {
+      const { runMonitor } = await importMonitor();
+      const options = makeDefaultOptions({ timeoutSeconds: 20 });
+
+      setPipelineState("active", ["specify"], "plan");
+      mockExists((p) => p.includes("pipeline-state.json"));
+
+      // Bash ツール実行中の TUI 出力
+      mockedCapturePaneContent.mockReturnValue(
+        "⎿  Running glm -p 'implement the feature'\n❯ "
+      );
+      mockedExecSync.mockReturnValue("index.html\n");
+
+      const promise = runMonitor(options);
+      await vi.advanceTimersByTimeAsync(25_000);
+      const result = await promise as MonitorResult;
+
+      // "⎿  Running" マッチで active 判定 → idle exit ではなく timeout
+      expect(result.exitReason).toBe("timeout");
+    });
+
+    it("Bash Dispatch 長時間実行: ❯ あり + Running あり → idle にならない", async () => {
+      const { runMonitor } = await importMonitor();
+      const options = makeDefaultOptions({ timeoutSeconds: 20 });
+      const mockedPasteBuffer = vi.mocked(pasteBuffer);
+
+      setPipelineState("active", ["specify", "plan"], "implement", ["specify", "plan", "implement", "review"]);
+      mockExists((p) => p.includes("pipeline-state.json"));
+
+      // Bash ツール実行中
+      mockedCapturePaneContent.mockReturnValue(
+        "⎿  Running glm -p '... long prompt ...'\n\nSome output here...\n❯ "
+      );
+      mockedExecSync.mockReturnValue("");
+
+      const promise = runMonitor(options);
+      await vi.advanceTimersByTimeAsync(25_000);
+      const result = await promise as MonitorResult;
+
+      // Recovery message は送信されない
+      expect(mockedPasteBuffer).not.toHaveBeenCalled();
+      // timeout で終了（idle exit ではない）
+      expect(result.exitReason).toBe("timeout");
+    });
+  });
+
   it("enableTeamStallDetection 無効時はスタックチェックしない", async () => {
     const { runMonitor } = await importMonitor();
     // Don't pass enableTeamStallDetection

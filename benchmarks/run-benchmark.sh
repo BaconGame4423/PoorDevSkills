@@ -72,7 +72,7 @@ _find_excluding_archives() {
     local skip=false
     while [[ "$d" != "$base_dir" && "$d" != "/" ]]; do
       d=$(dirname "$d")
-      [[ -f "$d/_git-log.txt" ]] && { skip=true; break; }
+      [[ -f "$d/_git-log.txt" || -f "$d/_archived" ]] && { skip=true; break; }
     done
     $skip || echo "$f"
   done
@@ -125,6 +125,8 @@ archive_run() {
   if [[ -d "$dir/.git" ]]; then
     git -C "$dir" log --oneline --all > "$archive/_git-log.txt" 2>/dev/null || true
   fi
+  # アーカイブマーカー（_git-log.txt が書けない場合のフォールバック）
+  date +%s > "$archive/_archived"
 
   # _runs/ を .gitignore に追記
   if ! grep -qx '_runs/' "$dir/.gitignore" 2>/dev/null; then

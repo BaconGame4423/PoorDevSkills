@@ -38,7 +38,7 @@ _find_excluding_archives() {
     local skip=false
     while [[ "$d" != "$base_dir" && "$d" != "/" ]]; do
       d=$(dirname "$d")
-      [[ -f "$d/_git-log.txt" ]] && { skip=true; break; }
+      [[ -f "$d/_git-log.txt" || -f "$d/_archived" ]] && { skip=true; break; }
     done
     $skip || echo "$f"
   done

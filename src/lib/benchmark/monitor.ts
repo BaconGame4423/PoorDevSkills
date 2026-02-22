@@ -38,11 +38,12 @@ function findPipelineState(comboDir: string): string | null {
   if (existsSync(runsDir)) {
     for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      if (existsSync(path.join(runsDir, entry.name, "_git-log.txt"))) continue;
-      const candidate = path.join(runsDir, entry.name, "pipeline-state.json");
+      const runSubDir = path.join(runsDir, entry.name);
+      if (existsSync(path.join(runSubDir, "_git-log.txt")) || existsSync(path.join(runSubDir, "_archived"))) continue;
+      const candidate = path.join(runSubDir, "pipeline-state.json");
       if (existsSync(candidate)) return candidate;
       // Also check nested feature dirs (e.g., _runs/<ts>/features/<name>/)
-      const featDir = path.join(runsDir, entry.name, "features");
+      const featDir = path.join(runSubDir, "features");
       if (existsSync(featDir)) {
         for (const sub of readdirSync(featDir, { withFileTypes: true })) {
           if (!sub.isDirectory()) continue;
@@ -150,9 +151,10 @@ function hasArtifacts(comboDir: string): boolean {
     if (existsSync(runsDir)) {
       for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        if (existsSync(path.join(runsDir, entry.name, "_git-log.txt"))) continue;
+        const runSubDir = path.join(runsDir, entry.name);
+        if (existsSync(path.join(runSubDir, "_git-log.txt")) || existsSync(path.join(runSubDir, "_archived"))) continue;
         const subFiles = execSync(
-          `find "${path.join(runsDir, entry.name)}" ${findOpts}`,
+          `find "${runSubDir}" ${findOpts}`,
           { encoding: "utf-8" }
         ).trim();
         if (subFiles) return true;

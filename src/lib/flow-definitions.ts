@@ -65,7 +65,7 @@ const PHASE_REVIEW_TEAM: StepTeamConfig = {
 export const FEATURE_FLOW: FlowDefinition = {
   steps: [
     "specify", "suggest", "plan", "planreview",
-    "tasks", "tasksreview", "testdesign", "implement",
+    "tasks", "tasksreview", "implement", "testdesign",
     "architecturereview", "qualityreview", "phasereview",
   ],
   reviews: [
@@ -78,8 +78,8 @@ export const FEATURE_FLOW: FlowDefinition = {
     suggest:   { spec: "spec.md" },
     plan:      { spec: "spec.md", suggestions: "suggestions.yaml", decisions: "suggestion-decisions.yaml" },
     tasks:     { plan: "plan.md", spec: "spec.md" },
-    testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md" },
-    implement: { tasks: "tasks.md", plan: "plan.md", testplan: "test-plan.md" },
+    implement: { tasks: "tasks.md", plan: "plan.md" },
+    testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md", implementation: "*" },
     planreview:  { plan: "plan.md", spec: "spec.md" },
     tasksreview: { tasks: "tasks.md", spec: "spec.md", plan: "plan.md" },
     architecturereview: { spec: "spec.md" },
@@ -120,8 +120,8 @@ export const FEATURE_FLOW: FlowDefinition = {
     planreview: PLANREVIEW_TEAM,
     tasks:       { type: "team", teammates: [{ role: "worker-tasks" }] },
     tasksreview: TASKSREVIEW_TEAM,
-    testdesign:  { type: "team", teammates: [{ role: "worker-testdesign" }] },
     implement:   { type: "team", teammates: [{ role: "worker-implement" }] },
+    testdesign:  { type: "team", teammates: [{ role: "worker-testdesign" }] },
     architecturereview: ARCH_REVIEW_TEAM,
     qualityreview: QUALITY_REVIEW_TEAM,
     phasereview: PHASE_REVIEW_TEAM,

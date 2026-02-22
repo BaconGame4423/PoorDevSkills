@@ -37,27 +37,21 @@ You **MUST** consider user input before proceeding (if not empty).
 
 ## IMPL_PLAN Template
 
+**HARD LIMIT: plan.md MUST NOT exceed 500 lines.** Focus on architecture decisions and dependency graphs. Defer task-level details to tasks.md.
+
 ````markdown
 # Implementation Plan: [FEATURE]
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
 ## Summary
 
-[Primary requirement + technical approach from research]
+[Primary requirement + technical approach — max 5 lines]
 
 ## Technical Context
 
-**Language/Version**: [e.g., Python 3.11]
-**Primary Dependencies**: [e.g., FastAPI]
-**Storage**: [if applicable]
-**Testing**: [e.g., pytest]
-**Target Platform**: [e.g., Linux server]
-**Project Type**: [single/web/mobile]
-**Performance Goals**: [domain-specific]
-**Constraints**: [domain-specific]
-**Scale/Scope**: [domain-specific]
+**Language/Version**: [e.g., Python 3.11] | **Dependencies**: [e.g., FastAPI] | **Testing**: [e.g., pytest]
+**Platform**: [e.g., Linux server] | **Project Type**: [single/web/mobile]
 
 ## Constitution Check
 
@@ -67,118 +61,59 @@ You **MUST** consider user input before proceeding (if not empty).
 
 ## Project Structure
 
-### Documentation (this feature)
-
 ```text
 specs/[###-feature]/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
 ├── contracts/           # Phase 1 output
 └── tasks.md             # /poor-dev.tasks output (NOT created by /poor-dev.plan)
 ```
 
-### Source Code (repository root)
+**Source code structure**: Choose ONE, expand with real paths, delete unused.
 
-Choose ONE structure. Delete unused options and expand with real paths.
+## Contracts & Interfaces (並列実装の基盤)
 
-```text
-# Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-tests/
-├── contract/
-├── integration/
-└── unit/
+### 境界定義
+- Component A (files: ...) ←→ Component B (files: ...)
+- Interface: contracts/...
+- Parallel: Yes/No (rationale)
 
-# Option 2: Web application (frontend + backend)
-backend/
-├── src/{models,services,api}/
-└── tests/
-frontend/
-├── src/{components,pages,services}/
-└── tests/
+### 並列化可否判定基準
+- ファイル空間が非重複
+- コントラクト（interface / API schema）で接続点が定義済み
+- 一方がモックで他方の動作をシミュレート可能
 
-# Option 3: Mobile + API
-api/
-└── [same as backend]
-ios/ or android/
-└── [platform-specific structure]
-```
+## Dependency Graph
 
-**Structure Decision**: [Selected structure with rationale]
-
-## Complexity Tracking
-
-> Fill ONLY if Constitution Check has violations to justify.
-
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
+[Phase/component dependencies as a list or ASCII diagram — NO individual task details]
 ````
 
 ## Phase Details
 
 **Phase 0: Outline & Research**
-1. Extract unknowns from Technical Context (NEEDS CLARIFICATION → research tasks).
-2. Generate and dispatch research agents for each unknown/technology.
-3. Consolidate in `research.md`: Decision, Rationale, Alternatives considered.
+1. Extract unknowns from Technical Context → research tasks.
+2. Consolidate in `research.md`: Decision, Rationale, Alternatives considered.
 
 **Output**: research.md
 
-**Phase 1: Design & Contracts (Contract-First 並列実装の基盤)**
+**Phase 1: Design & Contracts**
 
 Prerequisites: research.md complete.
 
-1. Extract entities from spec → `data-model.md` (fields, relationships, validation, state transitions).
-2. Generate API contracts from functional requirements → `contracts/` directory:
-   - **TypeScript projects** → `.ts` interface files
-   - **REST API** → OpenAPI 3.x YAML
-   - **GraphQL** → `.graphql` schema files
-   - **gRPC** → `.proto` files
-   - **Mock definitions** → test stubs and sample data
-3. Define **parallel boundaries** in plan Architecture section:
-   ```markdown
-   ## Contracts & Interfaces (並列実装の基盤)
-
-   ### 境界定義
-   - Component A (files: src/server/**) ←→ Component B (files: src/client/**)
-   - Interface: contracts/api.yaml
-   - Parallel: Yes (non-overlapping file spaces)
-
-   ### 並列化可否判定基準
-   - ファイル空間が非重複（異なるディレクトリ / 異なるファイル群）
-   - コントラクト（interface / API schema）で接続点が定義済み
-   - 一方がモックで他方の動作をシミュレート可能
-   ```
+1. Extract entities from spec → `data-model.md`.
+2. Generate API contracts → `contracts/` (TypeScript `.ts` / OpenAPI YAML / GraphQL `.graphql` / gRPC `.proto`).
+3. Define parallel boundaries in plan.
 
 **Output**: data-model.md, contracts/*, quickstart.md
-
-## File Naming
-
-- **Complete plan**: `plan.md`
-- **Phase 0 only**: `research.md`
-- **Phase 1 only**: `data-model.md`, `contracts/`, `quickstart.md`
-
-## Progress Markers
-
-Output progress markers at key milestones:
-- `[PROGRESS: plan reading-spec]` — spec.md 読み取り開始
-- `[PROGRESS: plan constitution-check]` — Constitution Check 実行中
-- `[PROGRESS: plan phase0-research]` — Phase 0 リサーチ開始
-- `[PROGRESS: plan phase0-complete]` — Phase 0 完了、research.md 作成
-- `[PROGRESS: plan phase1-design]` — Phase 1 設計開始
-- `[PROGRESS: plan phase1-complete]` — Phase 1 完了、全成果物作成
 
 ## Key Rules
 
 - Use absolute paths
 - ERROR on gate failures or unresolved clarifications
 - Phase 1 requires research.md; skip with warning if missing
-- Code examples: function signature + max 3-line pseudocode. Leave full implementation to implement step.
+- Code examples: function signature + max 3-line pseudocode. Leave full implementation to implement step
+- **500 line hard limit**: If plan exceeds 500 lines, trim Phase Details and code examples first
 
 ### Dashboard Update
 
@@ -192,9 +127,8 @@ Update living documents in `docs/`:
    Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
 4. Write `docs/progress.md`:
    - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+   - Per-feature section: branch, phase, artifact checklist, last activity
 5. Write `docs/roadmap.md`:
    - Header with timestamp
    - Active features table (feature, phase, status, branch)
    - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)

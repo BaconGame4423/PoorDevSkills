@@ -86,8 +86,10 @@ describe("FEATURE_FLOW", () => {
   it("artifacts が正しく定義されている", () => {
     const artifacts = FEATURE_FLOW.artifacts!;
     expect(artifacts["specify"]).toBe("spec.md");
+    expect(artifacts["suggest"]).toEqual(["suggestions.yaml", "exploration-session.yaml", "suggestion-decisions.yaml"]);
     expect(artifacts["plan"]).toBe("plan.md");
     expect(artifacts["testdesign"]).toBe("test-plan.md");
+    expect(artifacts["implement"]).toBe("*");
   });
 
   it("reviewPersonaGroups が全レビューステップに定義されている", () => {
@@ -97,6 +99,13 @@ describe("FEATURE_FLOW", () => {
     }
   });
 
+  it("reviewTargets にレビューステップの定義がある", () => {
+    const targets = FEATURE_FLOW.reviewTargets!;
+    expect(targets["architecturereview"]).toBe("*");
+    expect(targets["qualityreview"]).toBe("*");
+    expect(targets["phasereview"]).toBe("*");
+  });
+
   it("teamConfig に全ステップの設定がある", () => {
     const tc = FEATURE_FLOW.teamConfig!;
     for (const step of FEATURE_FLOW.steps) {
@@ -104,11 +113,11 @@ describe("FEATURE_FLOW", () => {
     }
   });
 
-  it("レビューステップの teamConfig が review-loop または parallel-review", () => {
+  it("レビューステップの teamConfig が全て review-loop", () => {
     const tc = FEATURE_FLOW.teamConfig!;
-    expect(tc["planreview"]!.type).toBe("review-loop");
-    expect(tc["architecturereview"]!.type).toBe("parallel-review");
-    expect(tc["qualityreview"]!.type).toBe("parallel-review");
+    for (const rev of FEATURE_FLOW.reviews!) {
+      expect(tc[rev]!.type, rev).toBe("review-loop");
+    }
   });
 
   it("全レビューの reviewCommunication が opus-mediated", () => {

@@ -3,7 +3,6 @@ name: planreview-critical
 description: Plan review - Critical Thinker persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Critical Thinker reviewing a plan.

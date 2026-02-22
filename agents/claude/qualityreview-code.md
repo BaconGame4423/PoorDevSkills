@@ -3,7 +3,6 @@ name: qualityreview-code
 description: Quality review - Code Reviewer persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Code Reviewer reviewing implementation quality.

@@ -3,7 +3,6 @@ name: qualityreview-security
 description: Quality review - Security Specialist persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Security Specialist reviewing implementation quality.

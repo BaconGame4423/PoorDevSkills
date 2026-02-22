@@ -226,4 +226,121 @@ describe("computeNextInstruction", () => {
       }
     });
   });
+
+  describe("配列 artifacts", () => {
+    it("suggest の create_team で配列 artifacts が返る", () => {
+      const ctx = makeCtx({
+        state: makeState({ completed: ["specify"] }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("create_team");
+      if (action.action === "create_team") {
+        expect(action.step).toBe("suggest");
+        expect(action.artifacts).toHaveLength(3);
+        expect(action.artifacts).toContain("/proj/specs/001-test/suggestions.yaml");
+        expect(action.artifacts).toContain("/proj/specs/001-test/exploration-session.yaml");
+        expect(action.artifacts).toContain("/proj/specs/001-test/suggestion-decisions.yaml");
+      }
+    });
+
+    it("implement の create_team で '*' sentinel artifacts が返る", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: ["specify", "suggest", "plan", "planreview", "tasks", "tasksreview", "testdesign"],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/tasks.md": "tasks",
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("create_team");
+      if (action.action === "create_team") {
+        expect(action.step).toBe("implement");
+        expect(action.artifacts).toEqual(["*"]);
+      }
+    });
+  });
+
+  describe("reviewTargets '*' パターン", () => {
+    it("reviewTargets='*' で feature dir 全体を target にする", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "suggest", "plan", "planreview",
+            "tasks", "tasksreview", "testdesign", "implement",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("create_review_team");
+      if (action.action === "create_review_team") {
+        expect(action.step).toBe("architecturereview");
+        expect(action.target_files).toEqual(["/proj/specs/001-test"]);
+      }
+    });
+  });
+
+  describe("unified review teams", () => {
+    it("architecturereview が reviewer-arch-unified 1名を使う", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [
+            "specify", "suggest", "plan", "planreview",
+            "tasks", "tasksreview", "testdesign", "implement",
+          ],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("create_review_team");
+      if (action.action === "create_review_team") {
+        expect(action.reviewers).toHaveLength(1);
+        expect(action.reviewers[0]!.role).toBe("reviewer-arch-unified");
+        expect(action.fixers).toHaveLength(1);
+        expect(action.fixers[0]!.role).toBe("review-fixer");
+      }
+    });
+  });
+
+  describe("done で配列 artifacts を収集", () => {
+    it("suggest artifacts が存在する場合に全て収集する", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: [...FEATURE_FLOW.steps],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/spec.md": "spec",
+        "/proj/specs/001-test/suggestions.yaml": "yaml",
+        "/proj/specs/001-test/exploration-session.yaml": "yaml",
+        "/proj/specs/001-test/suggestion-decisions.yaml": "yaml",
+        "/proj/specs/001-test/plan.md": "plan",
+        "/proj/specs/001-test/tasks.md": "tasks",
+        "/proj/specs/001-test/test-plan.md": "testplan",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("done");
+      if (action.action === "done") {
+        expect(action.artifacts).toContain("/proj/specs/001-test/suggestions.yaml");
+        expect(action.artifacts).toContain("/proj/specs/001-test/exploration-session.yaml");
+        expect(action.artifacts).toContain("/proj/specs/001-test/suggestion-decisions.yaml");
+        // implement "*" → fd itself
+        expect(action.artifacts).toContain("/proj/specs/001-test");
+      }
+    });
+  });
 });

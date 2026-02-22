@@ -3,7 +3,6 @@ name: tasksreview-senior
 description: Tasks review - Senior Engineer persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Senior Engineer reviewing task decomposition.

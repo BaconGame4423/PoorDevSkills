@@ -3,7 +3,6 @@ name: tasksreview-devops
 description: Tasks review - DevOps Engineer persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are DevOps Engineer reviewing task decomposition.

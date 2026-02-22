@@ -3,7 +3,6 @@ name: planreview-pm
 description: Plan review - PM persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are PM (Product Manager) reviewing a plan.

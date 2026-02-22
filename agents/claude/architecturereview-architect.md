@@ -3,7 +3,6 @@ name: architecturereview-architect
 description: Architecture review - Architect persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Software Architect reviewing architecture.

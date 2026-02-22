@@ -77,6 +77,9 @@ Web 検索には以下のツールを使用する。利用可能なツールは�
 
 ### STEP 3: Research Exploration
 
+**MANDATORY**: 最低3回の Web 検索を実行すること。検索結果は `sources_consulted[]` に URL を記録する。
+検索ツールが利用不可の場合は `[SEARCH_UNAVAILABLE]` を `sources_consulted[]` に記録して続行する。
+
 Perform research directly using web search and codebase analysis:
 
 1. Analyze the feature spec to identify areas needing best practice research

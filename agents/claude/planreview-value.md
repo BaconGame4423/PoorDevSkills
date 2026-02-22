@@ -3,7 +3,6 @@ name: planreview-value
 description: Plan review - Value Analyst persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Value Analyst reviewing a plan.

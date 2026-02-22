@@ -129,10 +129,18 @@ function collectArtifacts(
 ): string[] {
   if (!flowDef.artifacts) return [];
   const files: string[] = [];
-  for (const filename of Object.values(flowDef.artifacts)) {
-    const fullPath = path.join(fd, filename);
-    if (fs.exists(fullPath)) {
-      files.push(fullPath);
+  for (const value of Object.values(flowDef.artifacts)) {
+    if (value === "*") {
+      // Sentinel: feature dir itself (implement step)
+      files.push(fd);
+      continue;
+    }
+    const filenames = Array.isArray(value) ? value : [value];
+    for (const filename of filenames) {
+      const fullPath = path.join(fd, filename);
+      if (fs.exists(fullPath)) {
+        files.push(fullPath);
+      }
     }
   }
   return files;
@@ -156,8 +164,14 @@ function buildTeamAction(
       const tasks: TaskSpec[] = teammates.map((t) =>
         buildWorkerTask(step, t, fd, flowDef, fs)
       );
-      const artifactFile = flowDef.artifacts?.[step];
-      const artifacts = artifactFile ? [path.join(fd, artifactFile)] : [];
+      const artifactDef = flowDef.artifacts?.[step];
+      const artifacts: string[] = !artifactDef
+        ? []
+        : artifactDef === "*"
+          ? ["*"]
+          : Array.isArray(artifactDef)
+            ? artifactDef.map((f) => path.join(fd, f))
+            : [path.join(fd, artifactDef)];
       return {
         action: "create_team",
         step,
@@ -206,6 +220,7 @@ function collectReviewTargets(
   // reviewTargets が明示的に定義されている場合
   const pattern = flowDef.reviewTargets?.[step];
   if (pattern) {
+    if (pattern === "*") return [fd];
     const fullPath = path.join(fd, pattern);
     if (fs.exists(fullPath)) return [fullPath];
   }

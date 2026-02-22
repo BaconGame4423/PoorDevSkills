@@ -29,6 +29,11 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 ### Post-Implementation Cleanup (MANDATORY)
 - 並列実装で中間ファイルを作成した場合、最終統合後に削除
 - spec の配布形式制約（単一ファイル等）を遵守
+- **完了前チェックリスト** (全項目必須):
+  1. `ls FEATURE_DIR` でファイル一覧を取得
+  2. spec.md の成果物定義（deliverables / 配布形式）と照合
+  3. 定義外のファイル（中間ファイル、ビルド出力、テスト用ダミー等）を削除
+  4. spec に「単一ファイル」と記載がある場合、成果物が1ファイルであることを確認
 
 ### Test Plan Reference
 - Read test-plan.md if provided in context. Incorporate automated test code into deliverables where applicable.

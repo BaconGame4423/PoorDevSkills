@@ -49,10 +49,14 @@ export function buildWorkerTask(
   fs: Pick<FileSystem, "exists" | "readFile">
 ): TaskSpec {
   const contextDesc = buildContextDescription(step, fd, flowDef, fs);
-  const artifactFile = flowDef.artifacts?.[step];
-  const outputDesc = artifactFile
-    ? `Output: ${path.join(fd, artifactFile)}`
-    : `Complete the "${step}" step`;
+  const artifactDef = flowDef.artifacts?.[step];
+  const outputDesc = !artifactDef
+    ? `Complete the "${step}" step`
+    : artifactDef === "*"
+      ? `Output: all files in ${fd}`
+      : Array.isArray(artifactDef)
+        ? `Output: ${artifactDef.map((f) => path.join(fd, f)).join(", ")}`
+        : `Output: ${path.join(fd, artifactDef)}`;
 
   return {
     subject: `Execute ${step} step`,

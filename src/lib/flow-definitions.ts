@@ -31,12 +31,9 @@ const TASKSREVIEW_TEAM: StepTeamConfig = {
 };
 
 const ARCH_REVIEW_TEAM: StepTeamConfig = {
-  type: "parallel-review",
+  type: "review-loop",
   teammates: [
-    { role: "architecturereview-architect", writeAccess: false },
-    { role: "architecturereview-security", writeAccess: false },
-    { role: "architecturereview-performance", writeAccess: false },
-    { role: "architecturereview-sre", writeAccess: false },
+    { role: "reviewer-arch-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,
@@ -44,12 +41,9 @@ const ARCH_REVIEW_TEAM: StepTeamConfig = {
 };
 
 const QUALITY_REVIEW_TEAM: StepTeamConfig = {
-  type: "parallel-review",
+  type: "review-loop",
   teammates: [
-    { role: "qualityreview-code", writeAccess: false },
-    { role: "qualityreview-qa", writeAccess: false },
-    { role: "qualityreview-security", writeAccess: false },
-    { role: "qualityreview-testdesign", writeAccess: false },
+    { role: "reviewer-quality-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,
@@ -57,12 +51,9 @@ const QUALITY_REVIEW_TEAM: StepTeamConfig = {
 };
 
 const PHASE_REVIEW_TEAM: StepTeamConfig = {
-  type: "parallel-review",
+  type: "review-loop",
   teammates: [
-    { role: "phasereview-qa", writeAccess: false },
-    { role: "phasereview-regression", writeAccess: false },
-    { role: "phasereview-docs", writeAccess: false },
-    { role: "phasereview-ux", writeAccess: false },
+    { role: "reviewer-phase-unified", writeAccess: false },
     { role: "review-fixer" },
   ],
   maxReviewIterations: 12,
@@ -103,10 +94,11 @@ export const FEATURE_FLOW: FlowDefinition = {
   },
   artifacts: {
     specify: "spec.md",
-    suggest: "suggestions.yaml",
+    suggest: ["suggestions.yaml", "exploration-session.yaml", "suggestion-decisions.yaml"],
     plan: "plan.md",
     tasks: "tasks.md",
     testdesign: "test-plan.md",
+    implement: "*",
   },
   reviewPersonaGroups: {
     planreview: "planreview",
@@ -114,6 +106,11 @@ export const FEATURE_FLOW: FlowDefinition = {
     architecturereview: "architecturereview",
     qualityreview: "qualityreview",
     phasereview: "phasereview",
+  },
+  reviewTargets: {
+    architecturereview: "*",
+    qualityreview: "*",
+    phasereview: "*",
   },
   discussionSteps: ["discussion"],
   teamConfig: {

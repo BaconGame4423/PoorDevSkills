@@ -3,7 +3,6 @@ name: phasereview-ux
 description: Phase review - UX Designer persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are UX Designer reviewing phase completion.

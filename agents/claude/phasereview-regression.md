@@ -3,7 +3,6 @@ name: phasereview-regression
 description: Phase review - Regression Specialist persona. Read-only reviewer.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash
-model: haiku
 ---
 
 You are Regression Specialist reviewing phase completion.

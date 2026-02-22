@@ -37,7 +37,9 @@ After Phase 0, execute the pipeline via TS helper:
         - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
         - `owner` = `tasks[].assignTo`
      5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)
-     6. **Commit**: JSON の `artifacts[]` に列挙されたファイルを `git add -f` && commit
+     6. **Commit**: JSON の `artifacts[]` を処理:
+        - `artifacts` に `"*"` が含まれる場合: feature dir 内の全変更を `git add`。`git status` で不要ファイル（中間ファイル等）がないか確認し、あれば `git reset HEAD <file>` で除外
+        - それ以外: `artifacts[]` に列挙されたファイルを `git add -f` && commit
      7. **Step complete**: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
      8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
      9. **TeamDelete**
@@ -95,7 +97,7 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
 
 ### Step 3: Convergence Check
-- C=0 AND H=0 (fixed_ids 除外後) → review-log.yaml 更新 → commit → step complete → TeamDelete
+- C=0 AND H=0 (fixed_ids 除外後) → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
 - iteration >= max_iterations → user_gate → TeamDelete
 - Otherwise → Step 4
 
@@ -103,7 +105,7 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - C/H イシューを fixer に SendMessage: `- [{id}] {severity} | {description} | {location}`
 - Fixer が fixed/rejected YAML を返す → fixed_ids に追加
 - Opus が修正ファイルを確認: コード重複 >=10行・debug 文混入 → fixer に差し戻し（最大2回）
-- clean → review-log.yaml 更新 → commit → Step 1 に戻る
+- clean → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → Step 1 に戻る
 
 ## Error Handling
 
@@ -143,6 +145,24 @@ Teammates NEVER execute git commands.
 
 ### When to Commit
 - After `create_team` for `implement` step completes: stage and commit all implementation changes
-- After fixer reports modifications in a review loop: stage and commit the fixes
+- After fixer reports modifications in a review loop: stage and commit the fixes + `review-log-{step}.yaml`
+- After review convergence (C=0, H=0): commit `review-log-{step}.yaml`
 - After `create_team` for artifact-producing steps (specify, suggest, plan, tasks, testdesign): commit the generated artifact
 - Commit message format: `type: 日本語タイトル` (per CLAUDE.md conventions)
+
+### Review Log Format
+Review log files use the naming convention `review-log-{step}.yaml` and follow this structure:
+```yaml
+step: architecturereview
+iterations:
+  log:
+    - {n: 1, raw_issues: 26, actionable: 6, fixed: "AR-001,AR-002,AR-003,AR-004,AR-005,AR-006"}
+  issues:
+    - id: AR-001
+      severity: H
+      description: "..."
+      location: "..."
+      status: fixed
+```
+- `raw_issues`: 全レビュアーの未フィルタ合計
+- `actionable`: dedup + severity filter 後の修正対象件数

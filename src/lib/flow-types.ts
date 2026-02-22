@@ -22,7 +22,7 @@ export interface FlowDefinition {
   /** step → required files（checkPrerequisites 置換） */
   prerequisites?: Record<string, string[]>;
   /** step → output filename */
-  artifacts?: Record<string, string>;
+  artifacts?: Record<string, string | string[]>;
   /** step → prompt headers */
   headers?: Record<string, string[]>;
   /** review step → target path pattern */

@@ -133,19 +133,19 @@ PoorDevSkills が推奨する開発の流れは以下のとおりです。
 
 1. **仕様を作成する** — `/poor-dev.specify` で自然言語の機能説明から仕様書を生成します。ユーザーストーリー・受け入れ基準・非機能要件が構造化された spec.md が出力されます。曖昧な箇所があれば `/poor-dev.clarify` で質問を通じて仕様を精緻化できます。
 
-2. **ベストプラクティスを調査する** — `/poor-dev.suggest` で仕様に基づきツール・ライブラリ・設計パターンのベストプラクティスを自動調査します。メンテナンス性・セキュリティのスコアリングでフィルタリングされた提案が suggestions.yaml に出力されます。
+2. **技術計画を立てる** — `/poor-dev.plan` で仕様をもとにアーキテクチャ・技術選定・フェーズ分割を含む実装計画を作成します。ベストプラクティスの Web 調査も計画フェーズに統合されています。
 
-3. **技術計画を立てる** — `/poor-dev.plan` で仕様と提案をもとにアーキテクチャ・技術選定・フェーズ分割を含む実装計画を作成します。
+3. **計画をレビューする** — `/poor-dev.planreview` で PM・リスク・価値・批判の 4 ペルソナが計画を多角的にレビューします。指摘があれば自動修正ループが走り、指摘ゼロになるまで繰り返します。
 
-4. **計画をレビューする** — `/poor-dev.planreview` で PM・リスク・価値・批判の 4 ペルソナが計画を多角的にレビューします。指摘があれば自動修正ループが走り、指摘ゼロになるまで繰り返します。
+4. **タスクに分解する** — `/poor-dev.tasks` で計画を実行可能な粒度のタスクに分解します。依存関係と優先度が明示された tasks.md が生成されます。
 
-5. **タスクに分解する** — `/poor-dev.tasks` で計画を実行可能な粒度のタスクに分解します。依存関係と優先度が明示された tasks.md が生成されます。
+5. **タスクをレビューする** — `/poor-dev.tasksreview` で TechLead・Senior・DevOps・Junior の 4 ペルソナがタスクの粒度・依存関係・実行可能性を検証します。
 
-6. **タスクをレビューする** — `/poor-dev.tasksreview` で TechLead・Senior・DevOps・Junior の 4 ペルソナがタスクの粒度・依存関係・実行可能性を検証します。
+6. **設計をレビューする（任意）** — 必要に応じて `/poor-dev.architecturereview` で Architect・Security・Performance・SRE の 4 ペルソナが SOLID 原則準拠・脆弱性・性能を検証します。
 
-7. **設計をレビューする（任意）** — 必要に応じて `/poor-dev.architecturereview` で Architect・Security・Performance・SRE の 4 ペルソナが SOLID 原則準拠・脆弱性・性能を検証します。
+7. **実装する** — `/poor-dev.implement` で tasks.md に従いタスクを順次実装します。
 
-8. **実装する** — `/poor-dev.implement` で tasks.md に従いタスクを順次実装します。
+8. **テスト設計** — `/poor-dev.testdesign` で実装コードに基づくテスト計画・テストスケルトンを設計します。
 
 9. **品質を検証する** — `/poor-dev.qualityreview` で品質ゲート（型チェック・リント・テスト）を実行した後、QA・TestDesign・Code・Security の 4 ペルソナ + 敵対的レビューでコード品質を検証します。
 
@@ -208,8 +208,8 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 **効率化機構**:
 - **リスクベース深度**: 変更規模に応じてレビュー深度を自動調整（deep/standard/light）。小規模変更は 2 ペルソナ・最大 3 イテレーションで完了
 - **早期終了**: 3/4 ペルソナが GO（C/H=0）を返した時点で残りをキャンセルし GO 判定。逆に 2/4 が NO-GO なら即座に FIX 移行
-- **投機的実行**: specify → suggest を並列化し、仕様確定後すぐに suggest 結果を利用可能に
 - **並列実装**: `[P:group]` マーカー付きタスクを DAG ベースで並列 dispatch（同一ブランチ / worktree / フェーズ分割の 3 戦略）
+- **ハイブリッドコンテキスト注入**: ミッションクリティカルな成果物のみ Opus が事前注入、その他は Worker が自己読み込み（トークン節約）
 
 ---
 
@@ -221,7 +221,6 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|
 | `/poor-dev.team` | Agent Teams オーケストレーター（全フロー対応。メインエントリポイント） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
-| `/poor-dev.review` | レビューコマンドのルーター（レビュー種別を選択） |
 
 ### 仕様・計画・実装
 
@@ -229,7 +228,6 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 |---------|------|------|
 | `/poor-dev.specify` | 機能仕様の作成 | spec.md |
 | `/poor-dev.clarify` | 仕様の曖昧箇所を質問で解消 | 更新された spec.md |
-| `/poor-dev.suggest` | ベストプラクティス調査・提案 | suggestions.yaml, exploration-session.yaml |
 | `/poor-dev.bugfix` | バグ調査・根本原因特定・修正計画 | bug-report.md, investigation.md, fix-plan.md |
 | `/poor-dev.investigate` | 原因不明の問題調査・分析 | 調査レポート + 次アクション推奨 |
 | `/poor-dev.plan` | 技術計画の作成 | plan.md |
@@ -274,7 +272,6 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 | `/poor-dev.report` | プロジェクトレポート・ドキュメント生成 |
 | `/poor-dev.constitution` | プロジェクト憲法の作成・更新 |
 | `/poor-dev.taskstoissues` | タスクを GitHub Issues に変換 |
-| `/poor-dev.config` | ハイブリッドモデル設定（CLI/モデルのカテゴリ別設定） |
 
 ### ベンチマーク
 
@@ -331,63 +328,16 @@ PoorDevSkills の核心は **多角的 AI レビュー**と**自動修正ルー�
 
 PoorDevSkills は **Claude Code** と **OpenCode** の両方から利用でき、レビューごとに CLI とモデルを使い分けられます。
 
-### モデルティアシステム
+### Agent Teams モデル構成
 
-Plan-and-Execute モデルに基づき、各ステップに最適なモデルを自動選択します。
+Agent Teams パス (`/poor-dev.team`) では、Orchestrator（Opus）と Teammate で異なるモデルを使用するハイブリッド構成を取ります。
 
-| ティア | 用途 | 対象ステップ | 推奨モデル |
-|--------|------|-------------|-----------|
-| T1 (Strategic) | 計画・設計判断 | plan | Claude Sonnet |
-| T2 (Tactical) | 実装・レビュー | specify, planreview, tasks, implement 等 | MiniMax M2.5 / GLM4.7 |
-| T3 (Routine) | 定型・探索 | suggest | MiniMax M2.5-Lightning / GLM4.7 |
+| 役割 | モデル | API |
+|------|--------|-----|
+| Orchestrator（リーダー） | Claude Opus | Anthropic API |
+| Teammate（ワーカー・レビュアー） | GLM-5 等 | Z.AI API（`CLAUDE_CODE_TEAMMATE_COMMAND` で差し替え） |
 
-**解決優先度**: `overrides.<agent>` → `overrides.<category>` → `step_tiers` → `tiers` → `default`
-
-### 設定方法
-
-```bash
-/poor-dev.config show                          # 現在の設定 + ティア一覧
-/poor-dev.config default opencode zai-coding-plan/glm-4.7  # デフォルト設定
-/poor-dev.config tier T2 opencode minimax-m2.5  # ティア定義
-/poor-dev.config step-tier plan T1              # ステップにティア割当
-/poor-dev.config set fixer claude sonnet        # 個別エージェント上書き
-/poor-dev.config depth auto                     # レビュー深度（auto/deep/standard/light）
-/poor-dev.config speculation on                 # 投機的実行の有効化
-/poor-dev.config parallel auto                  # 並列実装の戦略設定
-/poor-dev.config reset                          # 推奨デフォルトにリセット
-```
-
-設定はプロジェクトルートの `.poor-dev/config.json` に保存され、`npx github:BaconGame4423/PoorDevSkills update` で上書きされません。
-
-### GLM5 対応設定
-
-小規模モデル（GLM5 等）で安定動作させるための追加設定:
-
-```json
-{
-  "command_variant": "simple",
-  "review_mode": "bash"
-}
-```
-
-| 設定 | 値 | 説明 |
-|------|-----|------|
-| `command_variant` | `"simple"` | 各ステップで `-simple` 版コマンドを優先使用。LLM はコンテンツ生成のみ、ループ・状態管理は bash が担当 |
-| `review_mode` | `"bash"` | レビューループを bash で駆動。persona dispatch → aggregate → fix を bash スクリプトが制御 |
-
-未設定時は従来の LLM 駆動モードにフォールバックし、後方互換性を維持します。
-
-> **NOTE**: `command_variant` と `review_mode` はレガシーパイプライン (poor-dev.pipeline) 専用の設定です。Agent Teams パス (poor-dev.team) では使用されません。
-
-### 利用可能モデルの確認
-
-```bash
-# OpenCode のモデル一覧
-opencode models
-
-# Claude Code のモデル（固定）
-# haiku, sonnet, opus
-```
+Teammate のモデルはプロセスレベルで差し替えられるため、コード内のモデル指定は無視されます。
 
 ### Agent Teams で Teammate を GLM-5 に差し替える（非公式）
 

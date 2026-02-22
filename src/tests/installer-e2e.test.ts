@@ -164,7 +164,7 @@ describe("poor-dev-next CLI subcommands", () => {
     const lines = output.trim().split("\n");
     const lastJson = JSON.parse(lines[lines.length - 1]!);
     // Pipeline should be replaced, next step after bugfix should be planreview
-    expect(["create_team", "create_review_team", "user_gate"]).toContain(lastJson.action);
+    expect(["bash_dispatch", "bash_review_dispatch", "user_gate"]).toContain(lastJson.action);
   });
 
   it("--set-conditional with unknown key: exits with error", () => {

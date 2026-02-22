@@ -1,31 +1,14 @@
 /**
  * team-types.ts
  *
- * Agent Teams パスで使用するアクション型。
+ * Bash Dispatch パスで使用するアクション型。
  * computeNextInstruction() の戻り値型。
  * poor-dev-next CLI の出力 JSON スキーマ。
  */
 
-// --- Teammate / Task スペック ---
-
-export interface TeammateSpec {
-  role: string;
-  agentFile: string;
-  agentType?: string;
-  writeAccess: boolean;
-}
-
-export interface TaskSpec {
-  subject: string;
-  description: string;
-  assignTo: string;
-}
-
 // --- TeamAction (computeNextInstruction 戻り値) ---
 
 export type TeamAction =
-  | CreateTeamAction
-  | CreateReviewTeamAction
   | BashDispatchAction
   | BashReviewDispatchAction
   | UserGateAction
@@ -35,31 +18,6 @@ export type TeamAction =
 export interface ActionMeta {
   recovery_hint: string;
   step_complete_cmd?: string;
-}
-
-/** Worker チーム作成 */
-export interface CreateTeamAction {
-  action: "create_team";
-  step: string;
-  team_name: string;
-  teammates: TeammateSpec[];
-  tasks: TaskSpec[];
-  artifacts: string[];
-  _meta?: ActionMeta;
-}
-
-/** レビューチーム作成 (review-loop / parallel-review) */
-export interface CreateReviewTeamAction {
-  action: "create_review_team";
-  step: string;
-  team_name: string;
-  reviewers: TeammateSpec[];
-  fixers: TeammateSpec[];
-  target_files: string[];
-  max_iterations: number;
-  communication: "direct" | "opus-mediated";
-  tasks: TaskSpec[];
-  _meta?: ActionMeta;
 }
 
 /** Worker ステップの Bash dispatch */

@@ -13,7 +13,7 @@ Parse `$ARGUMENTS`:
 
 ## Step 1: combo 選択（引数なしの場合）
 
-benchmarks/benchmarks.json を読み込み、combinations から `mode: "team"` のみフィルタして表示。
+benchmarks/benchmarks.json を読み込み、combinations を表示。
 AskUserQuestion で combo を選択させる。
 選択肢は各 combo の `dir_name` + `orchestrator/sub_agent` を表示する。
 
@@ -47,12 +47,7 @@ benchmarks.json からプロンプトを構築する。`/poor-dev.team` プレ�
 TASK_DESC=$(jq -r '.task.description' benchmarks/benchmarks.json)
 TASK_NAME=$(jq -r '.task.name' benchmarks/benchmarks.json)
 REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' benchmarks/benchmarks.json)
-DISPATCH_MODE=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .dispatch_mode // ""' benchmarks/benchmarks.json)
-if [ "$DISPATCH_MODE" = "bash" ]; then
-  PROMPT="/poor-dev.team --bash-dispatch ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
-else
-  PROMPT="/poor-dev.team ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
-fi
+PROMPT="/poor-dev.team ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
 ```
 
 ## Step 4: ベンチペイン作成 + claude 起動
@@ -174,7 +169,6 @@ node dist/lib/benchmark/bin/bench-team-monitor.js \
   --phase0-config benchmarks/_scaffold/common/phase0-responses.json \
   --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
   --timeout 7200 \
-  --enable-team-stall-detection \
   --caller-pane $CURRENT
 ```
 

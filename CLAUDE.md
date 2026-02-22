@@ -35,27 +35,26 @@
   - minor: コマンド追加、エージェント追加、機能追加
   - major: 破壊的変更（コマンド体系変更、ディレクトリ構造変更）
 
-## Agent Teams フロー (poor-dev.team)
+## Bash Dispatch フロー (poor-dev.team)
 
 - `/poor-dev.team` 実行中は TS ヘルパー (`node .poor-dev/dist/bin/poor-dev-next.js`) の JSON 指示に従う
-- Phase 0 はチームメイト不使用。Opus が直接ユーザーと議論
-- レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（直接通信しない）
+- Phase 0 は Worker 不使用。Opus が直接ユーザーと議論
+- レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（`glm -p` 経由）
 - compaction 後の回復: `pipeline-state.json` を読み、`node .poor-dev/dist/bin/poor-dev-next.js` 再実行
-- チーム名: `pd-<step>-<NNN>`
 - カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能
 
-## Agent Teams アーキテクチャ
+## Bash Dispatch アーキテクチャ
 
-- poor-dev.team が唯一のパイプライン実行パス（レガシーパスは削除済み）
-- TeamMate のモデルは `CLAUDE_CODE_TEAMMATE_COMMAND` 環境変数でプロセスレベル差し替え
+- poor-dev.team が唯一のパイプライン実行パス
+- `glm -p` で Worker を直接呼び出し（Agent Teams lifecycle なし）
+- Worker のモデルは `CLAUDE_CODE_TEAMMATE_COMMAND` 環境変数でプロセスレベル差し替え
   - Orchestrator (Opus) = Anthropic API
-  - TeamMate (GLM-5) = Z.AI API (`scripts/setup-glm-teammate.sh` で構成)
-- config.json の overrides/tiers は poor-dev.config コマンドの設定管理用に残存するが、team パスのモデル選択には使われない
+  - Worker (GLM-5) = Z.AI API (`scripts/setup-glm-teammate.sh` で構成)
 
 ## 実装の並列化ルール
 
-- Plan 承認後の実装は、必ず複数の TeamMate で並列実行する
-- 独立したファイル群・Phase 単位でタスクを分割し、TeamCreate + Task で並列にディスパッチする
+- Plan 承認後の実装は、必ず複数の Worker で並列実行する
+- 独立したファイル群・Phase 単位でタスクを分割し、Task で並列にディスパッチする
 - 単一エージェントでの逐次実装は禁止
 - 例外: spec の成果物が単一ファイルの場合、または全タスクが同一ファイルを対象とする場合は逐次実装を許可
 

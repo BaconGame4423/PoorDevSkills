@@ -33,10 +33,6 @@ const { values } = parseArgs({
     "post-command": {
       type: "string",
     },
-    "enable-team-stall-detection": {
-      type: "boolean",
-      default: false,
-    },
     "caller-pane": {
       type: "string",
     },
@@ -108,7 +104,6 @@ const options: MonitorOptions = {
   phase0ConfigPath: values["phase0-config"],
   timeoutSeconds: parseInt(values.timeout ?? "7200", 10),
   projectRoot: values["project-root"] ?? process.cwd(),
-  enableTeamStallDetection: values["enable-team-stall-detection"] ?? false,
   ...(values["post-command"] ? { postCommand: values["post-command"] } : {}),
 };
 

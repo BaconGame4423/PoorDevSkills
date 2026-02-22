@@ -117,7 +117,7 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 
 | コマンド | 用途 |
 |---------|------|
-| `/poor-dev.team` | Agent Teams オーケストレーター（全フロー対応。メインエントリポイント） |
+| `/poor-dev.team` | Bash Dispatch オーケストレーター（全フロー対応。メインエントリポイント） |
 | `/poor-dev.switch` | フローを直接選択して開始（intake スキップ） |
 
 ### 仕様・計画・実装
@@ -178,7 +178,7 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 | `poor-dev benchmark run <combo>` | ベンチマーク一括実行（セットアップ→パイプライン→分析→メトリクス収集） |
 | `poor-dev benchmark setup` | ベンチマークディレクトリのセットアップ |
 | `poor-dev benchmark compare` | COMPARISON.md の生成 |
-| `/bench-team <combo>` | Agent Teams ベンチマーク実行 + PoorDevSkills 分析 |
+| `/bench-team <combo>` | ベンチマーク実行 + PoorDevSkills 分析 |
 
 ---
 
@@ -204,18 +204,16 @@ Claude Code または OpenCode のチャット内からスラッシュコマン�
 
 権限分離（レビュアは読み取り専用 / 修正者は書き込み専用）、スコープ境界、サイズガード、自動停止で安全性を担保。リスクベース深度・早期終了・ハイブリッドコンテキスト注入で効率化。
 
-### Agent Teams
+### Bash Dispatch
 
-`/poor-dev.team` は Agent Teams パスでパイプラインを駆動します。
+`/poor-dev.team` は Bash Dispatch でパイプラインを駆動します。`glm -p` を直接呼び出し、各ステップを headless モードで実行します。
 
 | 役割 | モデル | API |
 |------|--------|-----|
 | Orchestrator（リーダー） | Claude Opus | Anthropic API |
-| Teammate（ワーカー・レビュアー） | GLM-5 等 | Z.AI API（`CLAUDE_CODE_TEAMMATE_COMMAND` で差し替え） |
+| Worker（ワーカー・レビュアー） | GLM-5 等 | Z.AI API（`CLAUDE_CODE_TEAMMATE_COMMAND` で差し替え） |
 
-Orchestrator が全体の進行を制御し、各ステップを Teammate に dispatch します。Teammate のモデルはプロセスレベルで差し替え可能なため、**高品質な判断（Opus）+ 低コストな実行（GLM-5）** のハイブリッド構成が実現できます。
-
-**Bash Dispatch**: `glm -p` を直接呼び出して Agent Teams lifecycle（チーム作成・タスク割り当て・メッセージング）を省略する軽量モードも利用可能です。
+Orchestrator が全体の進行を制御し、各ステップを `glm -p` で Worker に dispatch します。Worker のモデルはプロセスレベルで差し替え可能なため、**高品質な判断（Opus）+ 低コストな実行（GLM-5）** のハイブリッド構成が実現できます。
 
 セットアップ手順は [docs/glm-teammate.md](docs/glm-teammate.md) を参照してください。
 

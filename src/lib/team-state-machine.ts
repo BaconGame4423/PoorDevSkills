@@ -13,17 +13,11 @@ import type { PipelineState } from "./types.js";
 import type { FileSystem } from "./interfaces.js";
 import type {
   TeamAction,
-  TeammateSpec,
-  TaskSpec,
   ActionMeta,
   BashDispatchAction,
   BashReviewDispatchAction,
 } from "./team-types.js";
 import {
-  buildTeamName,
-  buildTeammateSpec,
-  buildWorkerTask,
-  buildReviewTask,
   buildBashDispatchPrompt,
   buildBashReviewPrompt,
   buildBashFixerBasePrompt,
@@ -36,8 +30,6 @@ export interface ComputeContext {
   featureDir: string;
   projectDir: string;
   flowDef: FlowDefinition;
-  /** true: glm -p による Bash dispatch モード */
-  bashDispatch?: boolean;
 }
 
 /**
@@ -121,19 +113,9 @@ export function computeNextInstruction(
     step_complete_cmd: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete ${nextStep} --state-dir ${featureDir} --project-dir ${projectDir}`,
   };
 
-  // Bash dispatch モード
-  if (ctx.bashDispatch) {
-    const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
-    action._meta = meta;
-    return action;
-  }
-
-  // Agent Teams モード (デフォルト)
-  const action = buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
-  if (action.action === "create_team" || action.action === "create_review_team") {
-    action._meta = meta;
-  }
-
+  // Bash dispatch
+  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+  action._meta = meta;
   return action;
 }
 
@@ -176,76 +158,6 @@ function collectArtifacts(
     }
   }
   return files;
-}
-
-function buildTeamAction(
-  step: string,
-  teamConfig: StepTeamConfig,
-  fd: string,
-  featureDir: string,
-  flowDef: FlowDefinition,
-  fs: Pick<FileSystem, "exists" | "readFile">
-): TeamAction {
-  const teamName = buildTeamName(step, featureDir);
-
-  switch (teamConfig.type) {
-    case "team": {
-      const teammates: TeammateSpec[] = (teamConfig.teammates ?? []).map((t) =>
-        buildTeammateSpec(t)
-      );
-      const tasks: TaskSpec[] = teammates.map((t) =>
-        buildWorkerTask(step, t, fd, flowDef, fs)
-      );
-      const artifactDef = flowDef.artifacts?.[step];
-      const artifacts: string[] = !artifactDef
-        ? []
-        : artifactDef === "*"
-          ? ["*"]
-          : Array.isArray(artifactDef)
-            ? artifactDef.map((f) => path.join(fd, f))
-            : [path.join(fd, artifactDef)];
-      return {
-        action: "create_team",
-        step,
-        team_name: teamName,
-        teammates,
-        tasks,
-        artifacts,
-      };
-    }
-
-    case "review-loop":
-    case "parallel-review": {
-      const reviewers: TeammateSpec[] = [];
-      const fixers: TeammateSpec[] = [];
-      for (const t of teamConfig.teammates ?? []) {
-        const spec = buildTeammateSpec(t);
-        if (t.writeAccess === false) {
-          reviewers.push(spec);
-        } else {
-          fixers.push(spec);
-        }
-      }
-
-      const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
-      const allSpecs = [...reviewers, ...fixers];
-      const tasks: TaskSpec[] = allSpecs.map((t) =>
-        buildReviewTask(step, t, fd, targetFiles, flowDef, fs)
-      );
-
-      return {
-        action: "create_review_team",
-        step,
-        team_name: teamName,
-        reviewers,
-        fixers,
-        target_files: targetFiles,
-        max_iterations: teamConfig.maxReviewIterations ?? 12,
-        communication: teamConfig.reviewCommunication ?? "opus-mediated",
-        tasks,
-      };
-    }
-  }
 }
 
 function buildBashDispatchTeamAction(
@@ -342,4 +254,3 @@ function collectReviewTargets(
   }
   return targets.length > 0 ? targets : [fd];
 }
-

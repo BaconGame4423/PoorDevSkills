@@ -50,20 +50,25 @@ function makeCtx(overrides: Partial<ComputeContext> = {}): ComputeContext {
 // --- テスト ---
 
 describe("computeNextInstruction", () => {
-  describe("Agent Teams パス", () => {
-    it("初期状態で最初のステップの create_team を返す", () => {
+  describe("Bash Dispatch パス", () => {
+    it("初期状態で最初のステップの bash_dispatch を返す", () => {
       const ctx = makeCtx();
       const action = computeNextInstruction(ctx, mockFs());
 
-      expect(action.action).toBe("create_team");
-      if (action.action === "create_team") {
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
         expect(action.step).toBe("specify");
-        expect(action.team_name).toBe("pd-specify-001");
-        expect(action.teammates.length).toBeGreaterThan(0);
+        expect(action.worker.role).toBe("worker-specify");
+        expect(action.worker.agentFile).toBe("agents/claude/worker-specify.md");
+        expect(action.worker.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
+        expect(action.worker.maxTurns).toBe(30);
+        expect(action.prompt).toContain("Step: specify");
+        expect(action.prompt).toContain("Bash Dispatch");
+        expect(action.prompt).toContain("SendMessage");
       }
     });
 
-    it("specify 完了後に plan の create_team を返す", () => {
+    it("specify 完了後に plan の bash_dispatch を返す", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
@@ -71,13 +76,13 @@ describe("computeNextInstruction", () => {
       const fs = mockFs({ "/proj/specs/001-test/spec.md": "spec" });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_team");
-      if (action.action === "create_team") {
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
         expect(action.step).toBe("plan");
       }
     });
 
-    it("レビューステップで create_review_team を返す", () => {
+    it("レビューステップで bash_review_dispatch を返す", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: ["specify", "plan"],
@@ -89,22 +94,34 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_review_team");
-      if (action.action === "create_review_team") {
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
         expect(action.step).toBe("planreview");
-        expect(action.communication).toBe("opus-mediated");
-        expect(action.max_iterations).toBe(6);
-        // tasks[] の検証
-        expect(action.tasks).toBeDefined();
-        expect(action.tasks.length).toBe(2); // reviewer + fixer
-        expect(action.tasks[0]!.assignTo).toBe("reviewer-plan-unified");
-        expect(action.tasks[1]!.assignTo).toBe("review-fixer");
-        expect(action.tasks[0]!.description).toContain("Reviewer");
-        expect(action.tasks[1]!.description).toContain("Fixer");
+        expect(action.reviewer.role).toBe("reviewer-plan-unified");
+        expect(action.reviewer.tools).toBe("Read,Glob,Grep");
+        expect(action.fixer.role).toBe("review-fixer");
+        expect(action.fixer.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
+        expect(action.maxIterations).toBe(6);
+        expect(action.reviewPrompt).toContain("Step: planreview");
+        expect(action.fixerBasePrompt).toContain("Step: planreview");
       }
     });
 
-    it("全ステップ完了で done を返す", () => {
+    it("_meta が付与される", () => {
+      const ctx = makeCtx();
+      const action = computeNextInstruction(ctx, mockFs());
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action._meta).toBeDefined();
+        expect(action._meta!.recovery_hint).toContain("poor-dev-next.js");
+        expect(action._meta!.step_complete_cmd).toContain("--step-complete specify");
+      }
+    });
+  });
+
+  describe("全ステップ完了", () => {
+    it("done を返す", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: [...FEATURE_FLOW.steps],
@@ -117,8 +134,10 @@ describe("computeNextInstruction", () => {
         expect(action.summary).toContain("completed");
       }
     });
+  });
 
-    it("前提ファイル欠落で user_gate を返す", () => {
+  describe("前提ファイル欠落", () => {
+    it("user_gate を返す", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
@@ -147,8 +166,8 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_team");
-      if (action.action === "create_team") {
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
         expect(action.step).toBe("implement");
       }
     });
@@ -235,7 +254,7 @@ describe("computeNextInstruction", () => {
   });
 
   describe("配列 artifacts", () => {
-    it("plan の create_team で string artifact が返る", () => {
+    it("plan の bash_dispatch で string artifact が返る", () => {
       const ctx = makeCtx({
         state: makeState({ completed: ["specify"] }),
       });
@@ -244,14 +263,14 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_team");
-      if (action.action === "create_team") {
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
         expect(action.step).toBe("plan");
         expect(action.artifacts).toEqual(["/proj/specs/001-test/plan.md"]);
       }
     });
 
-    it("implement の create_team で '*' sentinel artifacts が返る", () => {
+    it("implement の bash_dispatch で '*' sentinel artifacts が返る", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: ["specify", "plan", "planreview", "tasks", "tasksreview"],
@@ -263,8 +282,8 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_team");
-      if (action.action === "create_team") {
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
         expect(action.step).toBe("implement");
         expect(action.artifacts).toEqual(["*"]);
       }
@@ -286,16 +305,16 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_review_team");
-      if (action.action === "create_review_team") {
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
         expect(action.step).toBe("architecturereview");
-        expect(action.target_files).toEqual(["/proj/specs/001-test"]);
+        expect(action.targetFiles).toEqual(["/proj/specs/001-test"]);
       }
     });
   });
 
   describe("unified review teams", () => {
-    it("architecturereview が reviewer-arch-unified 1名を使う", () => {
+    it("architecturereview が reviewer-arch-unified を使う", () => {
       const ctx = makeCtx({
         state: makeState({
           completed: [
@@ -309,83 +328,10 @@ describe("computeNextInstruction", () => {
       });
       const action = computeNextInstruction(ctx, fs);
 
-      expect(action.action).toBe("create_review_team");
-      if (action.action === "create_review_team") {
-        expect(action.reviewers).toHaveLength(1);
-        expect(action.reviewers[0]!.role).toBe("reviewer-arch-unified");
-        expect(action.fixers).toHaveLength(1);
-        expect(action.fixers[0]!.role).toBe("review-fixer");
-        // tasks[] の検証
-        expect(action.tasks).toBeDefined();
-        expect(action.tasks.length).toBe(2);
-        expect(action.tasks[0]!.assignTo).toBe("reviewer-arch-unified");
-        expect(action.tasks[1]!.assignTo).toBe("review-fixer");
-        expect(action.tasks[0]!.description).toContain("Reviewer");
-        expect(action.tasks[1]!.description).toContain("Fixer");
-      }
-    });
-  });
-
-  describe("Bash Dispatch パス", () => {
-    it("bashDispatch=true で worker step → bash_dispatch を返す", () => {
-      const ctx = makeCtx({ bashDispatch: true });
-      const action = computeNextInstruction(ctx, mockFs());
-
-      expect(action.action).toBe("bash_dispatch");
-      if (action.action === "bash_dispatch") {
-        expect(action.step).toBe("specify");
-        expect(action.worker.role).toBe("worker-specify");
-        expect(action.worker.agentFile).toBe("agents/claude/worker-specify.md");
-        expect(action.worker.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
-        expect(action.worker.maxTurns).toBe(30);
-        expect(action.prompt).toContain("Step: specify");
-        expect(action.prompt).toContain("Bash Dispatch");
-        expect(action.prompt).toContain("SendMessage");
-      }
-    });
-
-    it("bashDispatch=true で review step → bash_review_dispatch を返す", () => {
-      const ctx = makeCtx({
-        bashDispatch: true,
-        state: makeState({
-          completed: ["specify", "plan"],
-        }),
-      });
-      const fs = mockFs({
-        "/proj/specs/001-test/plan.md": "plan",
-        "/proj/specs/001-test/spec.md": "spec",
-      });
-      const action = computeNextInstruction(ctx, fs);
-
       expect(action.action).toBe("bash_review_dispatch");
       if (action.action === "bash_review_dispatch") {
-        expect(action.step).toBe("planreview");
-        expect(action.reviewer.role).toBe("reviewer-plan-unified");
-        expect(action.reviewer.tools).toBe("Read,Glob,Grep");
+        expect(action.reviewer.role).toBe("reviewer-arch-unified");
         expect(action.fixer.role).toBe("review-fixer");
-        expect(action.fixer.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
-        expect(action.maxIterations).toBe(6);
-        expect(action.reviewPrompt).toContain("Step: planreview");
-        expect(action.fixerBasePrompt).toContain("Step: planreview");
-      }
-    });
-
-    it("bashDispatch=false (デフォルト) で既存の create_team を返す (回帰テスト)", () => {
-      const ctx = makeCtx(); // bashDispatch undefined = false
-      const action = computeNextInstruction(ctx, mockFs());
-
-      expect(action.action).toBe("create_team");
-    });
-
-    it("bashDispatch=true でも _meta が付与される", () => {
-      const ctx = makeCtx({ bashDispatch: true });
-      const action = computeNextInstruction(ctx, mockFs());
-
-      expect(action.action).toBe("bash_dispatch");
-      if (action.action === "bash_dispatch") {
-        expect(action._meta).toBeDefined();
-        expect(action._meta!.recovery_hint).toContain("poor-dev-next.js");
-        expect(action._meta!.step_complete_cmd).toContain("--step-complete specify");
       }
     });
   });

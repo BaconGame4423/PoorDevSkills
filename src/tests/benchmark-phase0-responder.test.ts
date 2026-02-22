@@ -312,9 +312,9 @@ describe("phase0-responder", () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // TeamCreate が出現 = パイプライン開始済み
+      // bash_dispatch が出現 = パイプライン開始済み
       mockedCapturePaneContent.mockReturnValue(
-        withPrompt("TeamCreate で pd-specify-001 を作成? ❯")
+        withPrompt("bash_dispatch で specify を実行中 ❯")
       );
 
       const result = respondToPhase0("test-pane", config, 0);

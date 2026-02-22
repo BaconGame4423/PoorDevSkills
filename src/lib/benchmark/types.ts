@@ -86,30 +86,6 @@ export interface MonitorOptions {
   timeoutSeconds: number;
   projectRoot: string;
   postCommand?: string;
-  enableTeamStallDetection?: boolean;
-}
-
-// --- チームスタック検出 ---
-
-export interface TeamStallCheckConfig {
-  stallThresholdMs: number;   // default 300000 (5min)
-  graceAfterNudgeMs: number;  // default 120000 (2min)
-  maxNudges: number;          // default 3
-}
-
-export interface StalledTask {
-  taskId: string;
-  subject: string;
-  owner: string;
-  stalledSinceMs: number;
-  fileMtime: number;
-}
-
-export interface TeamStallState {
-  teamName: string;
-  nudgeCount: number;
-  lastNudgeAt: number;
-  stalledTasks: StalledTask[];
 }
 
 // --- tmux ラッパー型 ---

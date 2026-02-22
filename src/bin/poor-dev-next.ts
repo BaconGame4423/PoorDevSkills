@@ -36,7 +36,6 @@ interface CliArgs {
   idPrefix?: string;
   checkConvergence?: string;
   reviewCycle?: string;
-  bashDispatch: boolean;
   tokenReport?: string;
 }
 
@@ -44,7 +43,6 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     projectDir: process.cwd(),
     init: false,
-    bashDispatch: false,
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -83,9 +81,6 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--review-cycle":
         args.reviewCycle = next();
-        break;
-      case "--bash-dispatch":
-        args.bashDispatch = true;
         break;
       case "--token-report":
         args.tokenReport = next();
@@ -248,7 +243,7 @@ async function main(): Promise<void> {
     if (flowDef) {
       const featureDir = path.relative(projectDir, stateDir);
       const action = computeNextInstruction(
-        { state, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
+        { state, featureDir, projectDir, flowDef },
         fs
       );
       process.stdout.write(JSON.stringify(action) + "\n");
@@ -313,7 +308,7 @@ async function main(): Promise<void> {
     }
     const featureDir = path.relative(projectDir, stateDir);
     const nextAction = computeNextInstruction(
-      { state: updatedState, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
+      { state: updatedState, featureDir, projectDir, flowDef },
       fs
     );
     process.stdout.write(JSON.stringify(nextAction) + "\n");
@@ -345,7 +340,7 @@ async function main(): Promise<void> {
 
   const featureDir = path.relative(projectDir, stateDir);
   const action = computeNextInstruction(
-    { state, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
+    { state, featureDir, projectDir, flowDef },
     fs
   );
 

@@ -47,7 +47,12 @@ benchmarks.json からプロンプトを構築する。`/poor-dev.team` プレ�
 TASK_DESC=$(jq -r '.task.description' benchmarks/benchmarks.json)
 TASK_NAME=$(jq -r '.task.name' benchmarks/benchmarks.json)
 REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' benchmarks/benchmarks.json)
-PROMPT="/poor-dev.team ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
+DISPATCH_MODE=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .dispatch_mode // ""' benchmarks/benchmarks.json)
+if [ "$DISPATCH_MODE" = "bash" ]; then
+  PROMPT="/poor-dev.team --bash-dispatch ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
+else
+  PROMPT="/poor-dev.team ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
+fi
 ```
 
 ## Step 4: ベンチペイン作成 + claude 起動

@@ -29,6 +29,7 @@ export interface BenchCombo {
   orchestrator: string;
   sub_agent: string;
   mode?: string;
+  dispatch_mode?: "bash";
   step_overrides?: Record<string, string>;
 }
 
@@ -61,11 +62,18 @@ export type MonitorExitReason =
   | "timeout"
   | "phase0_max_turns";
 
+export interface TokenUsage {
+  orchestrator_cost_usd: number;
+  worker_turns: number;
+  worker_total_duration_ms: number;
+}
+
 export interface MonitorResult {
   exitReason: MonitorExitReason;
   elapsedSeconds: number;
   combo: string;
   logs: string[];
+  tokenUsage?: TokenUsage;
 }
 
 // --- 監視設定 ---

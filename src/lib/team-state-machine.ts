@@ -16,8 +16,18 @@ import type {
   TeammateSpec,
   TaskSpec,
   ActionMeta,
+  BashDispatchAction,
+  BashReviewDispatchAction,
 } from "./team-types.js";
-import { buildTeamName, buildTeammateSpec, buildWorkerTask, buildReviewTask } from "./team-instruction.js";
+import {
+  buildTeamName,
+  buildTeammateSpec,
+  buildWorkerTask,
+  buildReviewTask,
+  buildBashDispatchPrompt,
+  buildBashReviewPrompt,
+  buildBashFixerBasePrompt,
+} from "./team-instruction.js";
 
 // --- コア関数 ---
 
@@ -26,6 +36,8 @@ export interface ComputeContext {
   featureDir: string;
   projectDir: string;
   flowDef: FlowDefinition;
+  /** true: glm -p による Bash dispatch モード */
+  bashDispatch?: boolean;
 }
 
 /**
@@ -103,14 +115,22 @@ export function computeNextInstruction(
       options: ["skip", "abort"],
     };
   }
-  const action = buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
 
-  // _meta: recovery hint + step complete コマンド
+  const meta: ActionMeta = {
+    recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
+    step_complete_cmd: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete ${nextStep} --state-dir ${featureDir} --project-dir ${projectDir}`,
+  };
+
+  // Bash dispatch モード
+  if (ctx.bashDispatch) {
+    const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
+    action._meta = meta;
+    return action;
+  }
+
+  // Agent Teams モード (デフォルト)
+  const action = buildTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs);
   if (action.action === "create_team" || action.action === "create_review_team") {
-    const meta: ActionMeta = {
-      recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
-      step_complete_cmd: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete ${nextStep} --state-dir ${featureDir} --project-dir ${projectDir}`,
-    };
     action._meta = meta;
   }
 
@@ -223,6 +243,75 @@ function buildTeamAction(
         max_iterations: teamConfig.maxReviewIterations ?? 12,
         communication: teamConfig.reviewCommunication ?? "opus-mediated",
         tasks,
+      };
+    }
+  }
+}
+
+function buildBashDispatchTeamAction(
+  step: string,
+  teamConfig: StepTeamConfig,
+  fd: string,
+  featureDir: string,
+  flowDef: FlowDefinition,
+  fs: Pick<FileSystem, "exists" | "readFile">
+): BashDispatchAction | BashReviewDispatchAction {
+  const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
+  const REVIEWER_TOOLS = "Read,Glob,Grep";
+
+  switch (teamConfig.type) {
+    case "team": {
+      const teammate = (teamConfig.teammates ?? [])[0];
+      const role = teammate?.role ?? `worker-${step}`;
+      const agentFile = `agents/claude/${role}.md`;
+      const prompt = buildBashDispatchPrompt(step, fd, flowDef, fs);
+
+      const artifactDef = flowDef.artifacts?.[step];
+      const artifacts: string[] = !artifactDef
+        ? []
+        : artifactDef === "*"
+          ? ["*"]
+          : Array.isArray(artifactDef)
+            ? artifactDef.map((f) => path.join(fd, f))
+            : [path.join(fd, artifactDef)];
+
+      return {
+        action: "bash_dispatch",
+        step,
+        worker: { role, agentFile, tools: WORKER_TOOLS, maxTurns: 30 },
+        prompt,
+        artifacts,
+      };
+    }
+
+    case "review-loop":
+    case "parallel-review": {
+      const reviewerRole = (teamConfig.teammates ?? []).find((t) => t.writeAccess === false);
+      const fixerRole = (teamConfig.teammates ?? []).find((t) => t.writeAccess !== false);
+
+      const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
+      const reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs);
+      const fixerBasePrompt = buildBashFixerBasePrompt(step, fd, targetFiles, flowDef, fs);
+
+      return {
+        action: "bash_review_dispatch",
+        step,
+        reviewer: {
+          role: reviewerRole?.role ?? `reviewer-${step}`,
+          agentFile: `agents/claude/${reviewerRole?.role ?? `reviewer-${step}`}.md`,
+          tools: REVIEWER_TOOLS,
+          maxTurns: 15,
+        },
+        fixer: {
+          role: fixerRole?.role ?? "review-fixer",
+          agentFile: `agents/claude/${fixerRole?.role ?? "review-fixer"}.md`,
+          tools: WORKER_TOOLS,
+          maxTurns: 20,
+        },
+        reviewPrompt,
+        fixerBasePrompt,
+        targetFiles,
+        maxIterations: teamConfig.maxReviewIterations ?? 12,
       };
     }
   }

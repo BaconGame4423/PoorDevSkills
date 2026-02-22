@@ -83,6 +83,7 @@
     { "dir_name": "glm5_sonnet_specify",   "orchestrator": "glm5",  "sub_agent": "glm5",  "step_overrides": { "specify": "sonnet" } },
     { "dir_name": "glm5_sonnet_design",    "orchestrator": "glm5",  "sub_agent": "glm5",  "step_overrides": { "specify": "sonnet", "suggest": "sonnet", "plan": "sonnet" } },
     { "dir_name": "claude_team",            "orchestrator": "claude", "sub_agent": "claude", "mode": "team" },
-    { "dir_name": "sonnet_team",            "orchestrator": "sonnet", "sub_agent": "sonnet", "mode": "team" }
+    { "dir_name": "sonnet_team",            "orchestrator": "sonnet", "sub_agent": "sonnet", "mode": "team" },
+    { "dir_name": "claude_bash_glm5",       "orchestrator": "claude", "sub_agent": "glm5",   "mode": "team", "dispatch_mode": "bash" }
   ]
 }

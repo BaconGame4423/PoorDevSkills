@@ -34,7 +34,7 @@ Before creating any teams:
 
 After Phase 0, execute the pipeline via TS helper:
 
-1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .`
+1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .` (Bash Dispatch モード時は `--bash-dispatch` を追加)
 2. Parse the JSON output and execute the action:
    - `create_team` → 以下の手順を厳守:
      1. **Cleanup**: TeamDelete (既存チームがあれば削除。エラーは無視)
@@ -58,6 +58,8 @@ After Phase 0, execute the pipeline via TS helper:
      8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
      9. **TeamDelete**
    - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
+   - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
+   - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)
    - `user_gate` → See §User Gates below
    - `done` → Report completion to user
 3. After action completes: see §Conditional Steps below
@@ -126,6 +128,85 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - `converged: true` → `review-log-{step}.yaml` 更新 → commit → step complete → TeamDelete
 - `maxIterationsReached: true` → user_gate → TeamDelete
 - Otherwise → fixer に `fixerInstructions` を SendMessage → fixer の fixed/rejected を受信 → fixedIds に追加 → Step 1 に戻る
+
+## Bash Dispatch (glm -p)
+
+For `bash_dispatch` actions. Team lifecycle なしで glm -p (CLI headless mode) を直接呼び出す。
+
+### 手順
+1. プロンプトをファイルに書き出し: `<feature-dir>/.pd-dispatch/<step>-prompt.txt`
+2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ)
+3. glm -p 実行:
+   ```bash
+   CLAUDECODE= timeout 600 glm -p "$(cat <feature-dir>/.pd-dispatch/<step>-prompt.txt)" \
+     --append-system-prompt-file <worker.agentFile> \
+     --allowedTools "<worker.tools>" \
+     --output-format json \
+     --max-turns <worker.maxTurns> \
+     > <feature-dir>/.pd-dispatch/<step>-worker-result.json 2>&1
+   ```
+   **重要**: `CLAUDECODE=` で環境変数をクリアしてネストセッション検出を回避する
+4. 結果 JSON を Read:
+   - `subtype: "success"` → 成功
+   - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
+   - `subtype: "error_during_execution"` → エラー、ユーザーに報告
+   - タイムアウト (exit code 124) → ユーザーに報告
+5. artifacts を git add && commit
+6. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --bash-dispatch --state-dir <DIR> --project-dir .`
+7. 次のステップへ (Core Loop に戻る)
+
+## Bash Review Dispatch (glm -p)
+
+For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
+
+### Step 1: Reviewer 実行
+- `iteration += 1`
+- reviewer を glm -p で実行:
+  ```bash
+  CLAUDECODE= timeout 600 glm -p "$(cat <review-prompt-file>)" \
+    --append-system-prompt-file <reviewer.agentFile> \
+    --allowedTools "<reviewer.tools>" \
+    --output-format json \
+    --max-turns <reviewer.maxTurns> \
+    > <step>-reviewer-result.json 2>&1
+  ```
+- 結果 JSON の `result` フィールドからテキスト出力を取得
+
+### Step 2: Review Cycle 処理
+- reviewer テキスト出力を一時ファイルに保存
+- `--review-cycle` で一括処理 (Agent Teams 版と同じ):
+  ```json
+  {"rawReview": "<reviewer output>", "fixedIds": [...], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
+  ```
+- 戻り値: `{ converged, verdict, fixerInstructions, reviewLogEntry, maxIterationsReached }`
+
+### Step 3: 分岐
+- `converged: true` → review-log 更新 → commit → step-complete → 完了
+- `maxIterationsReached: true` → ユーザーに報告
+- Otherwise → Step 4 へ
+
+### Step 4: Fixer 実行
+- fixer プロンプトを構築: `fixerBasePrompt + "\n\n## Review Issues (Iteration N)\n" + fixerInstructions`
+- fixer を glm -p で実行:
+  ```bash
+  CLAUDECODE= timeout 600 glm -p "$(cat <fixer-prompt-file>)" \
+    --append-system-prompt-file <fixer.agentFile> \
+    --allowedTools "<fixer.tools>" \
+    --output-format json \
+    --max-turns <fixer.maxTurns> \
+    > <step>-fixer-result.json 2>&1
+  ```
+- fixer 結果の `result` から fixed/rejected ID を抽出 → `fixed_ids` に追加
+- commit fixes
+- Step 1 に戻る
+
+### エラー処理
+- glm -p タイムアウト (exit 124) → 1回リトライ → 再失敗でユーザーに報告
+- glm -p エラー出力 → ログに記録、ユーザーに報告
+
+### 一時ファイル管理
+- 一時ファイルは `<feature-dir>/.pd-dispatch/` に保存
+- パイプライン完了後に `.pd-dispatch/` を削除
 
 ## Error Handling
 

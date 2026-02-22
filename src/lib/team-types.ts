@@ -26,6 +26,8 @@ export interface TaskSpec {
 export type TeamAction =
   | CreateTeamAction
   | CreateReviewTeamAction
+  | BashDispatchAction
+  | BashReviewDispatchAction
   | UserGateAction
   | DoneAction;
 
@@ -57,6 +59,44 @@ export interface CreateReviewTeamAction {
   max_iterations: number;
   communication: "direct" | "opus-mediated";
   tasks: TaskSpec[];
+  _meta?: ActionMeta;
+}
+
+/** Worker ステップの Bash dispatch */
+export interface BashDispatchAction {
+  action: "bash_dispatch";
+  step: string;
+  worker: {
+    role: string;
+    agentFile: string;
+    tools: string;
+    maxTurns: number;
+  };
+  prompt: string;
+  artifacts: string[];
+  _meta?: ActionMeta;
+}
+
+/** レビューステップの Bash dispatch */
+export interface BashReviewDispatchAction {
+  action: "bash_review_dispatch";
+  step: string;
+  reviewer: {
+    role: string;
+    agentFile: string;
+    tools: string;
+    maxTurns: number;
+  };
+  fixer: {
+    role: string;
+    agentFile: string;
+    tools: string;
+    maxTurns: number;
+  };
+  reviewPrompt: string;
+  fixerBasePrompt: string;
+  targetFiles: string[];
+  maxIterations: number;
   _meta?: ActionMeta;
 }
 

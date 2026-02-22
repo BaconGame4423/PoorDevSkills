@@ -3,3 +3,4 @@ node_modules/
 dist/
 .tmp-test-*
 .poor-dev-version
+.pd-dispatch/

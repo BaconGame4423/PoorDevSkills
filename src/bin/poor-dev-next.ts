@@ -36,12 +36,15 @@ interface CliArgs {
   idPrefix?: string;
   checkConvergence?: string;
   reviewCycle?: string;
+  bashDispatch: boolean;
+  tokenReport?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     projectDir: process.cwd(),
     init: false,
+    bashDispatch: false,
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -80,6 +83,12 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--review-cycle":
         args.reviewCycle = next();
+        break;
+      case "--bash-dispatch":
+        args.bashDispatch = true;
+        break;
+      case "--token-report":
+        args.tokenReport = next();
         break;
     }
   }
@@ -124,8 +133,21 @@ function resolveConditionalBranch(
 
 // --- メイン ---
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv);
+
+  // --token-report: worker 結果集約 + JSONL 分析
+  if (args.tokenReport) {
+    try {
+      const { generateTokenReport } = await import("../lib/benchmark/token-report.js");
+      const report = generateTokenReport(args.tokenReport);
+      process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+    } catch (e) {
+      process.stderr.write(JSON.stringify({ error: `Failed to generate token report: ${e instanceof Error ? e.message : String(e)}` }) + "\n");
+      process.exit(1);
+    }
+    return;
+  }
 
   // --review-cycle: 統合レビューサイクル (parse + dedup + convergence + fixer instructions)
   if (args.reviewCycle) {
@@ -226,7 +248,7 @@ function main(): void {
     if (flowDef) {
       const featureDir = path.relative(projectDir, stateDir);
       const action = computeNextInstruction(
-        { state, featureDir, projectDir, flowDef },
+        { state, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
         fs
       );
       process.stdout.write(JSON.stringify(action) + "\n");
@@ -291,7 +313,7 @@ function main(): void {
     }
     const featureDir = path.relative(projectDir, stateDir);
     const nextAction = computeNextInstruction(
-      { state: updatedState, featureDir, projectDir, flowDef },
+      { state: updatedState, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
       fs
     );
     process.stdout.write(JSON.stringify(nextAction) + "\n");
@@ -323,11 +345,14 @@ function main(): void {
 
   const featureDir = path.relative(projectDir, stateDir);
   const action = computeNextInstruction(
-    { state, featureDir, projectDir, flowDef },
+    { state, featureDir, projectDir, flowDef, bashDispatch: args.bashDispatch },
     fs
   );
 
   process.stdout.write(JSON.stringify(action) + "\n");
 }
 
-main();
+main().catch((e) => {
+  process.stderr.write(JSON.stringify({ error: String(e) }) + "\n");
+  process.exit(1);
+});

@@ -326,6 +326,70 @@ describe("computeNextInstruction", () => {
     });
   });
 
+  describe("Bash Dispatch パス", () => {
+    it("bashDispatch=true で worker step → bash_dispatch を返す", () => {
+      const ctx = makeCtx({ bashDispatch: true });
+      const action = computeNextInstruction(ctx, mockFs());
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.step).toBe("specify");
+        expect(action.worker.role).toBe("worker-specify");
+        expect(action.worker.agentFile).toBe("agents/claude/worker-specify.md");
+        expect(action.worker.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
+        expect(action.worker.maxTurns).toBe(30);
+        expect(action.prompt).toContain("Step: specify");
+        expect(action.prompt).toContain("Bash Dispatch");
+        expect(action.prompt).toContain("SendMessage");
+      }
+    });
+
+    it("bashDispatch=true で review step → bash_review_dispatch を返す", () => {
+      const ctx = makeCtx({
+        bashDispatch: true,
+        state: makeState({
+          completed: ["specify", "plan"],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/plan.md": "plan",
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_review_dispatch");
+      if (action.action === "bash_review_dispatch") {
+        expect(action.step).toBe("planreview");
+        expect(action.reviewer.role).toBe("reviewer-plan-unified");
+        expect(action.reviewer.tools).toBe("Read,Glob,Grep");
+        expect(action.fixer.role).toBe("review-fixer");
+        expect(action.fixer.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
+        expect(action.maxIterations).toBe(6);
+        expect(action.reviewPrompt).toContain("Step: planreview");
+        expect(action.fixerBasePrompt).toContain("Step: planreview");
+      }
+    });
+
+    it("bashDispatch=false (デフォルト) で既存の create_team を返す (回帰テスト)", () => {
+      const ctx = makeCtx(); // bashDispatch undefined = false
+      const action = computeNextInstruction(ctx, mockFs());
+
+      expect(action.action).toBe("create_team");
+    });
+
+    it("bashDispatch=true でも _meta が付与される", () => {
+      const ctx = makeCtx({ bashDispatch: true });
+      const action = computeNextInstruction(ctx, mockFs());
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action._meta).toBeDefined();
+        expect(action._meta!.recovery_hint).toContain("poor-dev-next.js");
+        expect(action._meta!.step_complete_cmd).toContain("--step-complete specify");
+      }
+    });
+  });
+
   describe("done で artifacts を収集", () => {
     it("存在する全 artifacts を収集する", () => {
       const ctx = makeCtx({

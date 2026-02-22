@@ -71,6 +71,35 @@ export function buildWorkerTask(
 }
 
 /**
+ * レビューチーム用のタスク定義を構築する。
+ */
+export function buildReviewTask(
+  step: string,
+  teammate: TeammateSpec,
+  fd: string,
+  targetFiles: string[],
+  flowDef: FlowDefinition,
+  fs: Pick<FileSystem, "exists">
+): TaskSpec {
+  const contextDesc = buildContextDescription(step, fd, flowDef, fs);
+  const targetDesc = targetFiles.map((f) => `  - ${f}`).join("\n");
+
+  return {
+    subject: `Execute ${step} review`,
+    description: [
+      `Step: ${step}`,
+      `Feature directory: ${fd}`,
+      `Target files:\n${targetDesc}`,
+      contextDesc,
+      teammate.writeAccess
+        ? `Role: Fixer — standby for fix instructions from orchestrator`
+        : `Role: Reviewer — review target files and output ISSUE/VERDICT lines`,
+    ].join("\n"),
+    assignTo: teammate.role,
+  };
+}
+
+/**
  * ステップのコンテキストファイル説明を構築する。
  */
 function buildContextDescription(

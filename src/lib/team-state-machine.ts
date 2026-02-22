@@ -16,7 +16,7 @@ import type {
   TeammateSpec,
   TaskSpec,
 } from "./team-types.js";
-import { buildTeamName, buildTeammateSpec, buildWorkerTask } from "./team-instruction.js";
+import { buildTeamName, buildTeammateSpec, buildWorkerTask, buildReviewTask } from "./team-instruction.js";
 
 // --- コア関数 ---
 
@@ -196,6 +196,10 @@ function buildTeamAction(
       }
 
       const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
+      const allSpecs = [...reviewers, ...fixers];
+      const tasks: TaskSpec[] = allSpecs.map((t) =>
+        buildReviewTask(step, t, fd, targetFiles, flowDef, fs)
+      );
 
       return {
         action: "create_review_team",
@@ -206,6 +210,7 @@ function buildTeamAction(
         target_files: targetFiles,
         max_iterations: teamConfig.maxReviewIterations ?? 12,
         communication: teamConfig.reviewCommunication ?? "opus-mediated",
+        tasks,
       };
     }
   }

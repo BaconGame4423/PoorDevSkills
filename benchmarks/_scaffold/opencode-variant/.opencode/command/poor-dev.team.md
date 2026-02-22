@@ -36,8 +36,10 @@ After Phase 0, execute the pipeline via TS helper:
         - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
         - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
         - `owner` = `tasks[].assignTo`
-     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)
-     6. **Commit**: JSON の `artifacts[]` に列挙されたファイルを `git add -f` && commit
+     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)。注: Bash(sleep) で待機してはならない。TaskList ツールを使用すること
+     6. **Commit**: JSON の `artifacts[]` を処理:
+        - `artifacts` に `"*"` が含まれる場合: feature dir 内の全変更を `git add`。`git status` で不要ファイル（中間ファイル等）がないか確認し、あれば `git reset HEAD <file>` で除外
+        - それ以外: `artifacts[]` に列挙されたファイルを `git add -f` && commit
      7. **Step complete**: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
      8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
      9. **TeamDelete**
@@ -79,14 +81,23 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 
 ### Step 1: Dispatch
 - `iteration += 1`
-- **初回のみ**: 上記 `create_team` 手順の 1-4 を実行してチーム作成
-- **2回目以降** (fix 後のリトライ): 既存チームで TaskCreate 再発行
+- **初回のみ**: `create_team` 手順の 1-4 を実行してチーム作成。
+  JSON の `tasks[]` を使って reviewer/fixer 両方に TaskCreate を実行すること
+- **2回目以降** (fix 後のリトライ): 既存チームで reviewer タスクのみ TaskCreate 再発行
 - reviewer は read-only、fixer は write-enabled
 - target files + 前回 review-log を task description に含める
 
 ### Step 2: Collect & Parse
-- Reviewer メッセージ待ち。TaskList を使って完了状況を確認可能
+- **TaskList ポーリングで reviewer タスク完了を確認** (`create_team` Step 5 と同じパターン)
+- reviewer タスクが completed になったら、reviewer からのメッセージを処理する:
+  - メッセージが未着の場合: 短いステータス出力（例: "Reviewer task completed. Waiting for output..."）でターンを終了し、メッセージ配信を待つ
 - 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
+
+**CRITICAL — Anti-Sleep Rule:**
+`Bash(sleep N)` で teammate の応答を待ってはならない。
+Agent Teams ではメッセージはターン間でのみ配信される。
+sleep はターンを維持し続けるため、メッセージが永遠に届かない。
+TaskList ポーリングを使用すること。
 - 各レビュアー出力から以下を抽出:
   - `ISSUE: {C|H|M|L} | {description} | {file:line}`
   - `VERDICT: {GO|CONDITIONAL|NO-GO}`
@@ -95,7 +106,7 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - Aggregate VERDICT: worst wins (NO-GO > CONDITIONAL > GO)
 
 ### Step 3: Convergence Check
-- C=0 AND H=0 (fixed_ids 除外後) → review-log.yaml 更新 → commit → step complete → TeamDelete
+- C=0 AND H=0 (fixed_ids 除外後) → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → step complete → TeamDelete
 - iteration >= max_iterations → user_gate → TeamDelete
 - Otherwise → Step 4
 
@@ -103,7 +114,7 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 - C/H イシューを fixer に SendMessage: `- [{id}] {severity} | {description} | {location}`
 - Fixer が fixed/rejected YAML を返す → fixed_ids に追加
 - Opus が修正ファイルを確認: コード重複 >=10行・debug 文混入 → fixer に差し戻し（最大2回）
-- clean → review-log.yaml 更新 → commit → Step 1 に戻る
+- clean → `review-log-{step}.yaml` 更新 → `git add -f review-log-{step}.yaml` → commit → Step 1 に戻る
 
 ## Error Handling
 
@@ -143,6 +154,24 @@ Teammates NEVER execute git commands.
 
 ### When to Commit
 - After `create_team` for `implement` step completes: stage and commit all implementation changes
-- After fixer reports modifications in a review loop: stage and commit the fixes
+- After fixer reports modifications in a review loop: stage and commit the fixes + `review-log-{step}.yaml`
+- After review convergence (C=0, H=0): commit `review-log-{step}.yaml`
 - After `create_team` for artifact-producing steps (specify, suggest, plan, tasks, testdesign): commit the generated artifact
 - Commit message format: `type: 日本語タイトル` (per CLAUDE.md conventions)
+
+### Review Log Format
+Review log files use the naming convention `review-log-{step}.yaml` and follow this structure:
+```yaml
+step: architecturereview
+iterations:
+  log:
+    - {n: 1, raw_issues: 26, actionable: 6, fixed: "AR-001,AR-002,AR-003,AR-004,AR-005,AR-006"}
+  issues:
+    - id: AR-001
+      severity: H
+      description: "..."
+      location: "..."
+      status: fixed
+```
+- `raw_issues`: 全レビュアーの未フィルタ合計
+- `actionable`: dedup + severity filter 後の修正対象件数

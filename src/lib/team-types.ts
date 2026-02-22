@@ -49,6 +49,7 @@ export interface CreateReviewTeamAction {
   target_files: string[];
   max_iterations: number;
   communication: "direct" | "opus-mediated";
+  tasks: TaskSpec[];
 }
 
 /** ユーザー確認ゲート */

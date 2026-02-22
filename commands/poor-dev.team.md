@@ -36,7 +36,7 @@ After Phase 0, execute the pipeline via TS helper:
         - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
         - **Context injection のみ追記**: description の `Context:` 行に列挙された各ファイルを Read し、末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
         - `owner` = `tasks[].assignTo`
-     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)
+     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)。注: Bash(sleep) で待機してはならない。TaskList ツールを使用すること
      6. **Commit**: JSON の `artifacts[]` を処理:
         - `artifacts` に `"*"` が含まれる場合: feature dir 内の全変更を `git add`。`git status` で不要ファイル（中間ファイル等）がないか確認し、あれば `git reset HEAD <file>` で除外
         - それ以外: `artifacts[]` に列挙されたファイルを `git add -f` && commit
@@ -81,14 +81,23 @@ For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set(
 
 ### Step 1: Dispatch
 - `iteration += 1`
-- **初回のみ**: 上記 `create_team` 手順の 1-4 を実行してチーム作成
-- **2回目以降** (fix 後のリトライ): 既存チームで TaskCreate 再発行
+- **初回のみ**: `create_team` 手順の 1-4 を実行してチーム作成。
+  JSON の `tasks[]` を使って reviewer/fixer 両方に TaskCreate を実行すること
+- **2回目以降** (fix 後のリトライ): 既存チームで reviewer タスクのみ TaskCreate 再発行
 - reviewer は read-only、fixer は write-enabled
 - target files + 前回 review-log を task description に含める
 
 ### Step 2: Collect & Parse
-- Reviewer メッセージ待ち。TaskList を使って完了状況を確認可能
+- **TaskList ポーリングで reviewer タスク完了を確認** (`create_team` Step 5 と同じパターン)
+- reviewer タスクが completed になったら、reviewer からのメッセージを処理する:
+  - メッセージが未着の場合: 短いステータス出力（例: "Reviewer task completed. Waiting for output..."）でターンを終了し、メッセージ配信を待つ
 - 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
+
+**CRITICAL — Anti-Sleep Rule:**
+`Bash(sleep N)` で teammate の応答を待ってはならない。
+Agent Teams ではメッセージはターン間でのみ配信される。
+sleep はターンを維持し続けるため、メッセージが永遠に届かない。
+TaskList ポーリングを使用すること。
 - 各レビュアー出力から以下を抽出:
   - `ISSUE: {C|H|M|L} | {description} | {file:line}`
   - `VERDICT: {GO|CONDITIONAL|NO-GO}`

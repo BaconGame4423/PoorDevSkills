@@ -94,6 +94,13 @@ describe("computeNextInstruction", () => {
         expect(action.step).toBe("planreview");
         expect(action.communication).toBe("opus-mediated");
         expect(action.max_iterations).toBe(12);
+        // tasks[] の検証
+        expect(action.tasks).toBeDefined();
+        expect(action.tasks.length).toBe(2); // reviewer + fixer
+        expect(action.tasks[0]!.assignTo).toBe("reviewer-plan-unified");
+        expect(action.tasks[1]!.assignTo).toBe("review-fixer");
+        expect(action.tasks[0]!.description).toContain("Reviewer");
+        expect(action.tasks[1]!.description).toContain("Fixer");
       }
     });
 
@@ -311,6 +318,13 @@ describe("computeNextInstruction", () => {
         expect(action.reviewers[0]!.role).toBe("reviewer-arch-unified");
         expect(action.fixers).toHaveLength(1);
         expect(action.fixers[0]!.role).toBe("review-fixer");
+        // tasks[] の検証
+        expect(action.tasks).toBeDefined();
+        expect(action.tasks.length).toBe(2);
+        expect(action.tasks[0]!.assignTo).toBe("reviewer-arch-unified");
+        expect(action.tasks[1]!.assignTo).toBe("review-fixer");
+        expect(action.tasks[0]!.description).toContain("Reviewer");
+        expect(action.tasks[1]!.description).toContain("Fixer");
       }
     });
   });

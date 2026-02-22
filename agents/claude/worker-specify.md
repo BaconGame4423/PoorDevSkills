@@ -26,18 +26,41 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.specify.md date=2026-02-21 -->
+## User Input
 
-## Execution Flow
+```text
+$ARGUMENTS
+```
 
-1. **Load context**:
-   - Use FEATURE_DIR from Task description
-   - Set `SPEC_FILE=FEATURE_DIR/spec.md`
-   - Read `discussion-summary.md` if present in FEATURE_DIR. User constraints stated during discussion are **MUST** requirements.
-     If input contradicts discussion-summary.md, discussion-summary.md takes precedence.
+You **MUST** consider the user input before proceeding (if not empty).
 
-2. **Write spec** using the template below. Replace all placeholders with concrete details from the feature description provided in the Task description Context.
+## Outline
 
-3. **Execution flow**:
+The text the user typed after `/poor-dev.specify` **is** the feature description. Do not ask the user to repeat it unless empty.
+
+1. **Generate branch short name** (2-4 words):
+   - Action-noun format (e.g., "add-user-auth", "oauth2-api-integration", "analytics-dashboard")
+   - Preserve technical terms/acronyms
+   - For single quotes in args, use escape syntax: `"I'm Groot"` or `'I'\''m Groot'`
+
+2. **Create feature branch**:
+   ```bash
+   git fetch --all --prune
+   ```
+   Find highest feature number N across: remote branches (`git ls-remote --heads origin`), local branches (`git branch`), specs directories (`specs/[0-9]+-*`). Use N+1.
+   ```bash
+   git checkout -b NNN-short-name
+   mkdir -p specs/NNN-short-name
+   ```
+   Set `FEATURE_DIR=specs/NNN-short-name`, `SPEC_FILE=FEATURE_DIR/spec.md`.
+
+3. **Load context**:
+   - Read `discussion-summary.md` if present. User constraints stated during discussion are **MUST** requirements.
+     If input.txt contradicts discussion-summary.md, discussion-summary.md takes precedence.
+
+4. **Write spec** using the template below. Replace all placeholders with concrete details from `$ARGUMENTS`.
+
+5. **Execution flow**:
    1. Parse feature description. If empty: ERROR.
    2. Extract actors, actions, data, constraints.
    3. For unclear aspects: make informed guesses. Only mark with `[NEEDS CLARIFICATION: question]` if the choice significantly impacts scope/UX and no reasonable default exists. **Max 3 markers.**
@@ -46,7 +69,7 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
    6. Define measurable, technology-agnostic Success Criteria.
    7. Identify Key Entities (if data involved).
 
-4. **Spec Quality Validation**: After writing, validate against the checklist below. Generate `FEATURE_DIR/checklists/requirements.md`.
+6. **Spec Quality Validation**: After writing, validate against the checklist below. Generate `FEATURE_DIR/checklists/requirements.md`.
 
    - Run validation. If items fail (excluding NEEDS CLARIFICATION): fix and re-validate (max 3 iterations).
    - If `[NEEDS CLARIFICATION]` markers remain (max 3): present each as a question with options table:
@@ -61,8 +84,9 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
      | B | ... | ... |
      | C | ... | ... |
      ```
+     Wait for user responses, update spec, re-validate.
 
-5. **Report**: spec path, checklist results, readiness status.
+7. Report: branch name, spec path, checklist results, readiness for `/poor-dev.suggest` (next phase) or `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
 
 ## Spec Template
 
@@ -72,7 +96,7 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 **Feature Branch**: `[###-feature-name]`
 **Created**: [DATE]
 **Status**: Draft
-**Input**: User description
+**Input**: User description: "$ARGUMENTS"
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -156,6 +180,22 @@ Implementation happens in the implement step. Generated code files will be autom
 
 **Success criteria must be**: measurable (specific metrics), technology-agnostic, user-focused, verifiable without implementation details.
 
-**Success Criteria checkboxes**: Always use `- [ ]` (unchecked). NEVER use `- [x]`.
+### Dashboard Update
 
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
 <!-- SYNC:END -->

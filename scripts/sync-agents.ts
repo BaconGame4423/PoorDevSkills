@@ -16,7 +16,7 @@ import path from "node:path";
 const AGENTS_DIR = path.join(import.meta.dirname ?? ".", "..", "agents", "claude");
 const COMMANDS_DIR = path.join(import.meta.dirname ?? ".", "..", "commands");
 
-const SYNC_BEGIN_RE = /^<!-- SYNC:BEGIN source=(.+?) -->/;
+const SYNC_BEGIN_RE = /^<!-- SYNC:(?:BEGIN|INLINED) source=(.+?)(?:\s+date=\S+)? -->/;
 const SYNC_END_RE = /^<!-- SYNC:END -->/;
 
 interface SyncResult {

@@ -26,8 +26,23 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.milestones.md date=2026-02-21 -->
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
+
+### Step 0: Feature ディレクトリの特定
+
+1. 現在のブランチ名を取得: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
+2. ブランチ名から数字プレフィックスを抽出
+3. 対応するディレクトリを特定: `FEATURE_DIR=$(ls -d specs/${PREFIX}-* 2>/dev/null | head -1)`
+4. `$FEATURE_DIR/goals.md` が存在することを確認
+   - 存在しない場合: Error: "goals ステップを先に完了してください。`/poor-dev.goals` を実行してください。"
 
 ### Step 1: Read Previous Artifacts
 
@@ -134,4 +149,22 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 
 - Write completed milestones to `$FEATURE_DIR/milestones.md`
 
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
 <!-- SYNC:END -->

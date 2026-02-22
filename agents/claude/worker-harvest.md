@@ -26,6 +26,13 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.harvest.md date=2026-02-21 -->
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
@@ -35,7 +42,9 @@ Harvest learnings from prototype and generate rebuild artifacts (learnings.md, c
 
 ### Step 1: Initialize Context
 
-Load `$FEATURE_DIR/discovery-memo.md` if it exists.
+**Setup**: Resolve FEATURE_DIR from branch prefix → `specs/${PREFIX}-*`. Create directory if missing.
+
+Load discovery-memo.md if it exists.
 
 ### Step 2: Prototype Analysis
 
@@ -76,6 +85,7 @@ Generate `$FEATURE_DIR/learnings.md`:
 # Learnings: [PROJECT/FEATURE NAME]
 
 **Created**: [DATE]
+**Branch**: `[NNN-short-name]`
 **Prototype commits**: [count]
 **Prototype period**: [oldest] - [newest]
 
@@ -122,9 +132,9 @@ Ask user to review: "知見ドキュメントの内容を確認してくださ�
 #### 4a. Principle Derivation
 
 Derive design principles from pain points (3-7 principles). Examples:
-- State management chaos -> "Single source of truth for state"
-- Changes ripple everywhere -> "Preserve change locality"
-- Scattered error handling -> "Unified error strategy"
+- State management chaos → "Single source of truth for state"
+- Changes ripple everywhere → "Preserve change locality"
+- Scattered error handling → "Unified error strategy"
 
 #### 4b. Constitution Writing
 
@@ -176,11 +186,29 @@ Report:
 `/poor-dev.plan` to create technical plan and join standard flow.
 ```
 
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
+
 ## Operating Principles
 
 - **Maximize learning**: Focus on "what we learned", not code
-- **Prevent second-system syndrome**: P1 = verified features only. Unverified ideas -> P2/P3
+- **Prevent second-system syndrome**: P1 = verified features only. Unverified ideas → P2/P3
 - **Constitution from experience**: Derive from concrete pain points, not abstract ideals
 - **User review required**: Get user confirmation at learnings, constitution, and spec stages
-
 <!-- SYNC:END -->

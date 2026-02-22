@@ -26,6 +26,13 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.investigate.md date=2026-02-21 -->
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
@@ -40,13 +47,13 @@ The investigation produces findings and a recommended next action, but does NOT 
 
 ## Operating Constraints
 
-**STRICTLY READ-ONLY**: Do not modify any project source files. Output a structured investigation report only.
+**STRICTLY READ-ONLY**: Do not modify any files. Output a structured investigation report.
 
 ## Execution Steps
 
 ### 1. Problem Statement Extraction
 
-Parse the task description context to extract:
+Parse `$ARGUMENTS` to extract:
 - **Phenomenon**: What is being observed?
 - **Context**: When/where does it occur?
 - **Expectations**: What did the user expect? (if any)
@@ -86,7 +93,7 @@ For each hypothesis:
 
 ### 5. Investigation Report
 
-Output a structured report to the Output path:
+Output a structured report:
 
 ```markdown
 ## Investigation Report
@@ -125,10 +132,10 @@ Output a structured report to the Output path:
 ### Next Steps
 
 Based on this investigation, consider:
-- If this is a confirmed bug -> `/poor-dev.bugfix` with findings
-- If this requires a new feature -> `/poor-dev.specify` with requirements
-- If this is expected behavior -> Document in project knowledge
-- If investigation is incomplete -> Gather more data and re-investigate
+- If this is a confirmed bug → `/poor-dev.bugfix` with findings
+- If this requires a new feature → `/poor-dev.specify` with requirements
+- If this is expected behavior → Document in project knowledge
+- If investigation is incomplete → Gather more data and re-investigate
 ```
 
 ### 6. Classification Recommendation
@@ -150,5 +157,4 @@ Based on findings, recommend the appropriate next action:
 - **Avoid premature fixes**: Focus on understanding first
 - **Cross-reference**: Link to specific files and line numbers
 - **Stay in scope**: Don't drift into tangential issues
-
 <!-- SYNC:END -->

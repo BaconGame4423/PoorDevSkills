@@ -26,13 +26,16 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.testdesign.md date=2026-02-21 -->
+# poor-dev.testdesign — Test Design
+
+Design comprehensive test plans and generate test skeletons before the implementation phase.
 
 ## Inputs
 
-Read the following artifacts from FEATURE_DIR (provided in Task description):
-- `spec.md` -- Feature specification
-- `plan.md` -- Implementation plan
-- `tasks.md` -- Task breakdown
+Read the following artifacts from the feature directory:
+- `spec.md` — Feature specification
+- `plan.md` — Implementation plan
+- `tasks.md` — Task breakdown
 
 ## Process
 
@@ -51,7 +54,7 @@ Read the following artifacts from FEATURE_DIR (provided in Task description):
 
 ## Output
 
-Write `test-plan.md` to FEATURE_DIR with:
+Write `test-plan.md` to the feature directory with:
 - Test strategy overview
 - Test categories and counts
 - Priority ordering
@@ -59,8 +62,7 @@ Write `test-plan.md` to FEATURE_DIR with:
 
 ## Constraints
 
-- Do NOT implement actual test logic -- only skeletons
+- Do NOT implement actual test logic — only skeletons
 - Reference specific sections of spec.md and tasks.md
 - Follow the project's existing test patterns if available
-
 <!-- SYNC:END -->

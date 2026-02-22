@@ -26,10 +26,18 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.bugfix.md date=2026-02-21 -->
+## User Input
+
+```text
+$ARGUMENTS
+```
+
+You **MUST** consider the user input before proceeding (if not empty).
 
 ## Prerequisites
 
-Verify `$FEATURE_DIR/bug-report.md` exists. If not: ERROR -- "Run `/poor-dev` first."
+1. **Setup**: Resolve FEATURE_DIR from branch prefix → `specs/${PREFIX}-*`. Error if missing.
+2. Verify `$FEATURE_DIR/bug-report.md` exists. If not: ERROR — "Run `/poor-dev` first."
 
 ## Stage 1: Bug Report Completion
 
@@ -64,15 +72,6 @@ Use Grep/Glob to identify relevant code paths. Trace error origin. Review relate
 git log --oneline --since="2 weeks ago" -- <relevant-paths>
 ```
 Identify behavior-changing commit (git bisect approach).
-
-### Web Search Tools
-
-Web 検索には以下のツールを使用する。利用可能なツールは実行環境によって異なる:
-
-- **Claude 組み込み**: `WebSearch`（検索）、`WebFetch`（URL 取得）
-- **Z.AI MCP**: `mcp__web-search-prime__*`（検索）、`mcp__web-reader__*`（URL 取得）、`mcp__zread__*`（記事読み取り）
-
-組み込みツールが利用不可の場合は MCP ツールを使用すること。どちらも利用可能な場合は組み込みツールを優先。
 
 ### 3c. Dependency & External Factor Analysis
 - Check lock files for dependency versions
@@ -117,20 +116,55 @@ Create `$FEATURE_DIR/fix-plan.md`: root cause ref, fix approach, files to modify
 
 | Criteria | Small | Large |
 |----------|-------|-------|
-| Files changed | <=3 | >=4 |
+| Files changed | ≤3 | ≥4 |
 | Change nature | Local logic fix | Architecture changes |
 | Testing | Modify existing tests | New test suite |
 | Regression risk | Low-Medium | High |
 
 Ask user to confirm scale assessment.
 
-### 5c. Small -> `/poor-dev.implement`
-### 5d. Large -> `/poor-dev.plan`
+### 5c. Small → `/poor-dev.implement`
+### 5d. Large → `/poor-dev.plan`
 
-Output the `SCALE` marker in your SendMessage: `SCALE: small` or `SCALE: large`.
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
 
 ## Stage 6: Reclassification Escape
 
-If during Stages 1-4 this is clearly a missing feature: ask "これはバグではなく未実装機能のようです。機能リクエストとして再分類しますか？" If approved, output `RECLASSIFY: feature` marker in your SendMessage.
+If during Stages 1-4 this is clearly a missing feature: ask "これはバグではなく未実装機能のようです。機能リクエストとして再分類しますか？" If approved → route to `poor-dev.specify`.
 
+## Commit & Push Confirmation
+
+After all steps above complete, use AskUserQuestion to ask:
+
+**Question**: "変更をコミット＆プッシュしますか？"
+**Options**:
+1. "Commit & Push" — 変更をコミットしてリモートにプッシュする
+2. "Commit only" — コミットのみ（プッシュしない）
+3. "Skip" — コミットせずに終了する
+
+**If user selects "Commit & Push" or "Commit only"**:
+1. `git add -A`
+2. Generate a commit message following the project convention (`fix: 日本語タイトル`). Summarize the bugfix work done in this session.
+3. `git commit -m "<message>"`
+4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`
+5. Report the commit hash and pushed branch (if applicable).
+
+**If user selects "Skip"**: Report completion summary and stop.
 <!-- SYNC:END -->

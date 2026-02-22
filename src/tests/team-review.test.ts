@@ -255,6 +255,61 @@ describe("parseReviewerOutputYaml — verdict 正規化", () => {
   });
 });
 
+describe("parseReviewerOutputYaml — インデント付き YAML", () => {
+  it("verdict 行にインデントがあってもパースできる", () => {
+    const raw = [
+      "```yaml",
+      "issues:",
+      "  - severity: H",
+      '    description: "tight coupling (ARCH)"',
+      '    location: "src/service.ts:15"',
+      "  verdict: GO",
+      "```",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("GO");
+    expect(result.issues).toHaveLength(1);
+  });
+
+  it("verdict 行に複数スペースのインデントがあってもパースできる", () => {
+    const raw = [
+      "```yaml",
+      "issues: []",
+      "    verdict: CONDITIONAL",
+      "```",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("CONDITIONAL");
+  });
+
+  it("verdict 行にタブインデントがあってもパースできる", () => {
+    const raw = [
+      "```yaml",
+      "issues: []",
+      "\tverdict: NO-GO",
+      "```",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.parseMethod).toBe("yaml");
+    expect(result.verdict).toBe("NO-GO");
+  });
+
+  it("YAML フェンスなしでインデント付き verdict をパースできる", () => {
+    const raw = [
+      "issues:",
+      "  - severity: C",
+      '    description: "critical bug"',
+      '    location: "file.ts:1"',
+      "  verdict: NOGO",
+    ].join("\n");
+    const result = parseReviewerOutputYaml(raw, "AR", 1);
+    expect(result.verdict).toBe("NO-GO");
+    expect(result.issues).toHaveLength(1);
+  });
+});
+
 describe("parseReviewerOutput — verdict 正規化 (テキスト形式)", () => {
   it("VERDICT: PASS → GO に正規化", () => {
     const raw = "VERDICT: PASS";

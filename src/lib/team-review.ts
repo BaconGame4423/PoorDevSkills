@@ -142,7 +142,7 @@ function extractYamlBlock(raw: string): string | null {
  * フル YAML パーサーではなく、2つのフィールドだけを対象にする。
  */
 function parseSimpleYaml(content: string): { issues: Array<{ severity: string; description: string; location: string }>; verdict: string } | null {
-  const verdictMatch = content.match(/^verdict:\s*(GO|CONDITIONAL|NO-GO|PASS|NOGO|NO_GO)/mi);
+  const verdictMatch = content.match(/^\s*verdict:\s*(GO|CONDITIONAL|NO-GO|PASS|NOGO|NO_GO)/mi);
   if (!verdictMatch) return null;
 
   const issues: Array<{ severity: string; description: string; location: string }> = [];

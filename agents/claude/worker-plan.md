@@ -26,12 +26,19 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
 7. **Output**: Task description の「Output:」行のパスに成果物を書き込む
 
 <!-- SYNC:INLINED source=commands/poor-dev.plan.md date=2026-02-21 -->
+## User Input
 
-## Execution Flow
+```text
+$ARGUMENTS
+```
 
-1. **Phase Selection**: Check if Task description specifies a phase (`phase0`, `phase1`, or `all`/default).
+You **MUST** consider user input before proceeding (if not empty).
 
-2. **Setup**: Use FEATURE_DIR from Task description.
+## Outline
+
+1. **Phase Selection**: Check if user specified a phase (`phase0`, `phase1`, or `all`/default).
+
+2. **Setup**: Resolve FEATURE_DIR from branch prefix → `specs/${PREFIX}-*`. Error if missing.
    - `FEATURE_SPEC=FEATURE_DIR/spec.md`
    - `IMPL_PLAN=FEATURE_DIR/plan.md`
 
@@ -42,7 +49,7 @@ You are a **teammate** in an Agent Teams workflow, working under an Opus supervi
    - **Phase 0 only**: Research phase only
    - **Phase 1 only**: Design phase (requires research.md)
 
-5. **Stop and report**: IMPL_PLAN path and generated artifacts.
+5. **Stop and report**: Branch, IMPL_PLAN path, generated artifacts.
 
 ## IMPL_PLAN Template
 
@@ -132,36 +139,36 @@ ios/ or android/
 ## Phase Details
 
 **Phase 0: Outline & Research**
-1. Extract unknowns from Technical Context (NEEDS CLARIFICATION -> research tasks).
+1. Extract unknowns from Technical Context (NEEDS CLARIFICATION → research tasks).
 2. Generate and dispatch research agents for each unknown/technology.
 3. Consolidate in `research.md`: Decision, Rationale, Alternatives considered.
 
 **Output**: research.md
 
-**Phase 1: Design & Contracts (Contract-First parallel implementation foundation)**
+**Phase 1: Design & Contracts (Contract-First 並列実装の基盤)**
 
 Prerequisites: research.md complete.
 
-1. Extract entities from spec -> `data-model.md` (fields, relationships, validation, state transitions).
-2. Generate API contracts from functional requirements -> `contracts/` directory:
-   - **TypeScript projects** -> `.ts` interface files
-   - **REST API** -> OpenAPI 3.x YAML
-   - **GraphQL** -> `.graphql` schema files
-   - **gRPC** -> `.proto` files
-   - **Mock definitions** -> test stubs and sample data
+1. Extract entities from spec → `data-model.md` (fields, relationships, validation, state transitions).
+2. Generate API contracts from functional requirements → `contracts/` directory:
+   - **TypeScript projects** → `.ts` interface files
+   - **REST API** → OpenAPI 3.x YAML
+   - **GraphQL** → `.graphql` schema files
+   - **gRPC** → `.proto` files
+   - **Mock definitions** → test stubs and sample data
 3. Define **parallel boundaries** in plan Architecture section:
    ```markdown
-   ## Contracts & Interfaces (parallel implementation foundation)
+   ## Contracts & Interfaces (並列実装の基盤)
 
-   ### Boundary Definitions
-   - Component A (files: src/server/**) <-> Component B (files: src/client/**)
+   ### 境界定義
+   - Component A (files: src/server/**) ←→ Component B (files: src/client/**)
    - Interface: contracts/api.yaml
    - Parallel: Yes (non-overlapping file spaces)
 
-   ### Parallelization Criteria
-   - File spaces are non-overlapping (different directories / different file sets)
-   - Contracts (interface / API schema) define connection points
-   - One side can simulate the other with mocks
+   ### 並列化可否判定基準
+   - ファイル空間が非重複（異なるディレクトリ / 異なるファイル群）
+   - コントラクト（interface / API schema）で接続点が定義済み
+   - 一方がモックで他方の動作をシミュレート可能
    ```
 
 **Output**: data-model.md, contracts/*, quickstart.md
@@ -175,12 +182,12 @@ Prerequisites: research.md complete.
 ## Progress Markers
 
 Output progress markers at key milestones:
-- `[PROGRESS: plan reading-spec]` -- spec.md reading started
-- `[PROGRESS: plan constitution-check]` -- Constitution Check in progress
-- `[PROGRESS: plan phase0-research]` -- Phase 0 research started
-- `[PROGRESS: plan phase0-complete]` -- Phase 0 complete, research.md created
-- `[PROGRESS: plan phase1-design]` -- Phase 1 design started
-- `[PROGRESS: plan phase1-complete]` -- Phase 1 complete, all artifacts created
+- `[PROGRESS: plan reading-spec]` — spec.md 読み取り開始
+- `[PROGRESS: plan constitution-check]` — Constitution Check 実行中
+- `[PROGRESS: plan phase0-research]` — Phase 0 リサーチ開始
+- `[PROGRESS: plan phase0-complete]` — Phase 0 完了、research.md 作成
+- `[PROGRESS: plan phase1-design]` — Phase 1 設計開始
+- `[PROGRESS: plan phase1-complete]` — Phase 1 完了、全成果物作成
 
 ## Key Rules
 
@@ -189,4 +196,22 @@ Output progress markers at key milestones:
 - Phase 1 requires research.md; skip with warning if missing
 - Code examples: function signature + max 3-line pseudocode. Leave full implementation to implement step.
 
+### Dashboard Update
+
+Update living documents in `docs/`:
+
+1. `mkdir -p docs`
+2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
+   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
+   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
+3. Determine each feature's phase from latest artifact:
+   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
+4. Write `docs/progress.md`:
+   - Header with timestamp and triggering command name
+   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
+5. Write `docs/roadmap.md`:
+   - Header with timestamp
+   - Active features table (feature, phase, status, branch)
+   - Completed features table
+   - Upcoming section (from concept.md/goals.md/milestones.md if present)
 <!-- SYNC:END -->

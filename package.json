@@ -35,7 +35,7 @@
   "scripts": {
     "prepare": "tsc",
     "build": "tsc",
-    "test": "vitest run",
+    "test": "vitest run && npx tsx scripts/sync-agents.ts --check",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "sync-agents": "npx tsx scripts/sync-agents.ts",

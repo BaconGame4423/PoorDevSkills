@@ -47,8 +47,11 @@ Before starting the pipeline:
    - **Scope summary**: 実現したいことの要約 (2-3 文)
    - **Requirements**: ユーザーとの議論で確定した要件・制約のリスト
    - **Tech decisions**: 技術スタック選択（該当する場合）
+   - **Pipeline**: `proceed` or `skip` — 質問回答のみでパイプライン不要なら `skip`
 5. **Exit Plan Mode**: Call `ExitPlanMode` to present the plan for user approval.
-   - ユーザーが承認 → Phase 0 Post-Plan に進む
+   - ユーザーが承認:
+     - Plan に `Pipeline: skip` と記載されている → **ここで終了**。feature ディレクトリ作成・Core Loop には進まない
+     - Plan に `Pipeline: proceed` と記載されている → Phase 0 Post-Plan に進む
    - ユーザーが却下 → Plan Mode に留まり、フィードバックに基づき修正して再度 ExitPlanMode
 
 ### Plan Mode 中の禁止事項

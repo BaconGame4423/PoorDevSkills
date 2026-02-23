@@ -60,6 +60,8 @@ function isWaitingForInput(paneContent: string): boolean {
   const lines = paneContent.split("\n");
   // Selection UI は常にユーザー入力待ち状態
   if (lines.some(l => l.includes("Enter to select"))) return true;
+  // ❯ N. カーソルパターン（Plan Mode 終了ダイアログ等、"Enter to select" ヒントなし）
+  if (lines.some(l => /❯\s*\d+\./.test(l))) return true;
   // 最後の非空行から ❯ を探す
   for (let i = lines.length - 1; i >= 0; i--) {
     const trimmed = lines[i]!.trim();
@@ -67,7 +69,9 @@ function isWaitingForInput(paneContent: string): boolean {
     // ❯ がプロンプト行にあるか
     if (trimmed.startsWith("❯") || trimmed === "❯") return true;
     // bypass permissions やヒント行、selection UI ナビゲーション行はスキップ
-    if (trimmed.includes("bypass permissions") || trimmed.includes("Tip:") || trimmed.includes("ctrl+")) continue;
+    if (trimmed.includes("bypass permissions") || trimmed.includes("Tip:") || trimmed.includes("ctrl+") || trimmed.includes("ctrl-g")) continue;
+    // Plan ファイルパス行 (~/.claude/plans/...) をスキップ
+    if (trimmed.startsWith("~/.claude/") || trimmed.includes("/.claude/plans/")) continue;
     if (trimmed.includes("Enter to select") || trimmed.includes("↑/↓ to navigate")) continue;
     // "N. Chat about this" 等の selection UI 末尾行はスキップ
     if (/^\d+\.\s/.test(trimmed)) continue;

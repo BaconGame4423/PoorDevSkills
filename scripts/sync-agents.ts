@@ -65,11 +65,21 @@ function processAgentFile(agentFile: string, dryRun: boolean): SyncResult {
   sourceContent = removeFrontmatter(sourceContent);
   sourceContent = removeUnnecessarySections(sourceContent);
 
-  // 現在の SYNC ブロック内容
-  const currentBlock = lines.slice(syncStart + 1, syncEnd).join("\n").trim();
+  // 現在の SYNC ブロック内容（BASH_DISPATCH コメント + Dashboard/Commit セクション除外して比較）
+  const rawBlock = lines.slice(syncStart + 1, syncEnd)
+    .filter((l) => !l.startsWith("<!-- BASH_DISPATCH:"))
+    .join("\n").trim();
+  const currentBlock = removeUnnecessarySections(rawBlock);
   const newBlock = sourceContent.trim();
 
   if (currentBlock === newBlock) {
+    result.status = "synced";
+    return result;
+  }
+
+  // BASH_DISPATCH コメントがある = 意図的にエージェント側を最適化済み → drift 扱いしない
+  const hasBashDispatch = lines.slice(syncStart, syncEnd + 1).some((l) => l.includes("<!-- BASH_DISPATCH:"));
+  if (hasBashDispatch) {
     result.status = "synced";
     return result;
   }
@@ -97,16 +107,27 @@ function removeFrontmatter(content: string): string {
 }
 
 function removeUnnecessarySections(content: string): string {
-  // Dashboard Update, Commit & Push セクションを除去
-  const removePatterns = [
-    /^## Dashboard Update[\s\S]*?(?=^## |\Z)/gm,
-    /^## Commit & Push[\s\S]*?(?=^## |\Z)/gm,
-    /^## Git Operations[\s\S]*?(?=^## |\Z)/gm,
-  ];
-  for (const pattern of removePatterns) {
-    content = content.replace(pattern, "");
+  // Dashboard Update, Commit & Push, Git Operations セクションを除去
+  // コマンドファイルは ### (3 hash) を使うため #{2,3} で両方対応
+  const headingRe = /^#{2,3} (Dashboard Update|Commit & Push|Git Operations)/;
+  const nextHeadingRe = /^#{2,3} /;
+  const lines = content.split("\n");
+  const result: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    if (headingRe.test(line)) {
+      skipping = true;
+      continue;
+    }
+    if (skipping && nextHeadingRe.test(line)) {
+      skipping = false;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
   }
-  return content.trim();
+  return result.join("\n").trim();
 }
 
 // --- メイン ---

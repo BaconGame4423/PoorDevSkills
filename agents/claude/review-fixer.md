@@ -55,3 +55,6 @@ remaining:
     reason: "needs spec clarification"
 delta_lines: +12
 ```
+
+- Output YAML only. Maximum 50 lines.
+- Do not explain reasoning. Only report fixed/rejected/cannot_fix IDs with one-line desc.

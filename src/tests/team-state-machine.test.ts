@@ -101,7 +101,7 @@ describe("computeNextInstruction", () => {
         expect(action.reviewer.tools).toBe("Read,Glob,Grep");
         expect(action.fixer.role).toBe("review-fixer");
         expect(action.fixer.tools).toBe("Read,Write,Edit,Bash,Grep,Glob");
-        expect(action.maxIterations).toBe(6);
+        expect(action.maxIterations).toBe(4);
         expect(action.reviewPrompt).toContain("Step: planreview");
         expect(action.fixerBasePrompt).toContain("Step: planreview");
       }

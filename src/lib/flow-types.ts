@@ -76,6 +76,8 @@ export interface TeammateRole {
   agentType?: string;
   /** default: true（reviewer は false） */
   writeAccess?: boolean;
+  /** per-step maxTurns override */
+  maxTurns?: number;
 }
 
 export interface ConditionalBranch {

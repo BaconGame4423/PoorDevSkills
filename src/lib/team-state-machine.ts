@@ -213,7 +213,7 @@ function buildBashDispatchTeamAction(
       return {
         action: "bash_dispatch",
         step,
-        worker: { role, agentFile, tools: WORKER_TOOLS, maxTurns: 30 },
+        worker: { role, agentFile, tools: WORKER_TOOLS, maxTurns: teammate?.maxTurns ?? 30 },
         prompt,
         artifacts,
       };
@@ -235,13 +235,13 @@ function buildBashDispatchTeamAction(
           role: reviewerRole?.role ?? `reviewer-${step}`,
           agentFile: `agents/claude/${reviewerRole?.role ?? `reviewer-${step}`}.md`,
           tools: REVIEWER_TOOLS,
-          maxTurns: 15,
+          maxTurns: reviewerRole?.maxTurns ?? 15,
         },
         fixer: {
           role: fixerRole?.role ?? "review-fixer",
           agentFile: `agents/claude/${fixerRole?.role ?? "review-fixer"}.md`,
           tools: WORKER_TOOLS,
-          maxTurns: 20,
+          maxTurns: fixerRole?.maxTurns ?? 20,
         },
         reviewPrompt,
         fixerBasePrompt,

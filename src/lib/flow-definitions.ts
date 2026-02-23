@@ -13,50 +13,50 @@ import type { FlowDefinition, StepTeamConfig } from "./flow-types.js";
 const PLANREVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
-    { role: "reviewer-plan-unified", writeAccess: false },
-    { role: "review-fixer" },
+    { role: "reviewer-plan-unified", writeAccess: false, maxTurns: 10 },
+    { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 6,
+  maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
 };
 
 const TASKSREVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
-    { role: "reviewer-tasks-unified", writeAccess: false },
-    { role: "review-fixer" },
+    { role: "reviewer-tasks-unified", writeAccess: false, maxTurns: 10 },
+    { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 6,
+  maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
 };
 
 const ARCH_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
-    { role: "reviewer-arch-unified", writeAccess: false },
-    { role: "review-fixer" },
+    { role: "reviewer-arch-unified", writeAccess: false, maxTurns: 10 },
+    { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 8,
+  maxReviewIterations: 5,
   reviewCommunication: "opus-mediated",
 };
 
 const QUALITY_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
-    { role: "reviewer-quality-unified", writeAccess: false },
-    { role: "review-fixer" },
+    { role: "reviewer-quality-unified", writeAccess: false, maxTurns: 10 },
+    { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 8,
+  maxReviewIterations: 5,
   reviewCommunication: "opus-mediated",
 };
 
 const PHASE_REVIEW_TEAM: StepTeamConfig = {
   type: "review-loop",
   teammates: [
-    { role: "reviewer-phase-unified", writeAccess: false },
-    { role: "review-fixer" },
+    { role: "reviewer-phase-unified", writeAccess: false, maxTurns: 10 },
+    { role: "review-fixer", maxTurns: 15 },
   ],
-  maxReviewIterations: 6,
+  maxReviewIterations: 4,
   reviewCommunication: "opus-mediated",
 };
 
@@ -126,10 +126,10 @@ export const FEATURE_FLOW: FlowDefinition = {
     specify:  { type: "team", teammates: [{ role: "worker-specify" }] },
     plan:     { type: "team", teammates: [{ role: "worker-plan" }] },
     planreview: PLANREVIEW_TEAM,
-    tasks:       { type: "team", teammates: [{ role: "worker-tasks" }] },
+    tasks:       { type: "team", teammates: [{ role: "worker-tasks", maxTurns: 20 }] },
     tasksreview: TASKSREVIEW_TEAM,
     implement:   { type: "team", teammates: [{ role: "worker-implement" }] },
-    testdesign:  { type: "team", teammates: [{ role: "worker-testdesign" }] },
+    testdesign:  { type: "team", teammates: [{ role: "worker-testdesign", maxTurns: 20 }] },
     architecturereview: ARCH_REVIEW_TEAM,
     qualityreview: QUALITY_REVIEW_TEAM,
     phasereview: PHASE_REVIEW_TEAM,
@@ -150,7 +150,7 @@ export const BUGFIX_FLOW: FlowDefinition = {
     bugfix:       { type: "team", teammates: [{ role: "worker-bugfix" }] },
     plan:         { type: "team", teammates: [{ role: "worker-plan" }] },
     planreview:   PLANREVIEW_TEAM,
-    tasks:        { type: "team", teammates: [{ role: "worker-tasks" }] },
+    tasks:        { type: "team", teammates: [{ role: "worker-tasks", maxTurns: 20 }] },
     tasksreview:  TASKSREVIEW_TEAM,
     implement:    { type: "team", teammates: [{ role: "worker-implement" }] },
     architecturereview: ARCH_REVIEW_TEAM,
@@ -267,7 +267,7 @@ export const EXPLORATION_FLOW: FlowDefinition = {
     harvest:      { type: "team", teammates: [{ role: "worker-harvest" }] },
     plan:         { type: "team", teammates: [{ role: "worker-plan" }] },
     planreview:   PLANREVIEW_TEAM,
-    tasks:        { type: "team", teammates: [{ role: "worker-tasks" }] },
+    tasks:        { type: "team", teammates: [{ role: "worker-tasks", maxTurns: 20 }] },
     tasksreview:  TASKSREVIEW_TEAM,
     implement:    { type: "team", teammates: [{ role: "worker-implement" }] },
     architecturereview: ARCH_REVIEW_TEAM,

@@ -21,6 +21,57 @@ const BASH_DISPATCH_SUFFIX = `
 const MAX_INJECT_CHARS = 50_000;
 
 /**
+ * コンテキスト注入ブロックを構築する（共通ヘルパー）。
+ */
+function buildContextBlocks(
+  step: string,
+  fd: string,
+  flowDef: FlowDefinition,
+  fs: Pick<FileSystem, "exists" | "readFile">
+): { contextLines: string[]; injectBlocks: string[] } {
+  const ctx = flowDef.context?.[step];
+  const injectMap = flowDef.contextInject?.[step];
+  if (!ctx) return { contextLines: [], injectBlocks: [] };
+
+  const contextLines: string[] = [];
+  const injectBlocks: string[] = [];
+  for (const [key, filename] of Object.entries(ctx)) {
+    const fullPath = filename === "*" ? fd : path.join(fd, filename);
+    const exists = fs.exists(fullPath);
+    const shouldInject = injectMap?.[key] === true;
+
+    if (shouldInject && exists) {
+      contextLines.push(`  ${key}: ${fullPath} [inject — content below]`);
+      let content = fs.readFile(fullPath);
+      if (content.length > MAX_INJECT_CHARS) {
+        content = content.slice(0, MAX_INJECT_CHARS) + "\n... (truncated)";
+      }
+      injectBlocks.push(`## Context: ${key}\n${content}`);
+    } else if (exists) {
+      contextLines.push(`  ${key}: ${fullPath} [self-read — use Read tool]`);
+    } else {
+      contextLines.push(`  ${key}: ${fullPath} (missing)`);
+    }
+  }
+  return { contextLines, injectBlocks };
+}
+
+/**
+ * コンテキスト注入ブロックを parts 配列に追加する。
+ */
+function appendContextToParts(
+  parts: string[],
+  { contextLines, injectBlocks }: { contextLines: string[]; injectBlocks: string[] }
+): void {
+  if (contextLines.length > 0) {
+    parts.push(`Context:\n${contextLines.join("\n")}`);
+  }
+  if (injectBlocks.length > 0) {
+    parts.push(injectBlocks.join("\n\n"));
+  }
+}
+
+/**
  * Bash dispatch 用のプロンプトを構築する。
  * [inject] ファイルの内容を実際に読み込んでプロンプトに埋め込む。
  */
@@ -45,36 +96,7 @@ export function buildBashDispatchPrompt(
     outputDesc,
   ];
 
-  // コンテキスト注入
-  const ctx = flowDef.context?.[step];
-  const injectMap = flowDef.contextInject?.[step];
-  if (ctx) {
-    const contextParts: string[] = [];
-    const injectContents: string[] = [];
-    for (const [key, filename] of Object.entries(ctx)) {
-      const fullPath = filename === "*" ? fd : path.join(fd, filename);
-      const exists = fs.exists(fullPath);
-      const shouldInject = injectMap?.[key] === true;
-
-      if (shouldInject && exists) {
-        contextParts.push(`  ${key}: ${fullPath} [inject — content below]`);
-        let content = fs.readFile(fullPath);
-        if (content.length > MAX_INJECT_CHARS) {
-          content = content.slice(0, MAX_INJECT_CHARS) + "\n... (truncated)";
-        }
-        injectContents.push(`## Context: ${key}\n${content}`);
-      } else if (exists) {
-        contextParts.push(`  ${key}: ${fullPath} [self-read — use Read tool]`);
-      } else {
-        contextParts.push(`  ${key}: ${fullPath} (missing)`);
-      }
-    }
-    parts.push(`Context:\n${contextParts.join("\n")}`);
-    if (injectContents.length > 0) {
-      parts.push(injectContents.join("\n\n"));
-    }
-  }
-
+  appendContextToParts(parts, buildContextBlocks(step, fd, flowDef, fs));
   parts.push(BASH_DISPATCH_SUFFIX);
   return parts.join("\n");
 }
@@ -97,36 +119,7 @@ export function buildBashReviewPrompt(
     `Role: Reviewer — review target files and output result as YAML`,
   ];
 
-  // コンテキスト注入
-  const ctx = flowDef.context?.[step];
-  const injectMap = flowDef.contextInject?.[step];
-  if (ctx) {
-    const contextParts: string[] = [];
-    const injectContents: string[] = [];
-    for (const [key, filename] of Object.entries(ctx)) {
-      const fullPath = filename === "*" ? fd : path.join(fd, filename);
-      const exists = fs.exists(fullPath);
-      const shouldInject = injectMap?.[key] === true;
-
-      if (shouldInject && exists) {
-        contextParts.push(`  ${key}: ${fullPath} [inject — content below]`);
-        let content = fs.readFile(fullPath);
-        if (content.length > MAX_INJECT_CHARS) {
-          content = content.slice(0, MAX_INJECT_CHARS) + "\n... (truncated)";
-        }
-        injectContents.push(`## Context: ${key}\n${content}`);
-      } else if (exists) {
-        contextParts.push(`  ${key}: ${fullPath} [self-read — use Read tool]`);
-      } else {
-        contextParts.push(`  ${key}: ${fullPath} (missing)`);
-      }
-    }
-    parts.push(`Context:\n${contextParts.join("\n")}`);
-    if (injectContents.length > 0) {
-      parts.push(injectContents.join("\n\n"));
-    }
-  }
-
+  appendContextToParts(parts, buildContextBlocks(step, fd, flowDef, fs));
   parts.push(BASH_DISPATCH_SUFFIX);
   return parts.join("\n");
 }
@@ -150,36 +143,7 @@ export function buildBashFixerBasePrompt(
     `Role: Fixer — fix issues identified by the reviewer`,
   ];
 
-  // コンテキスト注入 (reviewer と同じ)
-  const ctx = flowDef.context?.[step];
-  const injectMap = flowDef.contextInject?.[step];
-  if (ctx) {
-    const contextParts: string[] = [];
-    const injectContents: string[] = [];
-    for (const [key, filename] of Object.entries(ctx)) {
-      const fullPath = filename === "*" ? fd : path.join(fd, filename);
-      const exists = fs.exists(fullPath);
-      const shouldInject = injectMap?.[key] === true;
-
-      if (shouldInject && exists) {
-        contextParts.push(`  ${key}: ${fullPath} [inject — content below]`);
-        let content = fs.readFile(fullPath);
-        if (content.length > MAX_INJECT_CHARS) {
-          content = content.slice(0, MAX_INJECT_CHARS) + "\n... (truncated)";
-        }
-        injectContents.push(`## Context: ${key}\n${content}`);
-      } else if (exists) {
-        contextParts.push(`  ${key}: ${fullPath} [self-read — use Read tool]`);
-      } else {
-        contextParts.push(`  ${key}: ${fullPath} (missing)`);
-      }
-    }
-    parts.push(`Context:\n${contextParts.join("\n")}`);
-    if (injectContents.length > 0) {
-      parts.push(injectContents.join("\n\n"));
-    }
-  }
-
+  appendContextToParts(parts, buildContextBlocks(step, fd, flowDef, fs));
   parts.push(BASH_DISPATCH_SUFFIX);
   return parts.join("\n");
 }

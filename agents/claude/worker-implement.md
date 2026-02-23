@@ -93,27 +93,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read quickstart.md for integration scenarios
 
 4. **Project Setup Verification**:
-   - **REQUIRED**: Create/verify ignore files based on actual project setup:
-
-   **Detection & Creation Logic**:
-   - Check if the following command succeeds to determine if the repository is a git repo (create/verify .gitignore if so):
-
-     ```sh
-     git rev-parse --git-dir 2>/dev/null
-     ```
-
-   - Check if Dockerfile* exists or Docker in plan.md → create/verify .dockerignore
-   - Check if .eslintrc* exists → create/verify .eslintignore
-   - Check if eslint.config.* exists → ensure the config's `ignores` entries cover required patterns
-   - Check if .prettierrc* exists → create/verify .prettierignore
-   - Check if .npmrc or package.json exists → create/verify .npmignore (if publishing)
-   - Check if terraform files (*.tf) exist → create/verify .terraformignore
-   - Check if .helmignore needed (helm charts present) → create/verify .helmignore
-
-   **If ignore file already exists**: Verify it contains essential patterns, append missing critical patterns only
-   **If ignore file missing**: Create with full pattern set for detected technology
-
-   Add standard ignore patterns for the detected tech stack (build dirs, deps, env files, IDE dirs).
+   - Verify git repo → create/verify .gitignore with standard patterns
+   - Only create framework-specific ignore files if explicitly listed in plan.md tech stack
+   - If ignore file already exists: append missing critical patterns only
 
 5. Parse tasks.md structure and extract:
    - **Task phases**: Setup, Contracts, Foundational, User Stories, Integration, Polish
@@ -169,43 +151,5 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Confirm the implementation follows the technical plan
    - Report final status with summary of completed work
 
-### Dashboard Update
-
-Update living documents in `docs/`:
-
-1. `mkdir -p docs`
-2. Scan all `specs/*/` directories. For each feature dir, check artifact existence:
-   - discovery-memo.md, learnings.md, spec.md, plan.md, tasks.md, bug-report.md
-   - concept.md, goals.md, milestones.md, roadmap.md (roadmap flow)
-3. Determine each feature's phase from latest artifact:
-   Discovery → Specification → Planning → Tasks → Implementation → Review → Complete
-4. Write `docs/progress.md`:
-   - Header with timestamp and triggering command name
-   - Per-feature section: branch, phase, artifact checklist (✅/⏳/—), last activity
-5. Write `docs/roadmap.md`:
-   - Header with timestamp
-   - Active features table (feature, phase, status, branch)
-   - Completed features table
-   - Upcoming section (from concept.md/goals.md/milestones.md if present)
-
-Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/poor-dev.tasks` first to regenerate the task list.
-
-## Commit & Push Confirmation
-
-After all steps above complete, use AskUserQuestion to ask:
-
-**Question**: "変更をコミット＆プッシュしますか？"
-**Options**:
-1. "Commit & Push" — 変更をコミットしてリモートにプッシュする
-2. "Commit only" — コミットのみ（プッシュしない）
-3. "Skip" — コミットせずに終了する
-
-**If user selects "Commit & Push" or "Commit only"**:
-1. `git add -A -- . ':!agents/' ':!commands/' ':!lib/poll-dispatch.sh' ':!.poor-dev/' ':!.claude/agents/' ':!.claude/commands/'`
-2. Generate a commit message following the project convention (`feat: 日本語タイトル` or appropriate type). Summarize the implementation work done in this session.
-3. `git commit -m "<message>"`
-4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`
-5. Report the commit hash and pushed branch (if applicable).
-
-**If user selects "Skip"**: Report completion summary and stop.
+<!-- BASH_DISPATCH: Dashboard Update / Commit & Push removed — handled by Opus orchestrator (poor-dev.md §Git Operations). Source: commands/poor-dev.implement.md -->
 <!-- SYNC:END -->

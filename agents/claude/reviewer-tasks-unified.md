@@ -16,13 +16,7 @@ issues:
 verdict: GO|CONDITIONAL|NO-GO
 ```
 
-WRONG (DO NOT do this):
-- Adding text before or after the ```yaml fence
-- Indenting `verdict` inside the `issues` list
-- Omitting the `verdict` line
-- Using severity values other than C, H, M, L
-
-### Example A: issues found
+### Example: issues found
 
 ```yaml
 # TECHLEAD: task ordering creates unnecessary coupling
@@ -37,16 +31,9 @@ issues:
 verdict: CONDITIONAL
 ```
 
-### Example B: no issues
+For no issues: `issues: []` with `verdict: GO`
 
-```yaml
-# TECHLEAD: clean dependency chain
-# SENIOR: feasible implementation
-# DEVOPS: CI/CD steps included
-# JUNIOR: well-documented tasks
-issues: []
-verdict: GO
-```
+WRONG: text outside yaml fence, `verdict` indented under issues.
 
 ## Personas
 
@@ -63,3 +50,6 @@ verdict: GO
 - Use `# comment` lines for reasoning per persona
 - Each issue MUST have: severity, description (include PERSONA tag), location
 - `verdict` MUST be at root level (same indentation as `issues`), never indented under issues
+- Maximum 15 issues total. Prioritize C/H severity
+- Each `# comment` line: max 1 sentence per persona
+- Omit M/L issues if C/H issues exist (fixer should focus on critical items first)

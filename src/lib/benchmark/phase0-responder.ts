@@ -6,11 +6,11 @@ import { capturePaneContent, pasteBuffer, sendKeys } from "./tmux.js";
  * これらがペインに出現したら Discussion フェーズは完了と判断。
  */
 const PHASE0_EXIT_PATTERNS = [
-  "poor-dev-next.js",  // TS ヘルパー呼び出し
   "step_complete",
   "pipeline-state.json",
-  "bash_dispatch",     // Bash Dispatch アクション
-  "glm -p",           // glm 直接呼び出し
+  "bash_dispatch",           // Bash Dispatch アクション
+  "bash_review_dispatch",    // Bash Review Dispatch アクション
+  "glm -p",                  // glm 直接呼び出し
 ];
 
 /**

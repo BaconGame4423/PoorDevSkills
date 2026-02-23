@@ -38,7 +38,7 @@
 ## Bash Dispatch フロー (poor-dev)
 
 - `/poor-dev` 実行中は TS ヘルパー (`node .poor-dev/dist/bin/poor-dev-next.js`) の JSON 指示に従う
-- Phase 0 は Worker 不使用。Opus が直接ユーザーと議論
+- Phase 0 は Worker 不使用。Opus が Plan モードでユーザーと壁打ちし、承認後に Core Loop 開始
 - レビューループは Opus 仲介: reviewer → Opus → fixer → Opus（`glm -p` 経由）
 - compaction 後の回復: `pipeline-state.json` を読み、`node .poor-dev/dist/bin/poor-dev-next.js` 再実行
 - カスタムフロー: `.poor-dev/flows.json` でユーザー定義フローを追加可能

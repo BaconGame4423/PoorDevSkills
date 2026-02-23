@@ -323,12 +323,26 @@ describe("phase0-responder", () => {
       expect(result.responded).toBe(false);
     });
 
-    it("poor-dev-next.js が出現 → Phase 0 終了", async () => {
+    it("poor-dev-next.js --list-flows は Phase 0 終了ではない", async () => {
+      const { respondToPhase0 } = await importResponder();
+      const config = makeDefaultConfig();
+
+      // --list-flows は Phase 0 中の read-only 操作
+      mockedCapturePaneContent.mockReturnValue(
+        "node .poor-dev/dist/bin/poor-dev-next.js --list-flows\n❯\n  ⏵⏵ bypass permissions on"
+      );
+
+      const result = respondToPhase0("test-pane", config, 0);
+
+      expect(result.done).toBe(false);
+    });
+
+    it("bash_review_dispatch が出現 → Phase 0 終了", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
       mockedCapturePaneContent.mockReturnValue(
-        "node .poor-dev/dist/bin/poor-dev-next.js --flow feature\n❯\n  ⏵⏵ bypass permissions on"
+        withPrompt("bash_review_dispatch で planreview を実行中 ❯")
       );
 
       const result = respondToPhase0("test-pane", config, 0);

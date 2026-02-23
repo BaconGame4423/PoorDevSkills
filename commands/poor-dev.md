@@ -14,26 +14,50 @@ node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir
 ```
 This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
 
-## Phase 0: Discussion
+## Phase 0: Discussion (Plan Mode)
 
 Before starting the pipeline:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
-1. List available flows:
+1. **Enter Plan Mode**: Call `EnterPlanMode` to enter read-only planning mode.
+   Plan Mode ensures no files are created or modified during the discussion phase.
+
+### Plan Mode 中に行うこと (read-only operations only)
+
+2. List available flows (read-only Bash — Plan Mode 中でも実行可):
    ```bash
    node .poor-dev/dist/bin/poor-dev-next.js --list-flows --project-dir .
    ```
    Parse the JSON output. Classify the user's request into one of the available flow names.
    If custom flows exist, consider them in classification alongside built-in flows.
-2. Discuss scope and requirements with the user via AskUserQuestion:
+3. Discuss scope and requirements with the user via AskUserQuestion:
    - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
    - 技術スタック: 必要なら選択肢を提示
-   - 質問が不要なほど要件が明確な場合はスキップ可
-3. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
+   - 質問が不要なほど要件が明確な場合はスキップ可（ただし ExitPlanMode は必須）
+4. Write discussion results to the plan file:
+   - **Selected flow**: フロー名 (例: feature, bugfix, roadmap)
+   - **Scope summary**: 実現したいことの要約 (2-3 文)
+   - **Requirements**: ユーザーとの議論で確定した要件・制約のリスト
+   - **Tech decisions**: 技術スタック選択（該当する場合）
+5. **Exit Plan Mode**: Call `ExitPlanMode` to present the plan for user approval.
+   - ユーザーが承認 → Phase 0 Post-Plan に進む
+   - ユーザーが却下 → Plan Mode に留まり、フィードバックに基づき修正して再度 ExitPlanMode
+
+### Plan Mode 中の禁止事項
+- ファイル作成 (Write/Edit) 禁止
+- ディレクトリ作成 (mkdir) 禁止
+- 変更系 Bash コマンド禁止
+- Read-only Bash (`node ... --list-flows`, `ls`, `cat` 等) は許可
+
+### Plan Mode 終了後 (ユーザー承認後)
+
+6. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
    - NNN = 3桁連番 (001, 002, ...)。既存 features/ ディレクトリの最大値 + 1
    - 例: `features/001-function-visualizer/`
    - **禁止**: `_runs/` 配下に作成しないこと（アーカイブ領域と衝突）
-4. Create `discussion-summary.md` in the feature directory
-5. No sub-agents are spawned during this phase
+7. Create `discussion-summary.md` in the feature directory:
+   - Plan ファイルの内容をもとに生成する
+   - フロー分類、スコープ、ユーザー要件・制約を含める
+8. No sub-agents are spawned during this phase
 
 ## Core Loop
 

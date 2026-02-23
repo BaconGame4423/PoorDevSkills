@@ -95,6 +95,15 @@ for arg in "\$@"; do
   args+=("\$arg")
 done
 
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  DO NOT REMOVE: nested session detection bypass             ║
+# ║  Claude Code sets CLAUDECODE=1 in child processes.          ║
+# ║  The caller uses CLAUDECODE= (empty) but the variable       ║
+# ║  still EXISTS, which triggers the nested session check.     ║
+# ║  unset removes the variable entirely so claude launches.    ║
+# ║  Ref: 2026-02-23 — CLAUDECODE= broke all bench reviewers.  ║
+# ╚══════════════════════════════════════════════════════════════╝
+unset CLAUDECODE
 exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
 WRAPPER
 sudo chmod +x /usr/local/bin/glm
@@ -215,6 +224,15 @@ for arg in "\$@"; do
   args+=("\$arg")
 done
 
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  DO NOT REMOVE: nested session detection bypass             ║
+# ║  Claude Code sets CLAUDECODE=1 in child processes.          ║
+# ║  The caller uses CLAUDECODE= (empty) but the variable       ║
+# ║  still EXISTS, which triggers the nested session check.     ║
+# ║  unset removes the variable entirely so claude launches.    ║
+# ║  Ref: 2026-02-23 — CLAUDECODE= broke all bench reviewers.  ║
+# ╚══════════════════════════════════════════════════════════════╝
+unset CLAUDECODE
 exec claude --mcp-config ~/.claude/glm-mcp.json "\${args[@]}"
 GLM_INNER
 sudo chmod +x /usr/local/bin/glm

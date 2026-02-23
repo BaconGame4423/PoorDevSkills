@@ -16,6 +16,15 @@ This returns the current pipeline state and next action as JSON. Resume the Core
 
 ## Phase 0: Discussion (Plan Mode)
 
+**重要: EnterPlanMode は無条件必須**
+`/poor-dev` が呼ばれたら、引数の内容に関わらず（質問、タスク依頼、曖昧な入力すべて）、
+最初に必ず `EnterPlanMode` を呼ぶこと。
+「質問だから Plan モード不要」という判断は禁止。Plan Mode の read-only 保証がセーフガードとして機能する。
+
+引数が質問のみの場合:
+- Plan モード内で質問に回答し、パイプライン開始が不要なら ExitPlanMode で終了
+- feature ディレクトリの作成や Core Loop への進行は不要
+
 Before starting the pipeline:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
 1. **Enter Plan Mode**: Call `EnterPlanMode` to enter read-only planning mode.

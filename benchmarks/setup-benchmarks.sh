@@ -184,6 +184,15 @@ HOOK_EOF
   cp -rL "$SCAFFOLD/$variant/.claude/agents" "$target/.claude/"
   echo "  updated .claude/agents/"
 
+  # 3b) hooks 更新（common hooks + variant settings.json）
+  mkdir -p "$target/.claude/hooks"
+  cp "$SCAFFOLD/common/hooks/"*.sh "$target/.claude/hooks/" 2>/dev/null || true
+  chmod +x "$target/.claude/hooks/"*.sh 2>/dev/null || true
+  if [[ "$orch_cli" == "claude" && -f "$SCAFFOLD/$variant/.claude/settings.json" ]]; then
+    cp "$SCAFFOLD/$variant/.claude/settings.json" "$target/.claude/"
+  fi
+  echo "  updated .claude/hooks/"
+
   # 4) .claude/commands/ symlinks 再生成（claude variant のみ）
   if [[ "$orch_cli" == "claude" ]]; then
     rm -rf "$target/.claude/commands"
@@ -375,6 +384,12 @@ HOOK_EOF
     cp -rL "$SCAFFOLD/$variant/.opencode" "$target/"
     cp -rL "$SCAFFOLD/$variant/.claude" "$target/"
     echo "  copied $variant files"
+
+    # 4b) hooks コピー（common hooks → .claude/hooks/）
+    mkdir -p "$target/.claude/hooks"
+    cp "$SCAFFOLD/common/hooks/"*.sh "$target/.claude/hooks/" 2>/dev/null || true
+    chmod +x "$target/.claude/hooks/"*.sh 2>/dev/null || true
+    echo "  copied hooks"
 
     # 5) .poor-dev/config.json 生成
     mkdir -p "$target/.poor-dev"

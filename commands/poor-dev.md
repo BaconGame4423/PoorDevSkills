@@ -70,6 +70,9 @@ Before starting the pipeline:
 
 ### Plan Mode 終了後 (ユーザー承認後)
 
+**実装コードの直接書き込みは hook でブロックされます。
+feature ディレクトリ作成 → discussion-summary.md 作成 → 即座に Core Loop へ進んでください。**
+
 6. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
    - NNN = 3桁連番 (001, 002, ...)。既存 features/ ディレクトリの最大値 + 1
    - 例: `features/001-function-visualizer/`

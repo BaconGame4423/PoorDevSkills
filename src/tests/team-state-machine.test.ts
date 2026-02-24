@@ -65,6 +65,15 @@ describe("computeNextInstruction", () => {
         expect(action.prompt).toContain("Step: specify");
         expect(action.prompt).toContain("Bash Dispatch");
         expect(action.prompt).toContain("SendMessage");
+        // command フィールド検証
+        expect(action.command).toContain("dispatch-worker.js");
+        expect(action.command).toContain("--prompt-file");
+        expect(action.command).toContain("specify-prompt.txt");
+        expect(action.command).toContain("--result-file");
+        expect(action.command).toContain("specify-worker-result.json");
+        expect(action.command).toContain("--timeout 600");
+        expect(action.command).toContain("--max-retries 1");
+        expect(action.command).toContain("--append-system-prompt-file agents/claude/worker-specify.md");
       }
     });
 
@@ -104,6 +113,19 @@ describe("computeNextInstruction", () => {
         expect(action.maxIterations).toBe(4);
         expect(action.reviewPrompt).toContain("Step: planreview");
         expect(action.fixerBasePrompt).toContain("Step: planreview");
+        // reviewerCommand フィールド検証
+        expect(action.reviewerCommand).toContain("dispatch-worker.js");
+        expect(action.reviewerCommand).toContain("--prompt-file");
+        expect(action.reviewerCommand).toContain("planreview-review-prompt.txt");
+        expect(action.reviewerCommand).toContain("--result-file");
+        expect(action.reviewerCommand).toContain("planreview-reviewer-result.json");
+        expect(action.reviewerCommand).toContain("--append-system-prompt-file agents/claude/reviewer-plan-unified.md");
+        // fixerCommandPrefix フィールド検証
+        expect(action.fixerCommandPrefix).toContain("dispatch-worker.js");
+        expect(action.fixerCommandPrefix).not.toContain("--prompt-file");
+        expect(action.fixerCommandPrefix).toContain("--result-file");
+        expect(action.fixerCommandPrefix).toContain("planreview-fixer-result.json");
+        expect(action.fixerCommandPrefix).toContain("--append-system-prompt-file agents/claude/review-fixer.md");
       }
     });
 
@@ -404,6 +426,16 @@ describe("computeNextInstruction", () => {
         expect(action._meta).toBeDefined();
         expect(action._meta!.step_complete_cmd).toContain("--steps-complete");
         expect(action._meta!.step_complete_cmd).toContain("testdesign,architecturereview,qualityreview");
+        // 並列グループ内の各ステップに command フィールドがある
+        if (testdesignAction?.action === "bash_dispatch") {
+          expect(testdesignAction.command).toContain("dispatch-worker.js");
+          expect(testdesignAction.command).toContain("testdesign-prompt.txt");
+        }
+        if (archAction?.action === "bash_review_dispatch") {
+          expect(archAction.reviewerCommand).toContain("dispatch-worker.js");
+          expect(archAction.fixerCommandPrefix).toContain("dispatch-worker.js");
+          expect(archAction.fixerCommandPrefix).not.toContain("--prompt-file");
+        }
       }
     });
 

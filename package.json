@@ -5,7 +5,8 @@
   "description": "AI-powered development workflow slash commands for OpenCode & Claude Code",
   "bin": {
     "poor-dev": "./bin/poor-dev.mjs",
-    "poor-dev-next": "./dist/bin/poor-dev-next.js"
+    "poor-dev-next": "./dist/bin/poor-dev-next.js",
+    "dispatch-worker": "./dist/bin/dispatch-worker.js"
   },
   "files": [
     "bin/",

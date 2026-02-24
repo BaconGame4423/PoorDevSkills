@@ -157,47 +157,37 @@ When the TS helper returns `done`, generate a cost report before reporting compl
    - Total cost (orchestrator + worker)
 4. Commit `cost-report.json` with the final artifacts
 
-## Bash Dispatch (glm -p)
+## Bash Dispatch (dispatch-worker)
 
-For `bash_dispatch` actions. Team lifecycle なしで glm -p (CLI headless mode) を直接呼び出す。
+For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトライを内包。
 
 ### 手順
-1. プロンプトファイル確認: `--prompt-dir` で TS helper が `<feature-dir>/.pd-dispatch/<step>-prompt.txt` を事前書き出し済み
-2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ、TS helper が作成済みの場合スキップ)
-3. glm -p 実行:
+1. `action.command` をそのまま Bash で実行:
    ```bash
-   CLAUDECODE= timeout 600 glm -p "$(cat <feature-dir>/.pd-dispatch/<step>-prompt.txt)" \
-     --append-system-prompt-file <worker.agentFile> \
-     --allowedTools "<worker.tools>" \
-     --output-format json \
-     --max-turns <worker.maxTurns> \
-     > <feature-dir>/.pd-dispatch/<step>-worker-result.json 2>&1
+   <action.command>
    ```
-   **重要**: `CLAUDECODE=` で環境変数をクリアしてネストセッション検出を回避する
-4. 結果 JSON を Read:
+   コマンドは TS ヘルパーが完全生成済み。**LLM がコマンドを自力構成してはならない。**
+   dispatch-worker が内部で timeout (600s) + リトライ (1回) を処理する。
+2. result-file を Read:
+   - `"status": "failed"` → dispatch-worker がリトライ済みで最終失敗。ユーザーに報告
    - `subtype: "success"` → 成功
    - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
    - `subtype: "error_during_execution"` → エラー、ユーザーに報告
-   - タイムアウト (exit code 124) → ユーザーに報告
-5. artifacts を git add && commit
-6. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
-7. 次のステップへ (Core Loop に戻る)
+3. artifacts を git add && commit
+4. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
+5. 次のステップへ (Core Loop に戻る)
 
-## Bash Review Dispatch (glm -p)
+## Bash Review Dispatch (dispatch-worker)
 
 For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
 
 ### Step 1: Reviewer 実行
 - `iteration += 1`
-- reviewer を glm -p で実行:
+- `action.reviewerCommand` をそのまま Bash で実行:
   ```bash
-  CLAUDECODE= timeout 600 glm -p "$(cat <review-prompt-file>)" \
-    --append-system-prompt-file <reviewer.agentFile> \
-    --allowedTools "<reviewer.tools>" \
-    --output-format json \
-    --max-turns <reviewer.maxTurns> \
-    > <step>-reviewer-result.json 2>&1
+  <action.reviewerCommand>
   ```
+  コマンドは TS ヘルパーが完全生成済み。dispatch-worker が timeout + リトライを処理。
 - 結果 JSON の `result` フィールドからテキスト出力を取得
 
 ### Step 2: Review Cycle 処理
@@ -215,21 +205,16 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
 
 ### Step 4: Fixer 実行
 - fixer プロンプトを構築: `fixerBasePrompt + "\n\n## Review Issues (Iteration N)\n" + fixerInstructions`
-- fixer を glm -p で実行:
+- fixer プロンプトをファイルに保存し、`action.fixerCommandPrefix` + `--prompt-file <path>` で実行:
   ```bash
-  CLAUDECODE= timeout 600 glm -p "$(cat <fixer-prompt-file>)" \
-    --append-system-prompt-file <fixer.agentFile> \
-    --allowedTools "<fixer.tools>" \
-    --output-format json \
-    --max-turns <fixer.maxTurns> \
-    > <step>-fixer-result.json 2>&1
+  <action.fixerCommandPrefix> --prompt-file <fixer-prompt-file>
   ```
 - fixer 結果の `result` から fixed/rejected ID を抽出 → `fixed_ids` に追加
 - commit fixes
 - Step 1 に戻る
 
 ### エラー処理
-- glm -p タイムアウト (exit 124) → 1回リトライ → 再失敗でユーザーに報告
+- dispatch-worker が timeout + リトライを内部処理。result-file に `"status": "failed"` → ユーザーに報告
 - glm -p エラー出力 → ログに記録、ユーザーに報告
 
 ### 一時ファイル管理
@@ -244,24 +229,23 @@ For `bash_parallel_dispatch` actions. `steps` 配列内の各ステップを並�
 
 **Phase A: 全ステップの reviewer/worker を並列起動**
 
-`steps` 配列を走査し、各ステップを並列で実行:
-- `bash_dispatch` → 通常の glm -p worker 実行 (§Bash Dispatch と同じ)
-- `bash_review_dispatch` → reviewer のみを glm -p で実行 (fixer はまだ実行しない)
+`steps` 配列を走査し、各ステップの `command` / `reviewerCommand` をバックグラウンドで並列実行:
+- `bash_dispatch` → `step.command` を実行 (§Bash Dispatch と同じ)
+- `bash_review_dispatch` → `step.reviewerCommand` を実行 (fixer はまだ実行しない)
 
 各プロセスを PID/バックグラウンドジョブで管理し、個別に wait:
 ```bash
-# 例: 3 ステップを並列実行
-CLAUDECODE= timeout 600 glm -p "$(cat <step1>-prompt.txt)" ... > <step1>-result.json 2>&1 &
+# 例: 3 ステップを並列実行（各 step の command/reviewerCommand をそのまま使用）
+<step1.command> &
 PID1=$!
-CLAUDECODE= timeout 600 glm -p "$(cat <step2>-review-prompt.txt)" ... > <step2>-reviewer-result.json 2>&1 &
+<step2.reviewerCommand> &
 PID2=$!
-CLAUDECODE= timeout 600 glm -p "$(cat <step3>-review-prompt.txt)" ... > <step3>-reviewer-result.json 2>&1 &
+<step3.reviewerCommand> &
 PID3=$!
 wait $PID1 $PID2 $PID3
 ```
 
-プロンプトファイルは `--prompt-dir` で TS helper が事前書き出し済み。ファイル名はステップ名プレフィックスで衝突回避。
-glm -p の timeout は 1 プロセスあたり 600s。
+コマンドは TS ヘルパーが完全生成済み。dispatch-worker が timeout + リトライを内部処理。
 
 **Phase B: 各 review-loop の fixer を逐次処理**
 

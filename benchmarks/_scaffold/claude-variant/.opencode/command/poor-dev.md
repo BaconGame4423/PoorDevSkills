@@ -1,10 +1,11 @@
 ---
 description: "Bash Dispatch orchestrator for all development flows"
+model: opusplan
 ---
 
 # poor-dev — Bash Dispatch Orchestrator
 
-Orchestrate development workflows using Claude Code Agent Teams.
+Orchestrate development workflows using Bash Dispatch (`glm -p` direct invocation).
 
 ## Compaction Recovery
 
@@ -14,71 +15,102 @@ node .poor-dev/dist/bin/poor-dev-next.js --state-dir <FEATURE_DIR> --project-dir
 ```
 This returns the current pipeline state and next action as JSON. Resume the Core Loop from there.
 
-## Phase 0: Discussion
+### モデル設定
+このSkillは `opusplan` モデルで動作します。
+Phase 0 (Plan Mode) は Opus、Core Loop は Sonnet で自動切替されます。
 
-Before creating any teams:
+## Phase 0: Discussion (Plan Mode)
+
+**重要: EnterPlanMode は無条件必須**
+`/poor-dev` が呼ばれたら、引数の内容に関わらず（質問、タスク依頼、曖昧な入力すべて）、
+最初に必ず `EnterPlanMode` を呼ぶこと。
+「質問だから Plan モード不要」という判断は禁止。Plan Mode の read-only 保証がセーフガードとして機能する。
+
+引数が質問のみの場合:
+- Plan モード内で質問に回答し、パイプライン開始が不要なら ExitPlanMode で終了
+- feature ディレクトリの作成や Core Loop への進行は不要
+
+Before starting the pipeline:
 0. Verify TS helper exists: `ls .poor-dev/dist/bin/poor-dev-next.js` — if missing, tell user to run `npm run build` in the DevSkills source repo and re-run `poor-dev init`
-1. Classify the user's request into a flow type (feature, bugfix, investigation, roadmap, discovery)
-2. Discuss scope and requirements with the user via AskUserQuestion:
-   - スコープ確認: 要件リストを表示し「追加・変更はありますか？」
-   - 技術スタック: 必要なら選択肢を提示
-   - 質問が不要なほど要件が明確な場合はスキップ可
-3. **Create feature directory**: `features/<NNN>-<kebab-case-name>/`
-   - NNN = 3桁連番 (001, 002, ...)。既存 features/ ディレクトリの最大値 + 1
-   - 例: `features/001-function-visualizer/`
-   - **禁止**: `_runs/` 配下に作成しないこと（アーカイブ領域と衝突）
-4. Create `discussion-summary.md` in the feature directory
-5. No teammates are spawned during this phase
+1. **Enter Plan Mode**: Call `EnterPlanMode` to enter read-only planning mode.
+   Plan Mode ensures no files are created or modified during the discussion phase.
+
+### Plan Mode 中に行うこと (read-only operations only)
+
+2. List available flows (read-only Bash — Plan Mode 中でも実行可):
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --list-flows --project-dir .
+   ```
+   Parse the JSON output. Classify the user's request into one of the available flow names.
+   If custom flows exist, consider them in classification alongside built-in flows.
+3. **壁打ちフェーズ** (Plan ファイル書き込み禁止):
+   - ユーザーと自由に対話してスコープ・要件・技術選択を議論する
+   - AskUserQuestion も使えるが、テキスト出力での自由対話が基本
+   - **Plan ファイルへの書き込みは禁止** — 議論が固まるまで形式化しない
+   - 議論が十分と判断したら「まとめて Plan に書きましょうか？」と確認する
+   - ユーザーが了承するまで壁打ちを継続
+4. **ユーザー許可後**: Write discussion results to the plan file:
+   - **Selected flow**: フロー名 (例: feature, bugfix, roadmap)
+   - **Scope summary**: 実現したいことの要約 (2-3 文)
+   - **Requirements**: ユーザーとの議論で確定した要件・制約のリスト
+   - **Tech decisions**: 技術スタック選択（該当する場合）
+   - **Pipeline**: `proceed` or `skip` — 質問回答のみでパイプライン不要なら `skip`
+5. **Exit Plan Mode**: Call `ExitPlanMode` to present the plan for user approval.
+   - ユーザーが承認:
+     - Plan に `Pipeline: skip` と記載されている → **ここで終了**。feature ディレクトリ作成・Core Loop には進まない
+     - Plan に `Pipeline: proceed` と記載されている → Phase 0 Post-Plan に進む
+   - ユーザーが却下 → Plan Mode に留まり、フィードバックに基づき修正して再度 ExitPlanMode
+
+### Plan Mode 中の禁止事項
+- ファイル作成 (Write/Edit) 禁止
+- ディレクトリ作成 (mkdir) 禁止
+- 変更系 Bash コマンド禁止
+- Plan ファイルへの書き込みはユーザーの「まとめて」許可が出るまで禁止
+- Read-only Bash (`node ... --list-flows`, `ls`, `cat` 等) は許可
+
+### Plan Mode 終了後 (ユーザー承認後)
+
+**実装コードの直接書き込みは hook でブロックされます。
+`--init-from-plan` で feature ディレクトリ作成 → discussion-summary.md 生成 → pipeline 初期化 → 最初のアクション計算を一発で実行し、即座に Core Loop へ進んでください。**
+
+6. **Init from Plan** (1コマンドで Phase 0 → Core Loop 遷移):
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --init-from-plan <plan-file-path> --project-dir .
+   ```
+   - Plan ファイルに `## Feature name` (kebab-case) を含めること
+   - JSON 出力には `_initFromPlan.featureDir` (作成された feature ディレクトリ) が含まれる
+   - `_initFromPlan.warnings` にパース警告がある場合はユーザーに表示する
+   - `--flow` オプションで plan の `## Selected flow` を上書き可能
+   - Pipeline: `skip` の場合は `{ action: "done" }` が返り、ここで終了
+   - JSON 出力を Core Loop のステップ 2 (アクション解析) から開始
 
 ## Core Loop
 
-After Phase 0, execute the pipeline via TS helper:
+After Phase 0 (`--init-from-plan` の出力が最初のアクション), execute the pipeline via TS helper:
 
-1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --flow <FLOW> --state-dir <DIR> --project-dir .` (Bash Dispatch モード時は `--bash-dispatch` を追加)
+1. **初回**: `--init-from-plan` の JSON 出力をそのまま使用。`_initFromPlan.featureDir` を以降の `<DIR>` として記録
+   **2回目以降**: `node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`
 2. Parse the JSON output and execute the action:
-   - `create_team` → 以下の手順を厳守:
-     1. **Cleanup**: TeamDelete (既存チームがあれば削除。エラーは無視)
-     2. **TeamCreate**: `team_name` は JSON の `team_name` フィールドをそのまま使用
-     3. **Spawn**: JSON の `teammates[]` 毎に Task ツールで spawn:
-        - `name` = `teammates[].role`, `team_name` = 上記チーム名
-        - `subagent_type` = `"general-purpose"` (Claude Code が `.claude/agents/{role}.md` を自動ロード)
-        - `prompt` は最小限 (role と step の説明のみ)。詳細指示は agent file から自動注入される
-     4. **TaskCreate**: JSON の `tasks[]` 毎に:
-        - `subject` = `tasks[].subject`
-        - `description` = **JSON の `tasks[].description` をそのまま使用** (Opus が書き換え禁止)
-        - **Context injection (hybrid)**: description の `Context:` 行を確認:
-          - `[inject]` マーク付きファイル: Read して末尾に `## Context: {key}\n{content}` を append。50,000文字超は先頭で切り詰め
-          - `[self-read]` マーク付きファイル: パスのみ記載（worker が自分で Read する）
-        - `owner` = `tasks[].assignTo`
-     5. **Wait**: TaskList ポーリングで全タスク完了を確認 (120秒応答なし → §Error Handling)。注: Bash(sleep) で待機してはならない。TaskList ツールを使用すること
-     6. **Commit**: JSON の `artifacts[]` を処理:
-        - `artifacts` に `"*"` が含まれる場合: feature dir 内の全変更を `git add`。`git status` で不要ファイル（中間ファイル等）がないか確認し、あれば `git reset HEAD <file>` で除外
-        - それ以外: `artifacts[]` に列挙されたファイルを `git add -f` && commit
-     7. **Step complete**: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
-     8. **Shutdown**: 各 teammate に shutdown_request → 確認待ち
-     9. **TeamDelete**
-   - `create_review_team` → Opus-mediated review loop (see §Review Loop below)
    - `bash_dispatch` → Bash Dispatch で worker 実行 (see §Bash Dispatch below)
    - `bash_review_dispatch` → Bash Dispatch で review loop 実行 (see §Bash Review Dispatch below)
+   - `bash_parallel_dispatch` → 並列 Bash Dispatch (see §Bash Parallel Dispatch below)
    - `user_gate` → See §User Gates below
-   - `done` → Report completion to user
+   - `done` → Generate cost report + report completion to user (see §Cost Report below)
 3. After action completes: see §Conditional Steps below
 4. Return to step 1
 
 ### 禁止事項 (Pipeline Step Execution)
 - パイプラインステップの作業を Opus が直接実行してはならない（Write/Edit でのファイル生成、直接レビュー等）
-- Task サブエージェント（`team_name` なし）でパイプラインステップを実行してはならない
-- JSON の `tasks[].description` を独自プロンプトで置き換えてはならない（Context injection の追記のみ許可）
-- TeamMate 応答失敗時に「残りステップは直接実行」等の方針転換は禁止 → §Error Handling に従う
+- JSON の `tasks[].description` を独自プロンプトで置き換えてはならない
+- 失敗時に「残りステップは直接実行」等の方針転換は禁止 → §Error Handling に従う
 
 **Implement Step Exception**: tasks.md の全タスクが同一ファイルを対象とする場合、
 CLAUDE.md の例外規定に従い逐次実装を使用する。
-並列 TeamMate での同一ファイル書き込みは禁止。
 
 ### Conditional Steps
 
 When a step is in the flow's `conditionals` list (e.g., bugfix, rebuildcheck):
-1. After teammate completes work, scan output for conditional markers:
+1. After worker completes, scan output for conditional markers:
    - `[SCALE: SMALL]` → key: `<step>:SCALE_SMALL`
    - `[SCALE: LARGE]` → key: `<step>:SCALE_LARGE`
    - `[RECLASSIFY: FEATURE]` → key: `<step>:RECLASSIFY_FEATURE`
@@ -90,91 +122,77 @@ When a step is in the flow's `conditionals` list (e.g., bugfix, rebuildcheck):
 ### User Gates
 
 When the TS helper returns `user_gate`:
+
+#### Standard Gates (no gateOptions)
 1. Display the `message` to the user
 2. Present `options` as choices
 3. After user responds: `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <response> --state-dir <DIR> --project-dir .`
 4. Parse the returned action and continue the Core Loop
 
-## Review Loop (Opus-Mediated, Parallel Reviewers)
+#### Post-Step User Gates (gateOptions present)
+`user_gate` に `gateOptions` が含まれる場合（userGates 由来）:
+1. `gateOptions` の `label` を AskUserQuestion の選択肢として提示
+2. ユーザー選択に対応する `conditionalKey` を取得
+3. `node .poor-dev/dist/bin/poor-dev-next.js --gate-response <conditionalKey> --state-dir <DIR> --project-dir .`
+4. Parse the returned action and continue the Core Loop
 
-For `create_review_team` actions. Initialize: `iteration = 0`, `fixed_ids = Set()`
+注: `gateOptions` 付きの user_gate では出力マーカースキャンは行わない。
 
-### Step 1: Dispatch
-- `iteration += 1`
-- **初回のみ**: `create_team` 手順の 1-4 を実行してチーム作成。
-  JSON の `tasks[]` を使って reviewer/fixer 両方に TaskCreate を実行すること
-- **2回目以降** (fix 後のリトライ): 既存チームで reviewer タスクのみ TaskCreate 再発行
-- reviewer は read-only、fixer は write-enabled
-- target files + 前回 review-log を task description に含める
+## Cost Report
 
-### Step 2: Collect & Process (Single CLI Call)
-- **TaskList ポーリングで reviewer タスク完了を確認** (`create_team` Step 5 と同じパターン)
-- reviewer タスクが completed になったら、reviewer からのメッセージを処理する:
-  - メッセージが未着の場合: 短いステータス出力でターンを終了し、メッセージ配信を待つ
-- 外部モニターが `[MONITOR]` メッセージを送信した場合 → §Error Handling 参照
+When the TS helper returns `done`, generate a cost report before reporting completion:
 
-**CRITICAL — Anti-Sleep Rule:**
-`Bash(sleep N)` で teammate の応答を待ってはならない。TaskList ポーリングを使用すること。
+1. Find the latest orchestrator JSONL:
+   ```bash
+   JSONL_PATH=$(ls -t ~/.claude/projects/-$(pwd | tr / -)/*.jsonl 2>/dev/null | head -1)
+   ```
+2. Generate the integrated report:
+   ```bash
+   node .poor-dev/dist/bin/poor-dev-next.js --token-report <feature-dir>/.pd-dispatch --orchestrator-jsonl "$JSONL_PATH" > <feature-dir>/cost-report.json
+   ```
+   - If JSONL is not found, omit `--orchestrator-jsonl` (worker-only report)
+3. Display cost summary to the user:
+   - Orchestrator cost (model, tokens, USD)
+   - Worker cost (total USD, turns)
+   - Total cost (orchestrator + worker)
+4. Commit `cost-report.json` with the final artifacts
 
-- reviewer からの SendMessage 内容を一時ファイルに保存
-- **統合レビューサイクル**: 以下の JSON を一時ファイルに書き出し:
-  ```json
-  {"rawReview": "<reviewer output>", "fixedIds": ["AR001"], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
-  ```
-  `node .poor-dev/dist/bin/poor-dev-next.js --review-cycle <file>` で一括処理。
-  戻り値: `{ converged, verdict, parseMethod, fixerInstructions, reviewLogEntry, maxIterationsReached }`
+## Bash Dispatch (dispatch-worker)
 
-### Step 3: Branch on Result
-- `converged: true` → `review-log-{step}.yaml` 更新 → commit → step complete → TeamDelete
-- `maxIterationsReached: true` → user_gate → TeamDelete
-- Otherwise → fixer に `fixerInstructions` を SendMessage → fixer の fixed/rejected を受信 → fixedIds に追加 → Step 1 に戻る
-
-## Bash Dispatch (glm -p)
-
-For `bash_dispatch` actions. Team lifecycle なしで glm -p (CLI headless mode) を直接呼び出す。
+For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトライを内包。
 
 ### 手順
-1. プロンプトをファイルに書き出し: `<feature-dir>/.pd-dispatch/<step>-prompt.txt`
-2. `mkdir -p <feature-dir>/.pd-dispatch` (初回のみ)
-3. glm -p 実行:
+1. `action.command` をそのまま Bash で実行:
    ```bash
-   CLAUDECODE= timeout 600 glm -p "$(cat <feature-dir>/.pd-dispatch/<step>-prompt.txt)" \
-     --append-system-prompt-file <worker.agentFile> \
-     --allowedTools "<worker.tools>" \
-     --output-format json \
-     --max-turns <worker.maxTurns> \
-     > <feature-dir>/.pd-dispatch/<step>-worker-result.json 2>&1
+   <action.command>
    ```
-   **重要**: `CLAUDECODE=` で環境変数をクリアしてネストセッション検出を回避する
-4. 結果 JSON を Read:
+   コマンドは TS ヘルパーが完全生成済み。**LLM がコマンドを自力構成してはならない。**
+   dispatch-worker が内部で timeout (600s) + リトライ (1回) を処理する。
+2. result-file を Read:
+   - `"status": "failed"` → dispatch-worker がリトライ済みで最終失敗。ユーザーに報告
    - `subtype: "success"` → 成功
    - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
    - `subtype: "error_during_execution"` → エラー、ユーザーに報告
-   - タイムアウト (exit code 124) → ユーザーに報告
-5. artifacts を git add && commit
-6. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --bash-dispatch --state-dir <DIR> --project-dir .`
-7. 次のステップへ (Core Loop に戻る)
+3. artifacts を git add && commit
+4. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
+5. 次のステップへ (Core Loop に戻る)
 
-## Bash Review Dispatch (glm -p)
+## Bash Review Dispatch (dispatch-worker)
 
 For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []`
 
 ### Step 1: Reviewer 実行
 - `iteration += 1`
-- reviewer を glm -p で実行:
+- `action.reviewerCommand` をそのまま Bash で実行:
   ```bash
-  CLAUDECODE= timeout 600 glm -p "$(cat <review-prompt-file>)" \
-    --append-system-prompt-file <reviewer.agentFile> \
-    --allowedTools "<reviewer.tools>" \
-    --output-format json \
-    --max-turns <reviewer.maxTurns> \
-    > <step>-reviewer-result.json 2>&1
+  <action.reviewerCommand>
   ```
+  コマンドは TS ヘルパーが完全生成済み。dispatch-worker が timeout + リトライを処理。
 - 結果 JSON の `result` フィールドからテキスト出力を取得
 
 ### Step 2: Review Cycle 処理
 - reviewer テキスト出力を一時ファイルに保存
-- `--review-cycle` で一括処理 (Agent Teams 版と同じ):
+- `--review-cycle` で一括処理:
   ```json
   {"rawReview": "<reviewer output>", "fixedIds": [...], "idPrefix": "AR", "iteration": 1, "maxIterations": 8}
   ```
@@ -187,69 +205,89 @@ For `bash_review_dispatch` actions. Initialize: `iteration = 0`, `fixed_ids = []
 
 ### Step 4: Fixer 実行
 - fixer プロンプトを構築: `fixerBasePrompt + "\n\n## Review Issues (Iteration N)\n" + fixerInstructions`
-- fixer を glm -p で実行:
+- fixer プロンプトをファイルに保存し、`action.fixerCommandPrefix` + `--prompt-file <path>` で実行:
   ```bash
-  CLAUDECODE= timeout 600 glm -p "$(cat <fixer-prompt-file>)" \
-    --append-system-prompt-file <fixer.agentFile> \
-    --allowedTools "<fixer.tools>" \
-    --output-format json \
-    --max-turns <fixer.maxTurns> \
-    > <step>-fixer-result.json 2>&1
+  <action.fixerCommandPrefix> --prompt-file <fixer-prompt-file>
   ```
 - fixer 結果の `result` から fixed/rejected ID を抽出 → `fixed_ids` に追加
 - commit fixes
 - Step 1 に戻る
 
 ### エラー処理
-- glm -p タイムアウト (exit 124) → 1回リトライ → 再失敗でユーザーに報告
+- dispatch-worker が timeout + リトライを内部処理。result-file に `"status": "failed"` → ユーザーに報告
 - glm -p エラー出力 → ログに記録、ユーザーに報告
 
 ### 一時ファイル管理
 - 一時ファイルは `<feature-dir>/.pd-dispatch/` に保存
 - パイプライン完了後に `.pd-dispatch/` を削除
 
+## Bash Parallel Dispatch
+
+For `bash_parallel_dispatch` actions. `steps` 配列内の各ステップを並列実行する。
+
+### 2段階実行モデル (reviewer 並列 → fixer 逐次)
+
+**Phase A: 全ステップの reviewer/worker を並列起動**
+
+`steps` 配列を走査し、各ステップの `command` / `reviewerCommand` をバックグラウンドで並列実行:
+- `bash_dispatch` → `step.command` を実行 (§Bash Dispatch と同じ)
+- `bash_review_dispatch` → `step.reviewerCommand` を実行 (fixer はまだ実行しない)
+
+各プロセスを PID/バックグラウンドジョブで管理し、個別に wait:
+```bash
+# 例: 3 ステップを並列実行（各 step の command/reviewerCommand をそのまま使用）
+<step1.command> &
+PID1=$!
+<step2.reviewerCommand> &
+PID2=$!
+<step3.reviewerCommand> &
+PID3=$!
+wait $PID1 $PID2 $PID3
+```
+
+コマンドは TS ヘルパーが完全生成済み。dispatch-worker が timeout + リトライを内部処理。
+
+**Phase B: 各 review-loop の fixer を逐次処理**
+
+Phase A の reviewer 結果を使い、各 `bash_review_dispatch` ステップの review-cycle を逐次実行:
+```
+for step in [review steps with issues]:
+  --review-cycle で parse + convergence check
+  converged? → commit + next
+  not converged? → fixer dispatch (逐次) → 再 reviewer → 収束まで
+```
+fixer は書き込みを行うため、逐次実行して git 競合を回避する。
+
+**Phase C: 全ステップ完了マーク**
+```bash
+node .poor-dev/dist/bin/poor-dev-next.js --steps-complete testdesign,architecturereview,qualityreview --state-dir <DIR> --project-dir .
+```
+`_meta.step_complete_cmd` にこのコマンドが格納されている。
+
+### bash_dispatch ステップの処理
+- 通常の Bash Dispatch と同じ手順。結果確認 + artifact commit。
+
+### bash_review_dispatch ステップの処理
+- Phase A で reviewer のみ並列実行済み → reviewer 結果をそのまま `--review-cycle` に渡す
+- 以降は §Bash Review Dispatch の Step 2 以降と同じ
+
 ## Error Handling
-
-### Monitor Nudge Response
-`[MONITOR]` メッセージが入力に表示されたら:
-1. 名指しされた stalled teammate に SendMessage: "Are you still working? Please respond with status."
-2. 現在の作業を続行（ブロックしない）
-3. 応答あり → 問題なし
-4. 次のアクションサイクルでも応答なし:
-   a. shutdown_request 送信 → 確認待ち
-   b. 同じ agent spec で Task re-spawn → タスク再割当
-   c. respawn カウント（teammate 毎最大3回）
-5. 3回 respawn 後も失敗 → review-log に `verdict: GO` + `note: "DEGRADED: {role} failed after 3 respawns"` を記録して続行
-6. **全レビューステップが DEGRADED の場合**: ユーザーに警告メッセージを出力: "WARNING: All review steps degraded. Quality gate bypassed."
-7. 全 teammate 同時失敗 → rate limit 疑い → 120s 待機 → リトライ（最大3回）
-
-### TeamCreate / Teammate Failure
-- "Already leading team" エラー → TeamDelete → 5秒待機 → TeamCreate 再試行（最大2回）
-- Teammate タイムアウト (120秒応答なし):
-  1. SendMessage で状態確認
-  2. 応答なし → shutdown_request 送信
-  3. 同じ `teammates[]` spec で再 spawn → TaskCreate で同じタスク再割当
-  4. respawn 3回失敗 → `[ERROR: {role} failed after 3 respawns]` 出力して **停止**（直接実行に切り替えない）
 
 ### Other
 - Review loop > max_iterations → user confirmation required
 - Fixer validation failure → retry (max 2) → user confirmation
 - Crash recovery → pipeline-state.json + `node .poor-dev/dist/bin/poor-dev-next.js` to resume
 
-## Team Naming
-
-Format: `pd-<step>-<NNN>` where NNN is from the feature directory name.
-
 ## Git Operations
 
 All git operations (commit, push, checkout, clean) are performed by Opus only.
-Teammates NEVER execute git commands.
+Workers dispatched via glm -p NEVER execute git commands.
 
 ### When to Commit
-- After `create_team` for `implement` step completes: stage and commit all implementation changes
+- After `bash_dispatch` for `implement` step completes: stage and commit all implementation changes
 - After fixer reports modifications in a review loop: stage and commit the fixes + `review-log-{step}.yaml`
 - After review convergence (C=0, H=0): commit `review-log-{step}.yaml`
-- After `create_team` for artifact-producing steps (specify, suggest, plan, tasks, testdesign): commit the generated artifact
+- After `bash_dispatch` for artifact-producing steps (specify, plan, tasks, testdesign): commit the generated artifact
 - Commit message format: `type: 日本語タイトル` (per CLAUDE.md conventions)
 
 ### Review Log Format

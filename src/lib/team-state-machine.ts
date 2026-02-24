@@ -240,6 +240,32 @@ function collectArtifacts(
   return files;
 }
 
+/**
+ * dispatch-worker.js の実行コマンドを組み立てる。
+ * LLM はこのコマンドをそのまま Bash 実行するだけ。
+ */
+function buildDispatchCommand(opts: {
+  promptFile: string;
+  agentFile: string;
+  tools: string;
+  maxTurns: number;
+  resultFile: string;
+  timeout?: number;
+  maxRetries?: number;
+}): string {
+  const parts = [
+    "node .poor-dev/dist/bin/dispatch-worker.js",
+    `--prompt-file ${opts.promptFile}`,
+    `--append-system-prompt-file ${opts.agentFile}`,
+    `--allowedTools '${opts.tools}'`,
+    `--max-turns ${opts.maxTurns}`,
+    `--result-file ${opts.resultFile}`,
+    `--timeout ${opts.timeout ?? 600}`,
+    `--max-retries ${opts.maxRetries ?? 1}`,
+  ];
+  return parts.join(" ");
+}
+
 function buildBashDispatchTeamAction(
   step: string,
   teamConfig: StepTeamConfig,
@@ -250,13 +276,25 @@ function buildBashDispatchTeamAction(
 ): BashDispatchAction | BashReviewDispatchAction {
   const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
+  const dispatchDir = path.join(featureDir, ".pd-dispatch");
 
   switch (teamConfig.type) {
     case "team": {
       const teammate = (teamConfig.teammates ?? [])[0];
       const role = teammate?.role ?? `worker-${step}`;
       const agentFile = `agents/claude/${role}.md`;
+      const maxTurns = teammate?.maxTurns ?? 30;
       const prompt = buildBashDispatchPrompt(step, fd, flowDef, fs);
+
+      const promptFile = path.join(dispatchDir, `${step}-prompt.txt`);
+      const resultFile = path.join(dispatchDir, `${step}-worker-result.json`);
+      const command = buildDispatchCommand({
+        promptFile,
+        agentFile,
+        tools: WORKER_TOOLS,
+        maxTurns,
+        resultFile,
+      });
 
       const artifactDef = flowDef.artifacts?.[step];
       const artifacts: string[] = !artifactDef
@@ -270,7 +308,8 @@ function buildBashDispatchTeamAction(
       return {
         action: "bash_dispatch",
         step,
-        worker: { role, agentFile, tools: WORKER_TOOLS, maxTurns: teammate?.maxTurns ?? 30 },
+        command,
+        worker: { role, agentFile, tools: WORKER_TOOLS, maxTurns },
         prompt,
         artifacts,
       };
@@ -281,24 +320,53 @@ function buildBashDispatchTeamAction(
       const reviewerRole = (teamConfig.teammates ?? []).find((t) => t.writeAccess === false);
       const fixerRole = (teamConfig.teammates ?? []).find((t) => t.writeAccess !== false);
 
+      const reviewerRoleName = reviewerRole?.role ?? `reviewer-${step}`;
+      const fixerRoleName = fixerRole?.role ?? "review-fixer";
+      const reviewerAgentFile = `agents/claude/${reviewerRoleName}.md`;
+      const fixerAgentFile = `agents/claude/${fixerRoleName}.md`;
+      const reviewerMaxTurns = reviewerRole?.maxTurns ?? 15;
+      const fixerMaxTurns = fixerRole?.maxTurns ?? 20;
+
       const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
       const reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs);
       const fixerBasePrompt = buildBashFixerBasePrompt(step, fd, targetFiles, flowDef, fs);
 
+      const reviewerPromptFile = path.join(dispatchDir, `${step}-review-prompt.txt`);
+      const reviewerResultFile = path.join(dispatchDir, `${step}-reviewer-result.json`);
+      const reviewerCommand = buildDispatchCommand({
+        promptFile: reviewerPromptFile,
+        agentFile: reviewerAgentFile,
+        tools: REVIEWER_TOOLS,
+        maxTurns: reviewerMaxTurns,
+        resultFile: reviewerResultFile,
+      });
+
+      // fixer は --prompt-file が動的（iteration ごとに変わる）なので prefix のみ
+      const fixerResultFile = path.join(dispatchDir, `${step}-fixer-result.json`);
+      const fixerCommandPrefix = buildDispatchCommand({
+        promptFile: "__PROMPT_FILE__",
+        agentFile: fixerAgentFile,
+        tools: WORKER_TOOLS,
+        maxTurns: fixerMaxTurns,
+        resultFile: fixerResultFile,
+      }).replace(" --prompt-file __PROMPT_FILE__", "");
+
       return {
         action: "bash_review_dispatch",
         step,
+        reviewerCommand,
+        fixerCommandPrefix,
         reviewer: {
-          role: reviewerRole?.role ?? `reviewer-${step}`,
-          agentFile: `agents/claude/${reviewerRole?.role ?? `reviewer-${step}`}.md`,
+          role: reviewerRoleName,
+          agentFile: reviewerAgentFile,
           tools: REVIEWER_TOOLS,
-          maxTurns: reviewerRole?.maxTurns ?? 15,
+          maxTurns: reviewerMaxTurns,
         },
         fixer: {
-          role: fixerRole?.role ?? "review-fixer",
-          agentFile: `agents/claude/${fixerRole?.role ?? "review-fixer"}.md`,
+          role: fixerRoleName,
+          agentFile: fixerAgentFile,
           tools: WORKER_TOOLS,
-          maxTurns: fixerRole?.maxTurns ?? 20,
+          maxTurns: fixerMaxTurns,
         },
         reviewPrompt,
         fixerBasePrompt,

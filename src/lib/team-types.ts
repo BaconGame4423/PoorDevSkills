@@ -25,6 +25,8 @@ export interface ActionMeta {
 export interface BashDispatchAction {
   action: "bash_dispatch";
   step: string;
+  /** dispatch-worker.js の完全実行コマンド。Opus はこれをそのまま Bash 実行する */
+  command: string;
   worker: {
     role: string;
     agentFile: string;
@@ -40,6 +42,10 @@ export interface BashDispatchAction {
 export interface BashReviewDispatchAction {
   action: "bash_review_dispatch";
   step: string;
+  /** reviewer の dispatch-worker.js 完全実行コマンド */
+  reviewerCommand: string;
+  /** fixer の dispatch-worker.js コマンドプレフィックス（--prompt-file を除く）。Opus は --prompt-file <path> を追加するだけ */
+  fixerCommandPrefix: string;
   reviewer: {
     role: string;
     agentFile: string;

@@ -53,7 +53,7 @@ fi
 jval() { jq -r "$1" "$CONFIG"; }
 
 # --- スキャフォールドホワイトリスト ---
-SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules" "commands" "lib")
+SCAFFOLD_DIRS=(".opencode" ".claude" ".poor-dev" "templates" ".git" "_runs" "node_modules" "commands" "lib" "agents")
 SCAFFOLD_LINKS=()
 SCAFFOLD_FILES=("constitution.md" "opencode.json" ".gitignore" ".poor-dev-version" "CLAUDE.md" "AGENTS.md" ".bench-output.json" ".bench-metrics.json" ".bench-stderr.txt")
 

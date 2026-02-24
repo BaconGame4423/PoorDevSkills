@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>関数ビジュアライザー</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/13.2.2/math.min.js"></script>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --border: #0f3460;
+    --primary: #e94560;
+    --secondary: #53d8fb;
+    --text: #eee;
+    --text-muted: #999;
+    --grid: rgba(255,255,255,0.06);
+    --axis: rgba(255,255,255,0.25);
+    --fn-color: #e94560;
+    --deriv-color: #53d8fb;
+    --tangent-color: #f5a623;
+    --error: #ff4444;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .input-group label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  #expr-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #expr-input:focus {
+    border-color: var(--primary);
+  }
+
+  #error-msg {
+    font-size: 0.8rem;
+    color: var(--error);
+    min-height: 1.2em;
+    padding: 0 24px;
+    background: var(--surface);
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .controls label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+
+  .controls input[type="checkbox"] {
+    accent-color: var(--primary);
+  }
+
+  .presets {
+    padding: 8px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .presets span {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-right: 4px;
+  }
+
+  .preset-btn {
+    padding: 4px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .preset-btn:hover {
+    background: var(--border);
+    border-color: var(--primary);
+  }
+
+  .canvas-container {
+    flex: 1;
+    position: relative;
+    min-height: 300px;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(22, 33, 62, 0.95);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    display: none;
+    z-index: 10;
+    white-space: nowrap;
+  }
+
+  .tooltip .val-x { color: var(--text); }
+  .tooltip .val-f { color: var(--fn-color); }
+  .tooltip .val-d { color: var(--deriv-color); }
+
+  .legend {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(22, 33, 62, 0.9);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-swatch {
+    width: 16px;
+    height: 3px;
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>関数ビジュアライザー</h1>
+  <div class="input-group">
+    <label for="expr-input">f(x) =</label>
+    <input type="text" id="expr-input" value="sin(x)" autocomplete="off" spellcheck="false">
+  </div>
+  <div class="controls">
+    <label><input type="checkbox" id="chk-deriv" checked> 導関数 f'(x)</label>
+    <label><input type="checkbox" id="chk-tangent" checked> 接線</label>
+    <label><input type="checkbox" id="chk-autoscale" checked> 自動スケール</label>
+  </div>
+</header>
+<div id="error-msg"></div>
+<div class="presets">
+  <span>プリセット:</span>
+  <button class="preset-btn" data-expr="sin(x)">sin(x)</button>
+  <button class="preset-btn" data-expr="cos(x)">cos(x)</button>
+  <button class="preset-btn" data-expr="tan(x)">tan(x)</button>
+  <button class="preset-btn" data-expr="x^2">x&sup2;</button>
+  <button class="preset-btn" data-expr="x^3 - 3*x">x&sup3; - 3x</button>
+  <button class="preset-btn" data-expr="log(x)">log(x)</button>
+  <button class="preset-btn" data-expr="exp(x)">exp(x)</button>
+  <button class="preset-btn" data-expr="sqrt(x)">sqrt(x)</button>
+  <button class="preset-btn" data-expr="abs(x)">abs(x)</button>
+  <button class="preset-btn" data-expr="1/x">1/x</button>
+  <button class="preset-btn" data-expr="sin(x)/x">sin(x)/x</button>
+</div>
+<div class="canvas-container">
+  <canvas id="graph"></canvas>
+  <div class="tooltip" id="tooltip"></div>
+  <div class="legend" id="legend"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const canvas = document.getElementById('graph');
+  const ctx = canvas.getContext('2d');
+  const container = canvas.parentElement;
+  const input = document.getElementById('expr-input');
+  const errorMsg = document.getElementById('error-msg');
+  const tooltipEl = document.getElementById('tooltip');
+  const legendEl = document.getElementById('legend');
+  const chkDeriv = document.getElementById('chk-deriv');
+  const chkTangent = document.getElementById('chk-tangent');
+  const chkAutoscale = document.getElementById('chk-autoscale');
+
+  const PADDING = { top: 30, right: 30, bottom: 40, left: 55 };
+  const H = 1e-7;
+  const DEBOUNCE_MS = 300;
+
+  let compiledExpr = null;
+  let exprError = null;
+  let viewXMin = -10, viewXMax = 10;
+  let viewYMin = -10, viewYMax = 10;
+  let mouseX = null, mouseY = null;
+  let dpr = 1;
+  let debounceTimer = null;
+
+  // --- Expression compilation ---
+  function compileExpression(exprStr) {
+    try {
+      const node = math.parse(exprStr);
+      const code = node.compile();
+      // Test evaluation
+      code.evaluate({ x: 0 });
+      exprError = null;
+      errorMsg.textContent = '';
+      return code;
+    } catch (e) {
+      exprError = e.message;
+      errorMsg.textContent = '数式エラー: ' + e.message;
+      return null;
+    }
+  }
+
+  function evalExpr(x) {
+    if (!compiledExpr) return NaN;
+    try {
+      const v = compiledExpr.evaluate({ x: x });
+      if (typeof v === 'number' && isFinite(v)) return v;
+      return NaN;
+    } catch {
+      return NaN;
+    }
+  }
+
+  function derivative(x) {
+    const fp = evalExpr(x + H);
+    const fm = evalExpr(x - H);
+    if (isNaN(fp) || isNaN(fm)) return NaN;
+    return (fp - fm) / (2 * H);
+  }
+
+  // --- Canvas sizing ---
+  function resizeCanvas() {
+    dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // --- Coordinate transforms ---
+  function plotW() { return canvas.width / dpr - PADDING.left - PADDING.right; }
+  function plotH() { return canvas.height / dpr - PADDING.top - PADDING.bottom; }
+
+  function xToCanvas(x) {
+    return PADDING.left + (x - viewXMin) / (viewXMax - viewXMin) * plotW();
+  }
+  function yToCanvas(y) {
+    return PADDING.top + (viewYMax - y) / (viewYMax - viewYMin) * plotH();
+  }
+  function canvasToX(cx) {
+    return viewXMin + (cx - PADDING.left) / plotW() * (viewXMax - viewXMin);
+  }
+
+  // --- Auto scale ---
+  function computeAutoScale() {
+    if (!compiledExpr || !chkAutoscale.checked) return;
+    const steps = 500;
+    const dx = (viewXMax - viewXMin) / steps;
+    let yMin = Infinity, yMax = -Infinity;
+    for (let i = 0; i <= steps; i++) {
+      const x = viewXMin + i * dx;
+      const y = evalExpr(x);
+      if (isNaN(y)) continue;
+      // Clamp extreme values for reasonable display
+      if (Math.abs(y) > 1e6) continue;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+
+      if (chkDeriv.checked) {
+        const dy = derivative(x);
+        if (!isNaN(dy) && Math.abs(dy) < 1e6) {
+          if (dy < yMin) yMin = dy;
+          if (dy > yMax) yMax = dy;
+        }
+      }
+    }
+    if (!isFinite(yMin) || !isFinite(yMax)) {
+      viewYMin = -10;
+      viewYMax = 10;
+      return;
+    }
+    const margin = (yMax - yMin) * 0.1 || 1;
+    viewYMin = yMin - margin;
+    viewYMax = yMax + margin;
+    // Ensure minimum range
+    if (viewYMax - viewYMin < 0.1) {
+      const mid = (viewYMax + viewYMin) / 2;
+      viewYMin = mid - 1;
+      viewYMax = mid + 1;
+    }
+  }
+
+  // --- Grid & Axes ---
+  function niceStep(range) {
+    const rough = range / 8;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(rough)));
+    const norm = rough / pow10;
+    if (norm < 1.5) return pow10;
+    if (norm < 3) return 2 * pow10;
+    if (norm < 7) return 5 * pow10;
+    return 10 * pow10;
+  }
+
+  function drawGrid() {
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    // Background
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg');
+    ctx.fillRect(0, 0, w, h);
+
+    const xStep = niceStep(viewXMax - viewXMin);
+    const yStep = niceStep(viewYMax - viewYMin);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    // Vertical grid + x labels
+    const xStart = Math.ceil(viewXMin / xStep) * xStep;
+    for (let x = xStart; x <= viewXMax; x += xStep) {
+      const cx = xToCanvas(x);
+      if (cx < PADDING.left || cx > w - PADDING.right) continue;
+      ctx.beginPath();
+      ctx.moveTo(cx, PADDING.top);
+      ctx.lineTo(cx, h - PADDING.bottom);
+      ctx.stroke();
+      const label = Math.abs(x) < 1e-10 ? '0' : formatNum(x);
+      ctx.fillText(label, cx, h - PADDING.bottom + 6);
+    }
+
+    // Horizontal grid + y labels
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    const yStart = Math.ceil(viewYMin / yStep) * yStep;
+    for (let y = yStart; y <= viewYMax; y += yStep) {
+      const cy = yToCanvas(y);
+      if (cy < PADDING.top || cy > h - PADDING.bottom) continue;
+      ctx.beginPath();
+      ctx.moveTo(PADDING.left, cy);
+      ctx.lineTo(w - PADDING.right, cy);
+      ctx.stroke();
+      const label = Math.abs(y) < 1e-10 ? '0' : formatNum(y);
+      ctx.fillText(label, PADDING.left - 6, cy);
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+
+    // x-axis
+    if (viewYMin <= 0 && viewYMax >= 0) {
+      const cy = yToCanvas(0);
+      ctx.beginPath();
+      ctx.moveTo(PADDING.left, cy);
+      ctx.lineTo(w - PADDING.right, cy);
+      ctx.stroke();
+    }
+
+    // y-axis
+    if (viewXMin <= 0 && viewXMax >= 0) {
+      const cx = xToCanvas(0);
+      ctx.beginPath();
+      ctx.moveTo(cx, PADDING.top);
+      ctx.lineTo(cx, h - PADDING.bottom);
+      ctx.stroke();
+    }
+  }
+
+  function formatNum(n) {
+    if (Math.abs(n) >= 1e4 || (Math.abs(n) < 0.01 && n !== 0)) {
+      return n.toExponential(1);
+    }
+    return parseFloat(n.toPrecision(4)).toString();
+  }
+
+  // --- Plot function ---
+  function plotCurve(evalFn, color, lineWidth) {
+    const w = plotW();
+    const steps = Math.max(w * 2, 500);
+    const dx = (viewXMax - viewXMin) / steps;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+
+    let drawing = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = viewXMin + i * dx;
+      const y = evalFn(x);
+      if (isNaN(y) || !isFinite(y)) {
+        drawing = false;
+        continue;
+      }
+      const cx = xToCanvas(x);
+      const cy = yToCanvas(y);
+      // Clip to reasonable bounds to avoid Canvas path issues
+      if (cy < -5000 || cy > 5000) {
+        drawing = false;
+        continue;
+      }
+      if (!drawing) {
+        ctx.moveTo(cx, cy);
+        drawing = true;
+      } else {
+        ctx.lineTo(cx, cy);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // --- Tangent line ---
+  function drawTangent(x0) {
+    const y0 = evalExpr(x0);
+    const slope = derivative(x0);
+    if (isNaN(y0) || isNaN(slope)) return;
+
+    const xRange = viewXMax - viewXMin;
+    const x1 = viewXMin - xRange;
+    const x2 = viewXMax + xRange;
+    const y1 = y0 + slope * (x1 - x0);
+    const y2 = y0 + slope * (x2 - x0);
+
+    ctx.strokeStyle = 'rgba(245, 166, 35, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(xToCanvas(x1), yToCanvas(y1));
+    ctx.lineTo(xToCanvas(x2), yToCanvas(y2));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // --- Cursor point ---
+  function drawCursorPoint(x0) {
+    const y = evalExpr(x0);
+    if (isNaN(y)) return;
+
+    const cx = xToCanvas(x0);
+    const cy = yToCanvas(y);
+    const h = canvas.height / dpr;
+    const w = canvas.width / dpr;
+
+    // Crosshair
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cx, PADDING.top);
+    ctx.lineTo(cx, h - PADDING.bottom);
+    ctx.moveTo(PADDING.left, cy);
+    ctx.lineTo(w - PADDING.right, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Point on f(x)
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--fn-color');
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Point on f'(x)
+    if (chkDeriv.checked) {
+      const dy = derivative(x0);
+      if (!isNaN(dy)) {
+        const dcy = yToCanvas(dy);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--deriv-color');
+        ctx.beginPath();
+        ctx.arc(cx, dcy, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // --- Tooltip ---
+  function updateTooltip(x0) {
+    if (x0 === null || !compiledExpr) {
+      tooltipEl.style.display = 'none';
+      return;
+    }
+
+    const y = evalExpr(x0);
+    if (isNaN(y)) {
+      tooltipEl.style.display = 'none';
+      return;
+    }
+
+    let html = '<div class="val-x">x = ' + formatTooltipNum(x0) + '</div>';
+    html += '<div class="val-f">f(x) = ' + formatTooltipNum(y) + '</div>';
+
+    if (chkDeriv.checked) {
+      const dy = derivative(x0);
+      html += '<div class="val-d">f\'(x) = ' + (isNaN(dy) ? '未定義' : formatTooltipNum(dy)) + '</div>';
+    }
+
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.display = 'block';
+
+    // Position tooltip
+    const cx = xToCanvas(x0);
+    const cy = yToCanvas(y);
+    const rect = container.getBoundingClientRect();
+    const tw = tooltipEl.offsetWidth;
+    const th = tooltipEl.offsetHeight;
+
+    let tx = cx + 15;
+    let ty = cy - th - 10;
+    if (tx + tw > rect.width - 10) tx = cx - tw - 15;
+    if (ty < 5) ty = cy + 15;
+
+    tooltipEl.style.left = tx + 'px';
+    tooltipEl.style.top = ty + 'px';
+  }
+
+  function formatTooltipNum(n) {
+    if (Math.abs(n) > 1e6 || (Math.abs(n) < 0.001 && n !== 0)) {
+      return n.toExponential(4);
+    }
+    return n.toFixed(4);
+  }
+
+  // --- Legend ---
+  function updateLegend() {
+    if (!compiledExpr) {
+      legendEl.style.display = 'none';
+      return;
+    }
+    const expr = input.value.trim();
+    let html = '<div class="legend-item"><div class="legend-swatch" style="background:var(--fn-color)"></div> f(x) = ' + escHtml(expr) + '</div>';
+    if (chkDeriv.checked) {
+      html += '<div class="legend-item"><div class="legend-swatch" style="background:var(--deriv-color)"></div> f\'(x)</div>';
+    }
+    if (chkTangent.checked) {
+      html += '<div class="legend-item"><div class="legend-swatch" style="background:var(--tangent-color);border-top:1px dashed var(--tangent-color);height:0"></div> 接線</div>';
+    }
+    legendEl.innerHTML = html;
+    legendEl.style.display = 'block';
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // --- Main draw ---
+  function draw() {
+    resizeCanvas();
+    computeAutoScale();
+    drawGrid();
+
+    if (!compiledExpr) {
+      updateLegend();
+      return;
+    }
+
+    // Plot f(x)
+    plotCurve(evalExpr, getComputedStyle(document.documentElement).getPropertyValue('--fn-color').trim(), 2.5);
+
+    // Plot f'(x)
+    if (chkDeriv.checked) {
+      plotCurve(derivative, getComputedStyle(document.documentElement).getPropertyValue('--deriv-color').trim(), 2);
+    }
+
+    // Clip region for interactive overlays
+    const cursorX = mouseX !== null ? canvasToX(mouseX) : null;
+
+    if (cursorX !== null && cursorX >= viewXMin && cursorX <= viewXMax) {
+      if (chkTangent.checked) {
+        drawTangent(cursorX);
+      }
+      drawCursorPoint(cursorX);
+      updateTooltip(cursorX);
+    } else {
+      tooltipEl.style.display = 'none';
+    }
+
+    updateLegend();
+  }
+
+  // --- Zoom & Pan ---
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
+  let panStartViewXMin, panStartViewXMax, panStartViewYMin, panStartViewYMax;
+
+  canvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const xFrac = (mx - PADDING.left) / plotW();
+    const yFrac = (my - PADDING.top) / plotH();
+
+    const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+
+    const xRange = viewXMax - viewXMin;
+    const yRange = viewYMax - viewYMin;
+    const newXRange = xRange * factor;
+    const newYRange = yRange * factor;
+
+    viewXMin = viewXMin + xFrac * (xRange - newXRange);
+    viewXMax = viewXMin + newXRange;
+    viewYMin = viewYMin + (1 - yFrac) * (yRange - newYRange);
+    viewYMax = viewYMin + newYRange;
+
+    // Disable autoscale when user zooms
+    chkAutoscale.checked = false;
+    draw();
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartViewXMin = viewXMin;
+    panStartViewXMax = viewXMax;
+    panStartViewYMin = viewYMin;
+    panStartViewYMax = viewYMax;
+    canvas.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', function(e) {
+    if (isPanning) {
+      const dx = e.clientX - panStartX;
+      const dy = e.clientY - panStartY;
+      const xShift = -dx / plotW() * (panStartViewXMax - panStartViewXMin);
+      const yShift = dy / plotH() * (panStartViewYMax - panStartViewYMin);
+      viewXMin = panStartViewXMin + xShift;
+      viewXMax = panStartViewXMax + xShift;
+      viewYMin = panStartViewYMin + yShift;
+      viewYMax = panStartViewYMax + yShift;
+      chkAutoscale.checked = false;
+      draw();
+    }
+  });
+
+  window.addEventListener('mouseup', function() {
+    if (isPanning) {
+      isPanning = false;
+      canvas.style.cursor = 'crosshair';
+    }
+  });
+
+  canvas.addEventListener('mousemove', function(e) {
+    if (isPanning) return;
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+    draw();
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    mouseX = null;
+    mouseY = null;
+    tooltipEl.style.display = 'none';
+    draw();
+  });
+
+  canvas.style.cursor = 'crosshair';
+
+  // --- Input handling ---
+  function onExpressionChange() {
+    const expr = input.value.trim();
+    if (!expr) {
+      compiledExpr = null;
+      exprError = null;
+      errorMsg.textContent = '';
+      draw();
+      return;
+    }
+    compiledExpr = compileExpression(expr);
+    // Reset view on new expression
+    viewXMin = -10;
+    viewXMax = 10;
+    chkAutoscale.checked = true;
+    draw();
+  }
+
+  input.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(onExpressionChange, DEBOUNCE_MS);
+  });
+
+  // Enter key bypasses debounce
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      clearTimeout(debounceTimer);
+      onExpressionChange();
+    }
+  });
+
+  // Checkboxes
+  chkDeriv.addEventListener('change', draw);
+  chkTangent.addEventListener('change', draw);
+  chkAutoscale.addEventListener('change', function() {
+    if (chkAutoscale.checked) {
+      viewXMin = -10;
+      viewXMax = 10;
+    }
+    draw();
+  });
+
+  // Presets
+  document.querySelectorAll('.preset-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      input.value = btn.getAttribute('data-expr');
+      clearTimeout(debounceTimer);
+      onExpressionChange();
+    });
+  });
+
+  // Resize
+  window.addEventListener('resize', draw);
+
+  // Double-click to reset view
+  canvas.addEventListener('dblclick', function() {
+    viewXMin = -10;
+    viewXMax = 10;
+    chkAutoscale.checked = true;
+    draw();
+  });
+
+  // --- Init ---
+  onExpressionChange();
+})();
+</script>
+</body>
+</html>

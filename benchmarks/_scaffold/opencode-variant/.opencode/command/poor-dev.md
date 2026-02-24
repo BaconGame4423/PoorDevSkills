@@ -49,40 +49,36 @@ Before starting the pipeline:
    - **Plan ファイルへの書き込みは禁止** — 議論が固まるまで形式化しない
    - 議論が十分と判断したら「まとめて Plan に書きましょうか？」と確認する
    - ユーザーが了承するまで壁打ちを継続
-4. **ユーザー許可後**: Write discussion results to the plan file:
+4. **ユーザー許可後**: Plan ファイルに以下のセクション (H2) を記載:
+   - **Feature name**: kebab-case 名 (例: function-visualizer)
    - **Selected flow**: フロー名 (例: feature, bugfix, roadmap)
    - **Scope summary**: 実現したいことの要約 (2-3 文)
    - **Requirements**: ユーザーとの議論で確定した要件・制約のリスト
    - **Tech decisions**: 技術スタック選択（該当する場合）
    - **Pipeline**: `proceed` or `skip` — 質問回答のみでパイプライン不要なら `skip`
-5. **Exit Plan Mode**: Call `ExitPlanMode` to present the plan for user approval.
-   - ユーザーが承認:
-     - Plan に `Pipeline: skip` と記載されている → **ここで終了**。feature ディレクトリ作成・Core Loop には進まない
-     - Plan に `Pipeline: proceed` と記載されている → Phase 0 Post-Plan に進む
-   - ユーザーが却下 → Plan Mode に留まり、フィードバックに基づき修正して再度 ExitPlanMode
+   - proceed の場合、Plan 末尾に以下を記載 (self-reminder):
+     **承認後: `node .poor-dev/dist/bin/poor-dev-next.js --init-from-plan <plan-file-path> --project-dir .`**
+5. **Exit Plan Mode**: `ExitPlanMode` で Plan を提示。
+   - 承認 + `skip` → 終了
+   - 承認 + `proceed` → Step 6 (Init from Plan) を即実行
+   - 却下 → フィードバック反映後に再度 ExitPlanMode
 
-### Plan Mode 中の禁止事項
-- ファイル作成 (Write/Edit) 禁止
-- ディレクトリ作成 (mkdir) 禁止
-- 変更系 Bash コマンド禁止
-- Plan ファイルへの書き込みはユーザーの「まとめて」許可が出るまで禁止
-- Read-only Bash (`node ... --list-flows`, `ls`, `cat` 等) は許可
+Plan Mode は read-only。Write/Edit/mkdir/変更系 Bash 禁止。Plan 書き込みはユーザー許可後のみ。
 
-### Plan Mode 終了後 (ユーザー承認後)
+## Plan 承認後 → Core Loop 遷移
 
-**実装コードの直接書き込みは hook でブロックされます。
-`--init-from-plan` で feature ディレクトリ作成 → discussion-summary.md 生成 → pipeline 初期化 → 最初のアクション計算を一発で実行し、即座に Core Loop へ進んでください。**
+Plan 承認後、直接ファイルを作成・編集せずに init-from-plan を実行する。
+init-from-plan が feature ディレクトリ作成・pipeline 初期化・最初のアクション計算を一括で行う。
 
-6. **Init from Plan** (1コマンドで Phase 0 → Core Loop 遷移):
+6. **Init from Plan** を即実行:
    ```bash
    node .poor-dev/dist/bin/poor-dev-next.js --init-from-plan <plan-file-path> --project-dir .
    ```
-   - Plan ファイルに `## Feature name` (kebab-case) を含めること
-   - JSON 出力には `_initFromPlan.featureDir` (作成された feature ディレクトリ) が含まれる
-   - `_initFromPlan.warnings` にパース警告がある場合はユーザーに表示する
+   - JSON 出力を Core Loop Step 2 (アクション解析) から開始
+   - `_initFromPlan.featureDir` を以降の `<DIR>` として記録
+   - `_initFromPlan.warnings` にパース警告がある場合はユーザーに表示
    - `--flow` オプションで plan の `## Selected flow` を上書き可能
-   - Pipeline: `skip` の場合は `{ action: "done" }` が返り、ここで終了
-   - JSON 出力を Core Loop のステップ 2 (アクション解析) から開始
+   - `skip` の場合は `{ action: "done" }` が返り終了
 
 ## Core Loop
 
@@ -306,3 +302,9 @@ iterations:
 ```
 - `raw_issues`: 全レビュアーの未フィルタ合計
 - `actionable`: dedup + severity filter 後の修正対象件数
+
+## Quick Reference
+
+- Phase 0 → Core Loop: `node .poor-dev/dist/bin/poor-dev-next.js --init-from-plan <plan-file-path> --project-dir .`
+- Compaction Recovery: `node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir .`
+- Next step: `node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`

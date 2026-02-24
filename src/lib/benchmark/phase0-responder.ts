@@ -2,18 +2,6 @@ import type { Phase0Config } from "./types.js";
 import { capturePaneContent, pasteBuffer, sendKeys } from "./tmux.js";
 
 /**
- * Phase 0 終了を示すキーワード。
- * これらがペインに出現したら Discussion フェーズは完了と判断。
- */
-const PHASE0_EXIT_PATTERNS = [
-  "step_complete",
-  "pipeline-state.json",
-  "bash_dispatch",           // Bash Dispatch アクション
-  "bash_review_dispatch",    // Bash Review Dispatch アクション
-  "glm -p",                  // glm 直接呼び出し
-];
-
-/**
  * UI タイプを検出する。
  * AskUserQuestion の selection UI と通常のテキストプロンプトを区別。
  */
@@ -94,13 +82,6 @@ export function respondToPhase0(
   }
 
   const content = paneContent ?? capturePaneContent(paneId);
-
-  // Phase 0 終了検出: パイプライン実行が始まっていれば応答停止
-  for (const exitPattern of PHASE0_EXIT_PATTERNS) {
-    if (content.includes(exitPattern)) {
-      return { responded: false, turnCount, done: true };
-    }
-  }
 
   // TUI がプロンプト待ちでなければ応答しない
   if (!isWaitingForInput(content)) {

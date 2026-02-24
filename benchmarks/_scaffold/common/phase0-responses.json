@@ -7,6 +7,8 @@
   "responses": [
     { "pattern": "フロー|flow|分類|classify|種類|タイプ|type", "response": "feature フローでお願いします。新規機能の開発です。" },
     { "pattern": "スコープ|scope|範囲|対象|boundary", "response": "FR-001〜FR-013 の全13要件を実装してください。HTML/JS/CSS の単一ページアプリ（index.html 1ファイル）で、外部ライブラリは使わずバニラ JS で実装。" },
+    { "pattern": "まとめ|プラン|plan.*書|整理|書きましょう", "response": "はい、Plan にまとめてください。" },
+    { "pattern": "名前|feature.*name|ネーミング|kebab", "response": "function-visualizer でお願いします。" },
     { "pattern": "確認|進めて|始め|proceed|start|ready|準備|開始", "response": "はい、そのまま進めてください。" },
     { "pattern": "技術|ライブラリ|framework|フレームワーク|ツール|選定|stack", "response": "バニラ JS + HTML5 Canvas でお願いします。React/Vue 等のフレームワークは不要。数式パーサーも自前実装で。eval() は使わないでください。" },
     { "pattern": "テスト|test|検証|品質", "response": "ブラウザで開いて手動テストのみで十分です。自動テストフレームワークは不要。" },
@@ -18,6 +20,6 @@
     { "pattern": "優先|priority|順番|order|フェーズ|phase", "response": "全13要件を実装してください。優先順位はお任せしますが、コア機能（グラフ描画・数式パース）→ インタラクション → 微分・接線 → UI改善 の順が自然です。" },
     { "pattern": "質問|聞きたい|不明|unclear|clarif", "response": "特にありません。要件 FR-001〜FR-013 に従って実装を進めてください。判断に迷う点はベストプラクティスに従ってください。" }
   ],
-  "max_turns": 5,
+  "max_turns": 10,
   "fallback": "要件 FR-001〜FR-013 に従って実装を進めてください。HTML/JS/CSS 単一ファイル、バニラ JS、Canvas 描画、eval() 不使用。判断に迷う点はベストプラクティスで進めてください。"
 }

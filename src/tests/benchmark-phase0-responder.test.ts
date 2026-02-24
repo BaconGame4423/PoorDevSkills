@@ -308,47 +308,37 @@ describe("phase0-responder", () => {
       ).toBe(true);
     });
 
-    it("Phase 0 終了パターン検出 → done=true", async () => {
+    it("ペイン内容に bash_dispatch 等が含まれても done=false（偽陽性防止）", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // bash_dispatch が出現 = パイプライン開始済み
+      // poor-dev.md スキルテキストに bash_dispatch が含まれるケース
+      // Phase 0 終了判定は findPipelineState() に一本化されているため、
+      // テキストマッチでは done にならない
       mockedCapturePaneContent.mockReturnValue(
-        withPrompt("bash_dispatch で specify を実行中 ❯")
+        withPrompt("bash_dispatch で specify を実行中... 質問はありますか?")
       );
 
       const result = respondToPhase0("test-pane", config, 0);
 
-      expect(result.done).toBe(true);
-      expect(result.responded).toBe(false);
+      // exit patterns 削除済み → テキスト内の bash_dispatch では done にならない
+      expect(result.done).toBe(false);
+      // 質問マーカー ? があり、プロンプト待ちなので応答する
+      expect(result.responded).toBe(true);
     });
 
-    it("poor-dev-next.js --list-flows は Phase 0 終了ではない", async () => {
+    it("ペイン内容に pipeline-state.json が含まれても done=false", async () => {
       const { respondToPhase0 } = await importResponder();
       const config = makeDefaultConfig();
 
-      // --list-flows は Phase 0 中の read-only 操作
       mockedCapturePaneContent.mockReturnValue(
-        "node .poor-dev/dist/bin/poor-dev-next.js --list-flows\n❯\n  ⏵⏵ bypass permissions on"
+        withPrompt("pipeline-state.json を作成します。よろしいですか?")
       );
 
       const result = respondToPhase0("test-pane", config, 0);
 
       expect(result.done).toBe(false);
-    });
-
-    it("bash_review_dispatch が出現 → Phase 0 終了", async () => {
-      const { respondToPhase0 } = await importResponder();
-      const config = makeDefaultConfig();
-
-      mockedCapturePaneContent.mockReturnValue(
-        withPrompt("bash_review_dispatch で planreview を実行中 ❯")
-      );
-
-      const result = respondToPhase0("test-pane", config, 0);
-
-      expect(result.done).toBe(true);
-      expect(result.responded).toBe(false);
+      expect(result.responded).toBe(true);
     });
 
     it("古い出力の ? では応答しない（最新20行のみ対象）", async () => {

@@ -100,6 +100,25 @@ describe("buildBashDispatchPrompt", () => {
     expect(prompt).toContain("Bash Dispatch");
   });
 
+  it("FEATURE_FLOW の implement ステップで spec と tasks を inject する", () => {
+    const fs = mockFs({
+      "/proj/specs/001/spec.md": "# Spec\nFeature spec content",
+      "/proj/specs/001/tasks.md": "# Tasks\n- Task 1: implement",
+      "/proj/specs/001/plan.md": "# Plan\nArchitecture details",
+    });
+    const prompt = buildBashDispatchPrompt("implement", "/proj/specs/001", FEATURE_FLOW, fs);
+
+    // spec と tasks は inject
+    expect(prompt).toContain("## Context: spec");
+    expect(prompt).toContain("Feature spec content");
+    expect(prompt).toContain("## Context: tasks");
+    expect(prompt).toContain("Task 1: implement");
+    // plan は self-read
+    expect(prompt).toContain("plan.md");
+    expect(prompt).toContain("[self-read");
+    expect(prompt).not.toContain("## Context: plan");
+  });
+
   it("FEATURE_FLOW の specify ステップで正しい出力パスを含む", () => {
     const prompt = buildBashDispatchPrompt(
       "specify",

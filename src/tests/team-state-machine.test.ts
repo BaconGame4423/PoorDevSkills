@@ -347,6 +347,33 @@ describe("computeNextInstruction", () => {
         expect(action.artifacts).toEqual(["*"]);
       }
     });
+
+    it("implement の bash_dispatch で spec と tasks が inject される", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: ["specify", "plan", "planreview", "tasks", "tasksreview"],
+        }),
+      });
+      const fs = mockFs({
+        "/proj/specs/001-test/tasks.md": "# Tasks\n- Task 1",
+        "/proj/specs/001-test/spec.md": "# Spec\nFeature details",
+        "/proj/specs/001-test/plan.md": "# Plan\nArchitecture",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.step).toBe("implement");
+        // spec と tasks は inject
+        expect(action.prompt).toContain("## Context: spec");
+        expect(action.prompt).toContain("Feature details");
+        expect(action.prompt).toContain("## Context: tasks");
+        expect(action.prompt).toContain("Task 1");
+        // plan は self-read
+        expect(action.prompt).toContain("[self-read");
+        expect(action.prompt).not.toContain("## Context: plan");
+      }
+    });
   });
 
   describe("reviewTargets '*' パターン", () => {

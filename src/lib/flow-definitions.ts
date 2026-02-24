@@ -78,7 +78,7 @@ export const FEATURE_FLOW: FlowDefinition = {
     specify:   { input: "input.txt", discussion: "discussion-summary.md" },
     plan:      { spec: "spec.md" },
     tasks:     { plan: "plan.md", spec: "spec.md" },
-    implement: { tasks: "tasks.md", plan: "plan.md" },
+    implement: { spec: "spec.md", tasks: "tasks.md", plan: "plan.md" },
     testdesign: { spec: "spec.md", plan: "plan.md", tasks: "tasks.md", implementation: "*" },
     planreview:  { plan: "plan.md", spec: "spec.md" },
     tasksreview: { tasks: "tasks.md", spec: "spec.md", plan: "plan.md" },
@@ -89,7 +89,7 @@ export const FEATURE_FLOW: FlowDefinition = {
   contextInject: {
     plan:      { spec: true },
     tasks:     { spec: true },
-    implement: {},
+    implement: { spec: true, tasks: true },
     testdesign: { spec: true },
     planreview:  { spec: true },
     tasksreview: { spec: true },

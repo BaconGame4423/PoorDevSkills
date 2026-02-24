@@ -119,6 +119,11 @@ sync_scaffold() {
     rm -rf "$variant_dir/.claude/agents"
     cp -rL "$DEVSKILLS_DIR/.claude/agents" "$variant_dir/.claude/"
 
+    # agents/claude/ (dispatch-worker の --append-system-prompt-file パス用)
+    rm -rf "$variant_dir/agents/claude"
+    mkdir -p "$variant_dir/agents/claude"
+    cp -rL "$DEVSKILLS_DIR/agents/claude/"* "$variant_dir/agents/claude/"
+
     echo "  synced $vname"
   done
 
@@ -183,6 +188,12 @@ HOOK_EOF
   rm -rf "$target/.claude/agents"
   cp -rL "$SCAFFOLD/$variant/.claude/agents" "$target/.claude/"
   echo "  updated .claude/agents/"
+
+  # agents/claude/ 更新 (dispatch-worker の --append-system-prompt-file パス用)
+  rm -rf "$target/agents/claude"
+  mkdir -p "$target/agents"
+  cp -rL "$SCAFFOLD/$variant/agents/claude" "$target/agents/"
+  echo "  updated agents/claude/"
 
   # 3b) hooks 更新（common hooks + variant settings.json）
   mkdir -p "$target/.claude/hooks"
@@ -383,6 +394,10 @@ HOOK_EOF
     fi
     cp -rL "$SCAFFOLD/$variant/.opencode" "$target/"
     cp -rL "$SCAFFOLD/$variant/.claude" "$target/"
+    if [[ -d "$SCAFFOLD/$variant/agents/claude" ]]; then
+      mkdir -p "$target/agents"
+      cp -rL "$SCAFFOLD/$variant/agents/claude" "$target/agents/"
+    fi
     echo "  copied $variant files"
 
     # 4b) hooks コピー（common hooks → .claude/hooks/）

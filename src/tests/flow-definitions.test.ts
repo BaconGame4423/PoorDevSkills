@@ -72,7 +72,7 @@ describe("FEATURE_FLOW", () => {
     const ctx = FEATURE_FLOW.context!;
     expect(ctx["specify"]).toEqual({ input: "input.txt", discussion: "discussion-summary.md" });
     expect(ctx["plan"]).toEqual({ spec: "spec.md" });
-    expect(ctx["implement"]).toEqual({ tasks: "tasks.md", plan: "plan.md" });
+    expect(ctx["implement"]).toEqual({ spec: "spec.md", tasks: "tasks.md", plan: "plan.md" });
   });
 
   it("prerequisites が正しく定義されている", () => {

@@ -35,8 +35,8 @@ Based on the report type, read relevant files:
 - Scan top-level directory structure
 
 **アーキテクチャ**:
-- `.opencode/command/poor-dev.*.md` — command definitions
-- `.opencode/agents/` — agent definitions
+- `commands/poor-dev.*.md` — command definitions
+- `agents/claude/` — agent definitions
 
 **仕様一覧**:
 - `specs/*/spec.md` — all feature specs

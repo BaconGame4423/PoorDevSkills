@@ -256,11 +256,18 @@ TARGET_DIR="$SCRIPT_DIR/$COMBO"
 # build_prompt: benchmarks.json からプロンプトを動的構築
 # ============================================================
 build_prompt() {
-  local task_name task_desc requirements prompt
+  local task_id task_name task_desc requirements prompt
 
-  task_name=$(jval '.task.name')
-  task_desc=$(jval '.task.description')
-  requirements=$(jq -r '.task.requirements[] | "- \(.id): \(.name)"' "$CONFIG")
+  # combo から task ID を解決
+  task_id=$(jq -r --arg c "$COMBO" '.combinations[] | select(.dir_name == $c) | .task' "$CONFIG")
+  # fallback: combination に task がないか、tasks に存在しなければ default_task を使用
+  if [[ -z "$task_id" || "$task_id" == "null" ]] || ! jq -e --arg t "$task_id" '.tasks[$t]' "$CONFIG" &>/dev/null; then
+    task_id=$(jval '.default_task')
+  fi
+
+  task_name=$(jq -r --arg t "$task_id" '.tasks[$t].name' "$CONFIG")
+  task_desc=$(jq -r --arg t "$task_id" '.tasks[$t].description' "$CONFIG")
+  requirements=$(jq -r --arg t "$task_id" '.tasks[$t].requirements[] | "- \(.id): \(.name)"' "$CONFIG")
 
   prompt="/poor-dev ${task_desc}「${task_name}」を開発してください。
 要件:
@@ -273,11 +280,18 @@ ${requirements}"
 # build_baseline_prompt: baseline 用プロンプト構築
 # ============================================================
 build_baseline_prompt() {
-  local task_name task_desc requirements
+  local task_id task_name task_desc requirements
 
-  task_name=$(jval '.task.name')
-  task_desc=$(jval '.task.description')
-  requirements=$(jq -r '.task.requirements[] | "- \(.id): \(.name)"' "$CONFIG")
+  # combo から task ID を解決
+  task_id=$(jq -r --arg c "$COMBO" '.combinations[] | select(.dir_name == $c) | .task' "$CONFIG")
+  # fallback: combination に task がないか、tasks に存在しなければ default_task を使用
+  if [[ -z "$task_id" || "$task_id" == "null" ]] || ! jq -e --arg t "$task_id" '.tasks[$t]' "$CONFIG" &>/dev/null; then
+    task_id=$(jval '.default_task')
+  fi
+
+  task_name=$(jq -r --arg t "$task_id" '.tasks[$t].name' "$CONFIG")
+  task_desc=$(jq -r --arg t "$task_id" '.tasks[$t].description' "$CONFIG")
+  requirements=$(jq -r --arg t "$task_id" '.tasks[$t].requirements[] | "- \(.id): \(.name)"' "$CONFIG")
 
   cat <<PROMPT_EOF
 ${task_desc}「${task_name}」を開発してください。

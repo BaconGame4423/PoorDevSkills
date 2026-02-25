@@ -26,6 +26,7 @@ export interface Phase0Config {
 
 export interface BenchCombo {
   dir_name: string;
+  task: string;
   orchestrator: string;
   sub_agent: string;
   mode?: string;
@@ -41,13 +42,18 @@ export interface BenchModel {
   config_extras?: Record<string, unknown>;
 }
 
+export interface BenchTaskConfig {
+  name: string;
+  description: string;
+  requirements: Array<{ id: string; name: string }>;
+  process_stages: string[];
+  phase0_responses: string;
+  auto_test?: string;
+}
+
 export interface BenchConfig {
-  task: {
-    name: string;
-    description: string;
-    requirements: Array<{ id: string; name: string }>;
-    process_stages: string[];
-  };
+  default_task: string;
+  tasks: Record<string, BenchTaskConfig>;
   models: Record<string, BenchModel>;
   combinations: BenchCombo[];
 }

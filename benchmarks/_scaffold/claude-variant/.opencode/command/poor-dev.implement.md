@@ -101,7 +101,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    **6a. Sequential phases** (no [P] tasks): Execute tasks in order within the phase.
 
    **6b. Parallel phases** (contains [P] tasks):
-   Read `.poor-dev/config.json` → `parallel` settings.
+   Read plan.md → `parallel` settings.
 
    **Strategy**: Non-overlapping `[P]` tasks → same-branch parallel. Overlapping files → sequential.
    Group by `[P:group]`, dispatch sub-agents (max: `parallel.max_concurrent`), merge results.
@@ -175,7 +175,7 @@ After all steps above complete, use AskUserQuestion to ask:
 3. "Skip" — コミットせずに終了する
 
 **If user selects "Commit & Push" or "Commit only"**:
-1. `git add -A -- . ':!agents/' ':!commands/' ':!lib/poll-dispatch.sh' ':!.poor-dev/' ':!.opencode/command/' ':!.opencode/agents/' ':!.claude/agents/' ':!.claude/commands/'`
+1. `git add -A -- . ':!agents/' ':!commands/' ':!lib/poll-dispatch.sh' ':!.poor-dev/' ':!.claude/agents/' ':!.claude/commands/'`
 2. Generate a commit message following the project convention (`feat: 日本語タイトル` or appropriate type). Summarize the implementation work done in this session.
 3. `git commit -m "<message>"`
 4. If "Commit & Push": `git push -u origin $(git rev-parse --abbrev-ref HEAD)`

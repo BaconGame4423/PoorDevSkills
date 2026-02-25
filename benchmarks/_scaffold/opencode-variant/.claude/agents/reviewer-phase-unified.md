@@ -52,4 +52,3 @@ WRONG: text outside yaml fence, `verdict` indented under issues.
 - `verdict` MUST be at root level (same indentation as `issues`), never indented under issues
 - Maximum 15 issues total. Prioritize C/H severity
 - Each `# comment` line: max 1 sentence per persona
-- Omit M/L issues if C/H issues exist (fixer should focus on critical items first)

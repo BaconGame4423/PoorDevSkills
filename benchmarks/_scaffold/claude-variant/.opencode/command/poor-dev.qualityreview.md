@@ -66,7 +66,7 @@ Follow `templates/review-loop.md` Review Loop with the following **qualityreview
 Note: adversarial judgments and 3-strike rule remain independent of convergence — see STEP 3.
 Note: Quality gates (STAGE 0) always run regardless of review depth.
 
-**STEP 2 extension**: After standard aggregation, also run:
+**STEP 2 extension** (Bash Dispatch: Opus orchestrator handles adversarial inline): After standard aggregation, also run:
   - Adversarial judgments: APPROVED | NEEDS_CHANGES (add to issues) | HALLUCINATING (ignore).
   - **3-strike rule**: Track adversarial rejections. After 3 strikes → abort and report failure.
 

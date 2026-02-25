@@ -1,0 +1,24 @@
+{
+  "flow_type": "feature",
+  "discussion_context": {
+    "task_ref": "benchmarks.json の tasks.task-manager-api セクション参照",
+    "scope": "Express v4 + better-sqlite3 + バニラJS SPA。JWT認証、CRUD API、フロントエンド。"
+  },
+  "responses": [
+    { "pattern": "フロー|flow|分類|classify|種類|タイプ|type", "response": "feature フローでお願いします。新規機能の開発です。" },
+    { "pattern": "スコープ|scope|範囲|対象|boundary", "response": "FR-001〜FR-020 の全20要件を実装してください。Express v4 REST API + バニラJS SPA。データベースは better-sqlite3（ファイルベース、インストール不要）。認証は JWT（アクセストークン15分、リフレッシュトークン7日）。" },
+    { "pattern": "まとめ|プラン|plan.*書|整理|書きましょう", "response": "はい、Plan にまとめてください。" },
+    { "pattern": "名前|feature.*name|ネーミング|kebab", "response": "task-manager-api でお願いします。" },
+    { "pattern": "確認|進めて|始め|proceed|start|ready|準備|開始", "response": "はい、そのまま進めてください。" },
+    { "pattern": "技術|ライブラリ|framework|フレームワーク|ツール|選定|stack|データベース|DB", "response": "Express v4 + better-sqlite3 + jsonwebtoken + bcryptjs + express-rate-limit。フロントエンドはバニラJS SPA（React/Vue不要）。CSS フレームワークも不要、カスタムCSS で。" },
+    { "pattern": "テスト|test|検証|品質", "response": "FR-020 の通り、主要APIエンドポイントのユニットテストを実装してください。テストランナーは Node.js 組み込みの node:test を使用。外部テストフレームワーク不要。" },
+    { "pattern": "デザイン|UI|UX|見た目|レイアウト|色|テーマ", "response": "モダンなカンバンボード風デザインでお願いします。レスポンシブ対応必須（FR-010）。ドラッグ&ドロップ（FR-008）はHTML5 Drag and Drop API で。" },
+    { "pattern": "認証|auth|JWT|トークン|ログイン|セッション", "response": "JWT ベース。アクセストークン有効期限15分、リフレッシュトークン7日。bcryptjs でパスワードハッシュ化。トークンはlocalStorageに保存。リフレッシュは自動（401レスポンス時）。" },
+    { "pattern": "セキュリティ|security|脆弱性|CORS|XSS|SQL", "response": "SQLインジェクション防止（パラメータ化クエリ必須、文字列結合禁止）、XSS防止（DOM操作は textContent 使用、innerHTML 禁止）、CORS設定、bcryptjs、express-rate-limit。" },
+    { "pattern": "ファイル|構成|structure|アーキテクチャ|architecture|分割", "response": "マルチファイル構成: server.js（エントリ）、routes/auth.js、routes/tasks.js、middleware/auth.js、db/schema.js、public/index.html、public/app.js、public/style.css。フェーズ分割実装を推奨（Phase 1: DB+Auth、Phase 2: CRUD API、Phase 3: フロントエンド）。" },
+    { "pattern": "優先|priority|順番|order|フェーズ|phase|実装順", "response": "Phase 1: DB スキーマ + 認証API（register/login/refresh）→ Phase 2: タスク CRUD API + バリデーション → Phase 3: フロントエンド SPA + ドラッグ&ドロップ。各フェーズ完了後にレビュー。" },
+    { "pattern": "質問|聞きたい|不明|unclear|clarif", "response": "特にありません。要件 FR-001〜FR-020 に従って実装を進めてください。判断に迷う点はベストプラクティスに従ってください。" }
+  ],
+  "max_turns": 10,
+  "fallback": "要件 FR-001〜FR-020 に従って実装を進めてください。Express v4 + better-sqlite3 + JWT認証。マルチファイル構成、パラメータ化クエリ必須、innerHTML 禁止。判断に迷う点はベストプラクティスで進めてください。"
+}

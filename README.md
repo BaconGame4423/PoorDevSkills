@@ -181,7 +181,15 @@ Claude Code のチャット内からスラッシュコマンドで各ステッ�
 | `poor-dev benchmark run <combo>` | ベンチマーク一括実行（セットアップ→パイプライン→分析→メトリクス収集） |
 | `poor-dev benchmark setup` | ベンチマークディレクトリのセットアップ |
 | `poor-dev benchmark compare` | COMPARISON.md の生成 |
-| `/bench-team <combo>` | ベンチマーク実行 + PoorDevSkills 分析 |
+| `/bench [タスク名\|combo]` | ベンチマーク実行 + Phase 0 自動応答 + PoorDevSkills 分析 + 飽和検出 |
+| `/bench --results [タスク名]` | ベンチマーク結果表示 + 知見飽和検出 |
+
+#### マルチタスクベンチマーク
+
+benchmarks.json で複数タスクを定義可能。タスク名またはcombo名で指定:
+- `/bench` — デフォルトタスク（task-manager-api）を実行
+- `/bench 関数ビジュアライザー` — タスク名で指定
+- `/bench claude_bash_glm5` — combo 名で直接指定
 
 ---
 

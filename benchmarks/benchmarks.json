@@ -1,23 +1,56 @@
 {
-  "task": {
-    "name": "関数ビジュアライザー",
-    "description": "微分機能付きインタラクティブ数学ツール",
-    "requirements": [
-      { "id": "FR-001", "name": "インタラクティブ関数グラフ表示" },
-      { "id": "FR-002", "name": "数式入力フィールド" },
-      { "id": "FR-003", "name": "リアルタイムグラフ更新" },
-      { "id": "FR-004", "name": "自動ズーム/スケール" },
-      { "id": "FR-005", "name": "軸ラベルとグリッド線" },
-      { "id": "FR-006", "name": "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)" },
-      { "id": "FR-007", "name": "微分（導関数）の計算と表示" },
-      { "id": "FR-008", "name": "導関数のグラフ重畳表示" },
-      { "id": "FR-009", "name": "カーソル追従ツールチップ (x, f(x), f'(x))" },
-      { "id": "FR-010", "name": "接線表示" },
-      { "id": "FR-011", "name": "レスポンシブデザイン" },
-      { "id": "FR-012", "name": "エラーハンドリング（不正入力）" },
-      { "id": "FR-013", "name": "プリセット関数ボタン" }
-    ],
-    "process_stages": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement", "testdesign", "architecturereview", "qualityreview", "phasereview"]
+  "default_task": "task-manager-api",
+  "tasks": {
+    "function-visualizer": {
+      "name": "関数ビジュアライザー",
+      "description": "微分機能付きインタラクティブ数学ツール",
+      "requirements": [
+        { "id": "FR-001", "name": "インタラクティブ関数グラフ表示" },
+        { "id": "FR-002", "name": "数式入力フィールド" },
+        { "id": "FR-003", "name": "リアルタイムグラフ更新" },
+        { "id": "FR-004", "name": "自動ズーム/スケール" },
+        { "id": "FR-005", "name": "軸ラベルとグリッド線" },
+        { "id": "FR-006", "name": "複数関数サポート (sin,cos,tan,log,exp,sqrt,abs)" },
+        { "id": "FR-007", "name": "微分（導関数）の計算と表示" },
+        { "id": "FR-008", "name": "導関数のグラフ重畳表示" },
+        { "id": "FR-009", "name": "カーソル追従ツールチップ (x, f(x), f'(x))" },
+        { "id": "FR-010", "name": "接線表示" },
+        { "id": "FR-011", "name": "レスポンシブデザイン" },
+        { "id": "FR-012", "name": "エラーハンドリング（不正入力）" },
+        { "id": "FR-013", "name": "プリセット関数ボタン" }
+      ],
+      "process_stages": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement", "testdesign", "architecturereview", "qualityreview", "phasereview"],
+      "phase0_responses": "phase0-responses-function-visualizer.json"
+    },
+    "task-manager-api": {
+      "name": "タスク管理API",
+      "description": "JWT認証付きREST API + SPAフロントエンド",
+      "requirements": [
+        { "id": "FR-001", "name": "ユーザー登録 (email + password)" },
+        { "id": "FR-002", "name": "ログイン (JWT アクセストークン発行)" },
+        { "id": "FR-003", "name": "トークンリフレッシュ" },
+        { "id": "FR-004", "name": "タスク作成/読取/更新/削除" },
+        { "id": "FR-005", "name": "タスクステータス管理 (todo/in-progress/done)" },
+        { "id": "FR-006", "name": "タスク優先度 (high/medium/low)" },
+        { "id": "FR-007", "name": "タスク期限 + 期限切れ表示" },
+        { "id": "FR-008", "name": "ドラッグ&ドロップ並び替え" },
+        { "id": "FR-009", "name": "フィルタリング (ステータス/優先度)" },
+        { "id": "FR-010", "name": "レスポンシブデザイン" },
+        { "id": "FR-011", "name": "入力バリデーション (サーバー + クライアント)" },
+        { "id": "FR-012", "name": "APIエラー → クライアント伝播 + 表示" },
+        { "id": "FR-013", "name": "SQLインジェクション防止 (パラメータ化クエリ)" },
+        { "id": "FR-014", "name": "XSS防止 (出力エスケープ)" },
+        { "id": "FR-015", "name": "CORS設定" },
+        { "id": "FR-016", "name": "パスワードハッシュ化 (bcrypt)" },
+        { "id": "FR-017", "name": "レート制限 (express-rate-limit)" },
+        { "id": "FR-018", "name": "ローディング状態表示" },
+        { "id": "FR-019", "name": "楽観的UI更新" },
+        { "id": "FR-020", "name": "APIユニットテスト (主要エンドポイント)" }
+      ],
+      "process_stages": ["specify", "plan", "planreview", "tasks", "tasksreview", "implement", "testdesign", "architecturereview", "qualityreview", "phasereview"],
+      "phase0_responses": "phase0-responses-task-manager-api.json",
+      "auto_test": "test-task-manager-api.mjs"
+    }
   },
   "models": {
     "m2.5": {
@@ -63,6 +96,7 @@
     }
   },
   "combinations": [
-    { "dir_name": "claude_bash_glm5", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" }
+    { "dir_name": "claude_bash_glm5", "task": "function-visualizer", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" },
+    { "dir_name": "claude_bash_glm5_api", "task": "task-manager-api", "orchestrator": "claude", "sub_agent": "glm5", "mode": "team", "dispatch_mode": "bash" }
   ]
 }

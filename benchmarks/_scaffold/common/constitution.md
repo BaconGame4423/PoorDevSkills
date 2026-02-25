@@ -6,9 +6,9 @@
 追加されたセクション: 全セクション追加
 削除されたセクション: (該当なし - 初期バージョン)
 更新が必要なテンプレート:
-  ✅ .opencode/command/poor-dev.plan.md 内インラインテンプレート (憲法チェックセクション)
-  ✅ .opencode/command/poor-dev.specify.md 内インラインテンプレート (要件整合性)
-  ✅ .opencode/command/poor-dev.tasks.md 内インラインテンプレート (タスク分類)
+  ✅ commands/poor-dev.plan.md 内インラインテンプレート (憲法チェックセクション)
+  ✅ commands/poor-dev.specify.md 内インラインテンプレート (要件整合性)
+  ✅ commands/poor-dev.tasks.md 内インラインテンプレート (タスク分類)
   ✅ README.md
 フォローアップ TODO: なし
 -->
@@ -305,10 +305,10 @@ PoorDevSkillsは poor-dev コマンド群による構造化された開発フロ
 
 ### ランタイムガイダンス
 憲法原則を超える開発ガイダンスについては、以下を参照してください:
-- `.opencode/command/poor-dev.plan.md` 内のインラインテンプレート - 計画構造とゲート
-- `.opencode/command/poor-dev.specify.md` 内のインラインテンプレート - 仕様形式と要件
-- `.opencode/command/poor-dev.tasks.md` 内のインラインテンプレート - タスク編成とパターン
-- `.opencode/command/` ディレクトリのエージェント固有のガイダンス
+- `commands/poor-dev.plan.md` 内のインラインテンプレート - 計画構造とゲート
+- `commands/poor-dev.specify.md` 内のインラインテンプレート - 仕様形式と要件
+- `commands/poor-dev.tasks.md` 内のインラインテンプレート - タスク編成とパターン
+- `commands/` ディレクトリのコマンド定義
 
 ## スキル開発ガイドライン
 

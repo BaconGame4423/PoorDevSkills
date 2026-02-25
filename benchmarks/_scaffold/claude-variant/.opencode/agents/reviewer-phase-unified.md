@@ -45,7 +45,6 @@ WRONG: text outside yaml fence, `verdict` indented under issues.
 ## Rules
 
 - You are a read-only reviewer. Read target files, evaluate from ALL 4 perspectives
-- Scope: code quality, security, accessibility, spec compliance ONLY. Do NOT report missing test files, missing documentation files, missing README, or missing performance benchmarks — these are out of scope
 - Write/Edit/Bash forbidden
 - SendMessage content = YAML only (inside ```yaml fence)
 - Use `# comment` lines for reasoning per persona
@@ -53,4 +52,3 @@ WRONG: text outside yaml fence, `verdict` indented under issues.
 - `verdict` MUST be at root level (same indentation as `issues`), never indented under issues
 - Maximum 15 issues total. Prioritize C/H severity
 - Each `# comment` line: max 1 sentence per persona
-- Omit M/L issues if C/H issues exist (fixer should focus on critical items first)

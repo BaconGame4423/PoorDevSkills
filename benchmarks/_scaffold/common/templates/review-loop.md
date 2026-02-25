@@ -5,7 +5,7 @@ Each orchestrator references this template and provides its own: REVIEW_TYPE, PE
 
 ## STEP 0: Config Resolution
 
-1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "opencode", "model": "zai-coding-plan/glm-4.7" }, "overrides": {} }`.
+1. Read `.poor-dev/config.json` (Bash: `cat .poor-dev/config.json 2>/dev/null`). If missing, use built-in defaults: `{ "default": { "cli": "claude", "model": "sonnet" }, "overrides": {} }`.
 2. For each persona in PERSONAS and for `review-fixer`, resolve config with priority: `overrides.<agent>` → `overrides.${REVIEW_TYPE}` → `step_tiers.${REVIEW_TYPE}` → `tiers[tier]` → `default`.
 3. Determine execution mode per persona: if resolved `cli` matches current runtime → **native**; otherwise → **cross-CLI**.
 

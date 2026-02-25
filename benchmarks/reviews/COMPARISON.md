@@ -1,7 +1,7 @@
 # benchLLM 比較ダッシュボード
 
-> タスク: 関数ビジュアライザー（微分機能付きインタラクティブ数学ツール）
-> 最終更新: 2026-02-22
+> タスク: null（null）
+> 最終更新: 2026-02-25
 
 ---
 
@@ -9,42 +9,22 @@
 
 | ディレクトリ | モデル構成 | 役割 | パイプライン段階 | 出力 | ステータス |
 |---|---|---|---|---|---|
-| `m2.5_all` | MiniMax M2.5 | solo | -- | -- | 未開始 |
-| `glm5_all` | GLM-5 | solo | -- | -- | 未開始 |
-| `claude_all` | Claude | solo | -- | -- | 未開始 |
-| `claude_glm5_sub` | Claude + GLM-5 | orch+sub | -- | -- | 未開始 |
-| `claude_m2.5_sub` | Claude + MiniMax M2.5 | orch+sub | -- | -- | 未開始 |
-| `m2.5_orch_glm5_sub` | MiniMax M2.5 + GLM-5 | orch+sub | -- | -- | 未開始 |
-| `claude_baseline` | Claude (Baseline) | baseline | -- | -- | 未開始 |
-| `glm5_baseline` | GLM-5 (Baseline) | baseline | -- | -- | 未開始 |
-| `m2.5_baseline` | MiniMax M2.5 (Baseline) | baseline | -- | -- | 未開始 |
-| `glm5_claude_plan` | GLM-5 (plan=Claude) | step-override | -- | -- | 未開始 |
-| `glm5_claude_specify` | GLM-5 (specify=Claude) | step-override | -- | -- | 未開始 |
-| `glm5_claude_design` | GLM-5 (specify=Claude,suggest=Claude,plan=Claude) | step-override | -- | -- | 未開始 |
-| `sonnet_all` | Claude Sonnet 4.6 | solo | -- | -- | 未開始 |
-| `sonnet_glm5_sub` | Claude Sonnet 4.6 + GLM-5 | orch+sub | -- | -- | 未開始 |
-| `sonnet_m2.5_sub` | Claude Sonnet 4.6 + MiniMax M2.5 | orch+sub | -- | -- | 未開始 |
-| `sonnet_baseline` | Claude Sonnet 4.6 (Baseline) | baseline | -- | -- | 未開始 |
-| `glm5_sonnet_plan` | GLM-5 (plan=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
-| `glm5_sonnet_specify` | GLM-5 (specify=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
-| `glm5_sonnet_design` | GLM-5 (specify=Claude Sonnet 4.6,suggest=Claude Sonnet 4.6,plan=Claude Sonnet 4.6) | step-override | -- | -- | 未開始 |
-| `claude_team` | Claude | team | -- | -- | 未開始 |
-| `sonnet_team` | Claude Sonnet 4.6 | team | -- | -- | 未開始 |
-| `claude_bash_glm5` | Claude + GLM-5 | orch+sub (bash) | 10/10 | index.html+interfaces.ts | 完了 |
+| `claude_bash_glm5` | Claude + GLM-5 | orch+sub (bash) | -- | -- | 未開始 |
+| `claude_bash_glm5_api` | Claude + GLM-5 | orch+sub (bash) | -- | -- | 未開始 |
 
 ---
 
 ## スコア比較
 
-| 次元 | 重み | `m2.5_all` | `glm5_all` | `claude_all` | `claude_glm5_sub` | `claude_m2.5_sub` | `m2.5_orch_glm5_sub` | `claude_baseline` | `glm5_baseline` | `m2.5_baseline` | `glm5_claude_plan` | `glm5_claude_specify` | `glm5_claude_design` | `sonnet_all` | `sonnet_glm5_sub` | `sonnet_m2.5_sub` | `sonnet_baseline` | `glm5_sonnet_plan` | `glm5_sonnet_specify` | `glm5_sonnet_design` | `claude_team` | `sonnet_team` | `claude_bash_glm5` |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Process (プロセス遵守) | 15% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 90 |
-| Code Quality (コード品質) | 25% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 88 |
-| Completeness (完全性) | 25% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 100 |
-| UX/Visual | 15% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 80 |
-| Constitution (憲章準拠) | 10% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 100 |
-| Efficiency (効率) | 10% | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 80 |
-| **総合** | **100%** | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | **90.5** |
+| 次元 | 重み | `claude_bash_glm5` | `claude_bash_glm5_api` |
+|---|---|---|---|
+| Process (プロセス遵守) | 15% | -- | -- |
+| Code Quality (コード品質) | 25% | -- | -- |
+| Completeness (完全性) | 25% | -- | -- |
+| UX/Visual | 15% | -- | -- |
+| Constitution (憲章準拠) | 10% | -- | -- |
+| Efficiency (効率) | 10% | -- | -- |
+| **総合** | **100%** | -- | -- |
 
 > `--` = 未レビュー（作業完了後にレビュー実施予定）
 
@@ -52,56 +32,32 @@
 
 ## 要件充足マトリクス
 
-| 要件 | `m2.5_all` | `glm5_all` | `claude_all` | `claude_glm5_sub` | `claude_m2.5_sub` | `m2.5_orch_glm5_sub` | `claude_baseline` | `glm5_baseline` | `m2.5_baseline` | `glm5_claude_plan` | `glm5_claude_specify` | `glm5_claude_design` | `sonnet_all` | `sonnet_glm5_sub` | `sonnet_m2.5_sub` | `sonnet_baseline` | `glm5_sonnet_plan` | `glm5_sonnet_specify` | `glm5_sonnet_design` | `claude_team` | `sonnet_team` | `claude_bash_glm5` |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| FR-001 インタラクティブ関数グラフ表示 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-002 数式入力フィールド | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-003 リアルタイムグラフ更新 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-004 自動ズーム/スケール | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-005 軸ラベルとグリッド線 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-006 複数関数サポート (sin,cos,tan,log,exp,sqrt,abs) | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-007 微分（導関数）の計算と表示 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-008 導関数のグラフ重畳表示 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-009 カーソル追従ツールチップ (x, f(x), f'(x)) | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-010 接線表示 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-011 レスポンシブデザイン | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-012 エラーハンドリング（不正入力） | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| FR-013 プリセット関数ボタン | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | PASS |
-| **達成率** | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | **100%** |
+| 要件 | `claude_bash_glm5` | `claude_bash_glm5_api` |
+|---|---|---|
+| **達成率** | -- | -- |
 
 ---
 
 ## 効率メトリクス
 
-| 指標 | `m2.5_all` | `glm5_all` | `claude_all` | `claude_glm5_sub` | `claude_m2.5_sub` | `m2.5_orch_glm5_sub` | `claude_baseline` | `glm5_baseline` | `m2.5_baseline` | `glm5_claude_plan` | `glm5_claude_specify` | `glm5_claude_design` | `sonnet_all` | `sonnet_glm5_sub` | `sonnet_m2.5_sub` | `sonnet_baseline` | `glm5_sonnet_plan` | `glm5_sonnet_specify` | `glm5_sonnet_design` | `claude_team` | `sonnet_team` | `claude_bash_glm5` |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 壁時計時間 (秒) | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 3335 |
-| セッション数 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 1 |
-| 出力行数 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 1609 |
-| 出力バイト数 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 56885 |
-| 出力速度 (lines/sec) | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 0.48 |
-| 生成ファイル数 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | 2 |
-| 入力トークン | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-| 出力トークン | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-| コスト (USD) | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
+| 指標 | `claude_bash_glm5` | `claude_bash_glm5_api` |
+|---|---|---|
+| 壁時計時間 (秒) | -- | -- |
+| セッション数 | -- | -- |
+| 出力行数 | -- | -- |
+| 出力バイト数 | -- | -- |
+| 出力速度 (lines/sec) | -- | -- |
+| 生成ファイル数 | -- | -- |
+| 入力トークン | -- | -- |
+| 出力トークン | -- | -- |
+| コスト (USD) | -- | -- |
 
 ---
 
 ## プロセス遵守比較
 
-| 段階 | `m2.5_all` | `glm5_all` | `claude_all` | `claude_glm5_sub` | `claude_m2.5_sub` | `m2.5_orch_glm5_sub` | `claude_baseline` | `glm5_baseline` | `m2.5_baseline` | `glm5_claude_plan` | `glm5_claude_specify` | `glm5_claude_design` | `sonnet_all` | `sonnet_glm5_sub` | `sonnet_m2.5_sub` | `sonnet_baseline` | `glm5_sonnet_plan` | `glm5_sonnet_specify` | `glm5_sonnet_design` | `claude_team` | `sonnet_team` | `claude_bash_glm5` |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| specify | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| suggest | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | N/A |
-| plan | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| planreview | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| tasks | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| tasksreview | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| implement | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| testdesign | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| architecturereview | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| qualityreview | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
-| phasereview | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | ✅ |
+| 段階 | `claude_bash_glm5` | `claude_bash_glm5_api` |
+|---|---|---|
 
 ---
 
@@ -123,122 +79,21 @@ _(現時点で該当なし)_
 ### Low (L)
 | ID | ディレクトリ | 内容 |
 |---|---|---|
-| CQ-001 | claude_bash_glm5 | 2^x 微分未サポート |
-| CQ-002 | claude_bash_glm5 | log(x) ドメイン警告なし |
+| -- | -- | -- |
 
 ---
 
 ## 強み / 弱み 比較
 
-### m2.5_all (MiniMax M2.5 solo)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_all (GLM-5 solo)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### claude_all (Claude solo)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### claude_glm5_sub (Claude + GLM-5 orch+sub)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### claude_m2.5_sub (Claude + MiniMax M2.5 orch+sub)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### m2.5_orch_glm5_sub (MiniMax M2.5 + GLM-5 orch+sub)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### claude_baseline (Claude (Baseline) baseline)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_baseline (GLM-5 (Baseline) baseline)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### m2.5_baseline (MiniMax M2.5 (Baseline) baseline)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_claude_plan (GLM-5 (plan=Claude) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_claude_specify (GLM-5 (specify=Claude) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_claude_design (GLM-5 (specify=Claude,suggest=Claude,plan=Claude) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### sonnet_all (Claude Sonnet 4.6 solo)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### sonnet_glm5_sub (Claude Sonnet 4.6 + GLM-5 orch+sub)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### sonnet_m2.5_sub (Claude Sonnet 4.6 + MiniMax M2.5 orch+sub)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### sonnet_baseline (Claude Sonnet 4.6 (Baseline) baseline)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_sonnet_plan (GLM-5 (plan=Claude Sonnet 4.6) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_sonnet_specify (GLM-5 (specify=Claude Sonnet 4.6) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### glm5_sonnet_design (GLM-5 (specify=Claude Sonnet 4.6,suggest=Claude Sonnet 4.6,plan=Claude Sonnet 4.6) step-override)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### claude_team (Claude team)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
-### sonnet_team (Claude Sonnet 4.6 team)
-- **強み**: --
-- **弱み**: --
-- **特徴**: --
-
 ### claude_bash_glm5 (Claude + GLM-5 orch+sub (bash))
-- **強み**: Bash Dispatch で Agent Teams lifecycle オーバーヘッド排除、全 13/13 要件達成 (100%)、モジュラー設計+シンボリック微分正確
-- **弱み**: implement フェーズ約 20 分が全体の支配的ボトルネック、UX 全カテゴリ 4/5 で突出した強みなし
-- **特徴**: Agent Teams lifecycle 排除の初実証。Bash Dispatch (`glm -p`) 直接呼び出しで team create/shutdown を省略し低オーバーヘッド実行
+- **強み**: --
+- **弱み**: --
+- **特徴**: --
+
+### claude_bash_glm5_api (Claude + GLM-5 orch+sub (bash))
+- **強み**: --
+- **弱み**: --
+- **特徴**: --
 
 ---
 

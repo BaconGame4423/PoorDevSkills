@@ -39,13 +39,16 @@ $ARGUMENTS
 
 If `$ARGUMENTS` contains `--flow-type <type>`, use that directly.
 
-Otherwise, ask user (AskUserQuestion):
-- "どのフローを開始しますか？"
-- Options:
-  1. "探索 (discovery)" — まず作って学ぶ / 既存コードを整理して再構築
-  2. "機能開発 (feature)" — 仕様→計画→実装→レビューの11ステップ
-  3. "バグ修正 (bugfix)" — 調査→実装→レビューの5ステップ
-  4. "ロードマップ (roadmap)" — コンセプト→ゴール→マイルストーン→ロードマップの4ステップ
+Otherwise:
+1. Run: `node .poor-dev/dist/bin/poor-dev-next.js --list-flows --project-dir .`
+2. Parse the JSON output to get available flows
+3. Build AskUserQuestion options:
+   - Built-in pipeline flows (feature, bugfix, roadmap) with their descriptions
+   - Discovery shortcut (discovery-init) with its description
+   - Investigation flow (investigation) with its description
+   - Custom flows (builtin: false) with their descriptions
+   - Utility shortcuts (ask, report) — always at the end
+4. Ask user: "どのフローを開始しますか？"
 
 Also available via `--flow-type`: ask, report.
 

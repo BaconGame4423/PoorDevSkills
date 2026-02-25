@@ -71,7 +71,7 @@ The text the user typed after `/poor-dev.specify` **is** the feature description
      ```
      Wait for user responses, update spec, re-validate.
 
-7. Report: branch name, spec path, checklist results, readiness for `/poor-dev.suggest` (next phase) or `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
+7. Report: branch name, spec path, checklist results, readiness for `/poor-dev.clarify` (if needed) or `/poor-dev.plan`.
 
 ## Spec Template
 

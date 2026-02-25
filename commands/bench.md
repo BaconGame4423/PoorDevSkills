@@ -1,5 +1,5 @@
 ---
-description: "ベンチマーク実行（右 tmux ペインで対話 TUI 経由パイプライン自動実行 + PoorDevSkills 分析）"
+description: "ベンチマーク実行（右 tmux ペインで /poor-dev 自動実行 + Phase 0 自動応答 + PoorDevSkills 分析 + 飽和検出）"
 ---
 
 ## Arguments
@@ -7,44 +7,92 @@ description: "ベンチマーク実行（右 tmux ペインで対話 TUI 経由�
 $ARGUMENTS
 
 Parse `$ARGUMENTS`:
-- combo 名 (e.g. `glm5_all`, `claude_all`) → Step 2 へ
-- `--results <combo>` → Step 11 へ（結果表示のみ）
-- 空 → combo 選択（Step 1）
+- `--results [タスク名|combo名]` → Step 8 へ（結果表示 + 飽和検出）
+- combo 名 (e.g. `claude_bash_glm5`) → Step 2 へ
+- タスク名 (e.g. `関数ビジュアライザー`, `task-manager-api`) → タスクスコーピングで combo 解決 → Step 2 へ
+- 空 → デフォルトタスクの combo → Step 2 へ
 
-## Step 1: combo 選択（引数なしの場合）
+## Step 1: タスクスコーピング（combo 解決）
 
-benchmarks/benchmarks.json を読み込み、combinations を取得する。
-AskUserQuestion で combo を選択させる。
-選択肢は各 combo の `dir_name` + `orchestrator/sub_agent` を表示する。
+benchmarks/benchmarks.json を読み込み、引数を combo 名に解決する。
+
+解決順序:
+1. combo 名に完全一致 (`combinations[].dir_name`) → そのまま使用
+2. `tasks[].name` (日本語名) に部分一致 → 対応するコンボ `combinations[].task` で検索
+3. task ID (kebab-case) に完全一致 → 対応するコンボを選択
+4. 引数なし → `default_task` の task ID → 対応するコンボを選択
+
+```bash
+BENCH_JSON="benchmarks/benchmarks.json"
+ARG="$1"  # $ARGUMENTS の最初のトークン
+
+if [ -z "$ARG" ]; then
+  # 引数なし → デフォルトタスク
+  TASK_ID=$(jq -r '.default_task' "$BENCH_JSON")
+  COMBO=$(jq -r --arg t "$TASK_ID" '.combinations[] | select(.task == $t) | .dir_name' "$BENCH_JSON" | head -1)
+elif jq -e --arg c "$ARG" '.combinations[] | select(.dir_name == $c)' "$BENCH_JSON" >/dev/null 2>&1; then
+  # combo 名に完全一致
+  COMBO="$ARG"
+else
+  # タスク名/IDで検索
+  TASK_ID=$(jq -r --arg n "$ARG" '
+    .tasks | to_entries[] |
+    select(.value.name | test($n)) |
+    .key' "$BENCH_JSON" | head -1)
+  if [ -z "$TASK_ID" ]; then
+    # task ID 完全一致
+    TASK_ID=$(jq -r --arg id "$ARG" '.tasks | to_entries[] | select(.key == $id) | .key' "$BENCH_JSON" | head -1)
+  fi
+  if [ -z "$TASK_ID" ]; then
+    echo "ERROR: '$ARG' に一致するタスクまたは combo が見つかりません"
+    # AskUserQuestion で combo を選択させる
+  fi
+  COMBO=$(jq -r --arg t "$TASK_ID" '.combinations[] | select(.task == $t) | .dir_name' "$BENCH_JSON" | head -1)
+fi
+
+echo "解決結果: COMBO=$COMBO, TASK_ID=$TASK_ID"
+```
+
+combo が解決できない場合は AskUserQuestion で combinations を表示して選択させる。
 
 ## Step 2: 環境セットアップ
 
-左ペイン（Claude Code 側）で同期実行。ディレクトリ作成・シンボリックリンク・バージョン設定。
+左ペイン（Claude Code 側）で同期実行。
+
+セットアップ前に TS ビルドが最新か確認:
+```bash
+npm run build 2>/dev/null || true
+```
 
 ```bash
 ./benchmarks/run-benchmark.sh --setup <combo>
 ```
 
-## Step 3: CLI・モデル判定
-
-benchmarks.json から CLI とモデルを取得する。
-
+追加確認:
 ```bash
-ORCH=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .orchestrator' benchmarks/benchmarks.json)
-ORCH_CLI=$(jq -r --arg o "$ORCH" '.models[$o].cli' benchmarks/benchmarks.json)
-ORCH_MODEL=$(jq -r --arg o "$ORCH" '.models[$o].model_id' benchmarks/benchmarks.json)
+# .poor-dev/dist/bin/poor-dev-next.js 存在確認
+if [ ! -f ".poor-dev/dist/bin/poor-dev-next.js" ]; then
+  echo "ERROR: .poor-dev/dist/bin/poor-dev-next.js が見つかりません"
+  echo "npm run build を実行してください"
+fi
 ```
 
-## Step 4: 前回ラン状態の保存 + クリーン
+## Step 3: プロンプト構築
 
-既存のベンチマーク成果物があればアーカイブ（`_runs/<timestamp>/`）してからクリーンな状態にする。
+benchmarks.json の `tasks` からタスク情報を取得してプロンプトを構築する。
 
 ```bash
-./benchmarks/run-benchmark.sh --archive <combo>
-./benchmarks/run-benchmark.sh --clean <combo>
+# combo から task ID を解決
+TASK_ID=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .task' "$BENCH_JSON")
+TASK_DESC=$(jq -r --arg t "$TASK_ID" '.tasks[$t].description' "$BENCH_JSON")
+TASK_NAME=$(jq -r --arg t "$TASK_ID" '.tasks[$t].name' "$BENCH_JSON")
+REQ_PARTS=$(jq -r --arg t "$TASK_ID" '[.tasks[$t].requirements[] | "\(.id): \(.name)"] | join(", ")' "$BENCH_JSON")
+PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
 ```
 
-## Step 5: ベンチペイン作成（マルチペイン対応）
+## Step 4: ベンチペイン作成 + Claude CLI 起動
+
+既存の tmux ペイン管理方式で右ペインを作成し、Claude CLI を起動する。
 
 ```bash
 BENCH_STATE="/tmp/bench-active-panes.json"
@@ -67,18 +115,15 @@ done
 # 同一 combo 重複チェック
 if jq -e --arg c "<combo>" '.[$c]' "$BENCH_STATE" >/dev/null 2>&1; then
   echo "ERROR: <combo> は既に実行中です"
-  # ユーザーにエラー通知して中断
 fi
 
 # ペイン作成
 if [ ${#VALID_PANES[@]} -eq 0 ]; then
-  # ベンチペインなし → 既存の右ペインを削除 → 水平分割
   for p in $(tmux list-panes -F '#{pane_id}' | grep -v "$CURRENT"); do
     tmux kill-pane -t "$p" 2>/dev/null || true
   done
   TARGET=$(tmux split-window -h -P -F '#{pane_id}' -l 50%)
 else
-  # ベンチペインあり → 既存ベンチペインを垂直分割（上下）
   TARGET=$(tmux split-window -v -t "${VALID_PANES[0]}" -P -F '#{pane_id}')
 fi
 
@@ -88,70 +133,35 @@ jq --arg c "<combo>" --arg p "$TARGET" \
   "$BENCH_STATE" > "${BENCH_STATE}.tmp" && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
 ```
 
-## Step 6: CLI 起動
-
-右ペインで対話 TUI を起動する。
-
-- opencode の場合:
-  ```bash
-  tmux send-keys -t $TARGET "cd benchmarks/<combo> && opencode" Enter
-  ```
-- claude の場合:
-  ```bash
-  BENCH_ABS="$(cd benchmarks/<combo> && pwd)"
-  tmux send-keys -t $TARGET "cd $BENCH_ABS && GIT_CEILING_DIRECTORIES=$(cd benchmarks && pwd) env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
-  ```
-
-`env -u CLAUDECODE` は親 Claude Code の環境変数干渉を防止。
-opencode はディレクトリ内の `opencode.json` でモデル設定済み。
+CLI 起動（常に claude + 全権限自動許諾）:
+```bash
+ORCH_MODEL=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .orchestrator' benchmarks/benchmarks.json | xargs -I{} jq -r --arg o "{}" '.models[$o].model_id' benchmarks/benchmarks.json)
+BENCH_ABS="$(cd benchmarks/<combo> && pwd)"
+tmux send-keys -t $TARGET "cd $BENCH_ABS && GIT_CEILING_DIRECTORIES=$(cd benchmarks && pwd) env -u CLAUDECODE claude --model $ORCH_MODEL --dangerously-skip-permissions" Enter
+```
 
 パスは絶対パスに解決してから送信すること。
 
-## Step 7: CLI 初期化待機（ポーリング）
+## Step 5: CLI 初期化待機 + プロンプト送信
 
-TUI が入力受付状態になるまで `tmux capture-pane` でポーリングする。
-
-CLI ごとの READY_PATTERN:
-- `opencode` → `"Ask anything"`
-- `claude` → `">"`
+Claude CLI の READY_PATTERN は `"❯"`:
 
 ```bash
-# READY_PATTERN は Step 3 の ORCH_CLI に基づいて設定
-if [ "$ORCH_CLI" = "opencode" ]; then
-  READY_PATTERN="Ask anything"
-else
-  READY_PATTERN=">"
-fi
-
+READY_PATTERN="❯"
 WAIT_TIMEOUT=30; WAITED=0
 while [ $WAITED -lt $WAIT_TIMEOUT ]; do
   if tmux capture-pane -t $TARGET -p 2>/dev/null | grep -q "$READY_PATTERN"; then
-    sleep 1  # 追加の安定待機
+    sleep 1
     break
   fi
   sleep 1; WAITED=$((WAITED + 1))
 done
 if [ $WAITED -ge $WAIT_TIMEOUT ]; then
   echo "ERROR: TUI が ${WAIT_TIMEOUT}秒以内に初期化されませんでした"
-  # ユーザーにエラー通知して中断
 fi
 ```
 
-ポーリング間隔: 1 秒、タイムアウト: 30 秒。タイムアウト時はエラー通知して中断する。
-
-## Step 8: プロンプト構築・送信
-
-benchmarks.json からシングルラインプロンプトを構築し、tmux paste-buffer で TUI に送信する。
-
-```bash
-# benchmarks.json からプロンプト要素を取得
-TASK_DESC=$(jq -r '.task.description' benchmarks/benchmarks.json)
-TASK_NAME=$(jq -r '.task.name' benchmarks/benchmarks.json)
-REQ_PARTS=$(jq -r '[.task.requirements[] | "\(.id): \(.name)"] | join(", ")' benchmarks/benchmarks.json)
-PROMPT="/poor-dev ${TASK_DESC}「${TASK_NAME}」を開発してください。要件: ${REQ_PARTS}"
-```
-
-送信（リトライ付き確認）:
+プロンプト送信:
 ```bash
 tmux set-buffer -b bench "$PROMPT"
 tmux paste-buffer -p -t $TARGET -b bench -d
@@ -159,22 +169,28 @@ sleep 1
 tmux send-keys -t $TARGET Enter
 ```
 
-送信確認 — CLI 種別に応じた処理開始検知パターンで確認し、未送信なら Enter をリトライ:
+送信確認（リトライ付き）— ペインに `esc to inter` が表示されれば処理開始済み（行末 truncate 対策で部分一致）。`Streaming` / `Tool` 処理中パターンも確認に使用:
 ```bash
-# claude: "esc to inter" / opencode: プロンプト行消失
-SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0
+SUBMIT_TIMEOUT=10; SUBMIT_WAITED=0; ENTER_RETRIES=0; MAX_ENTER_RETRIES=3
 while [ $SUBMIT_WAITED -lt $SUBMIT_TIMEOUT ]; do
-  PANE=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-  if echo "$PANE" | grep -q "esc to inter"; then
+  PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
+  if echo "$PANE_CONTENT" | grep -q "esc to inter"; then
     echo "OK: プロンプト送信確認"
     break
   fi
-  # opencode の場合: プロンプト行が消えていれば処理開始
-  if [ "$CLI" = "opencode" ] && ! echo "$PANE" | grep -q "^>"; then
-    echo "OK: プロンプト送信確認 (opencode)"
-    break
+  # Streaming / Tool 処理中なら待機
+  if echo "$PANE_CONTENT" | grep -qE "(Streaming|Tool)"; then
+    echo "INFO: 処理中を検出、待機..."
+    sleep 2
+    SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
+    continue
   fi
-  tmux send-keys -t $TARGET Enter
+  # まだ入力欄にいる場合は Enter を再送（最大3回）
+  if [ $ENTER_RETRIES -lt $MAX_ENTER_RETRIES ]; then
+    tmux send-keys -t $TARGET Enter
+    ENTER_RETRIES=$((ENTER_RETRIES + 1))
+    echo "INFO: Enter 再送 ($ENTER_RETRIES/$MAX_ENTER_RETRIES)"
+  fi
   sleep 2
   SUBMIT_WAITED=$((SUBMIT_WAITED + 2))
 done
@@ -188,229 +204,159 @@ fi
 `-p` は Bubbletea の bracketed paste mode に対応（これがないと UTF-8 マルチバイトが分断される）。
 `-b bench` で名前付きバッファを使用、`-d` でペースト後にバッファを削除。
 
+## Step 6: TS 監視プロセス起動（バックグラウンド）
+
+combo から Phase 0 応答ファイルのパスを解決して TS monitor を起動する。
+
+```bash
+# Phase 0 応答ファイルのパスを解決
+TASK_ID=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .task' benchmarks/benchmarks.json)
+PHASE0_FILE=$(jq -r --arg t "$TASK_ID" '.tasks[$t].phase0_responses' benchmarks/benchmarks.json)
+PHASE0_CONFIG="benchmarks/_scaffold/common/${PHASE0_FILE}"
+
+node dist/lib/benchmark/bin/bench-team-monitor.js \
+  --combo <combo> \
+  --target $TARGET \
+  --combo-dir benchmarks/<combo> \
+  --phase0-config "$PHASE0_CONFIG" \
+  --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
+  --timeout 7200 \
+  --caller-pane $CURRENT
+```
+
+Bash(run_in_background) で実行。
+
 ユーザーに通知:
-- 右ペインで TUI が起動し `/poor-dev` パイプラインが開始されたこと
+- 右ペインで `/poor-dev` パイプラインが開始されたこと
+- Phase 0 質問は自動応答されること
 - 進捗は右ペインで確認可能なこと
 - 完了後は自動でポスト処理が実行されること
 
-## Step 9: バックグラウンド完了監視
+## Step 7: 完了時通知
 
-Bash(run_in_background) で完了監視ポーリング（最大 120 分）。
+監視プロセスが完了したらユーザーに通知:
+- ベンチマーク実行が完了したこと
+- `/bench --results <combo>` で結果確認を案内
 
-- 10 秒間隔: TUI 質問ダイアログの自動応答（`esc dismiss` パターン検知 → 1番目を選択）
-- 10 秒間隔: opencode Permission required ダイアログの自動承認（「Allow always」→「Confirm」）
-- 60 秒間隔: pipeline-state.json の完了/エラー判定
+※ ポスト処理はモニターが `--post-command` で自動実行済み。
 
-質問自動応答ポリシー: 常に最初の選択肢を選択（全 combo 共通 = 公平性担保）。
-複数質問は1サイクル1質問ずつ処理。opencode のみ対応、claude CLI は今後追加。
+## Step 8: 結果表示 + 飽和検出（`--results` モード）
 
-Permission required スマート承認ポリシー:
-- DevSkills プロジェクトルート配下のパス → 「Allow always」で自動承認
-- プロジェクト外パス → `BENCH_PERMISSION_SUSPICIOUS` を出力、承認しない（Claude Code が判断）
-- パス抽出失敗 → `BENCH_PERMISSION_PARSE_FAILED` を出力、承認しない（保守的挙動）
-操作手順: Right（Allow always に移動）→ Enter → Enter（Confirm）。
-注意: Tab は opencode のモード切替（agents タブ等）になるため絶対に使わない。
+`$ARGUMENTS` から `--results` の後のオプション引数を取得。
+引数がなければ `default_task` の combo、引数があれば Step 1 のタスクスコーピングで combo を解決。
 
-```bash
-set +H 2>/dev/null || true   # history expansion 無効化
-COMBO_DIR="benchmarks/<combo>"
-TIMEOUT=7200; ELAPSED=0; CHECK=0
-
-if [ "$ORCH_CLI" = "opencode" ]; then
-  QUESTION_PATTERN="esc dismiss"
-  PERMISSION_PATTERN="Permission required"
-else
-  QUESTION_PATTERN=""
-  PERMISSION_PATTERN=""
-fi
-
-LAST_ANSWER_TIME=0
-ANSWER_COOLDOWN=30
-LAST_PERM_TIME=0
-PERM_COOLDOWN=15
-
-PROJECT_ROOT="$(pwd)"
-HOME_DIR="$HOME"
-
-while [ $ELAPSED -lt $TIMEOUT ]; do
-  sleep 10; ELAPSED=$((ELAPSED + 10)); CHECK=$((CHECK + 1))
-
-  # ペイン存在確認
-  if ! tmux list-panes -F '#{pane_id}' 2>/dev/null | grep -q "$TARGET"; then
-    echo "BENCH_PANE_LOST: <combo>"; exit 1
-  fi
-
-  PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-
-  # Permission required スマート承認（クールダウン付き）
-  # プロジェクトルート配下のパスのみ「Allow always」で承認する
-  # プロジェクト外パスは承認せず Claude Code に判断を委譲する
-  # Tab はモード切替になるため使用禁止。左右矢印キーでオプション選択する
-  if [ -n "$PERMISSION_PATTERN" ]; then
-    SINCE_PERM=$((ELAPSED - LAST_PERM_TIME))
-    if [ $SINCE_PERM -ge $PERM_COOLDOWN ]; then
-      if echo "$PANE_CONTENT" | grep -q "$PERMISSION_PATTERN"; then
-        # ← 行からパスを抽出（~/... or /... 形式）
-        PERM_PATH=$(echo "$PANE_CONTENT" | grep '←' | sed -n 's/.*[[:space:]]\([~\/][^[:space:]]*\)[[:space:]]*$/\1/p' | head -1)
-
-        IS_SAFE=false
-        if [ -n "$PERM_PATH" ]; then
-          # チルダ展開
-          RESOLVED_PATH="${PERM_PATH/#\~/$HOME_DIR}"
-          # .. トラバーサルは拒否
-          if echo "$RESOLVED_PATH" | grep -q '\.\.'; then
-            echo "[${ELAPSED}s] BENCH_PERMISSION_SUSPICIOUS: path contains '..': $PERM_PATH"
-          elif echo "$RESOLVED_PATH" | grep -q "^${PROJECT_ROOT}/"; then
-            # インフラパスはプロジェクト内でも承認しない
-            if echo "$RESOLVED_PATH" | grep -qE "/(lib|commands)/"; then
-              echo "[${ELAPSED}s] BENCH_PERMISSION_DENIED: infrastructure path: $PERM_PATH"
-            else
-              IS_SAFE=true
-            fi
-          elif [ "$RESOLVED_PATH" = "$PROJECT_ROOT" ]; then
-            IS_SAFE=true
-          else
-            echo "[${ELAPSED}s] BENCH_PERMISSION_SUSPICIOUS: outside project root: $PERM_PATH"
-          fi
-        else
-          echo "[${ELAPSED}s] BENCH_PERMISSION_PARSE_FAILED: could not extract path from Permission dialog"
-        fi
-
-        if [ "$IS_SAFE" = true ]; then
-          echo "[${ELAPSED}s] Permission required detected (safe: $PERM_PATH)"
-          # Right arrow → "Allow always" に移動 → Enter で選択
-          tmux send-keys -t $TARGET Right
-          sleep 0.5
-          tmux send-keys -t $TARGET Enter
-          sleep 1
-          # "Allow always" 選択後に Confirm/Cancel ダイアログが表示される → Enter で Confirm
-          CONFIRM_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-          if echo "$CONFIRM_CONTENT" | grep -q "Confirm"; then
-            tmux send-keys -t $TARGET Enter
-            sleep 0.5
-            echo "[${ELAPSED}s] Permission approved (Allow always + Confirm)"
-          else
-            echo "[${ELAPSED}s] Permission approved (direct)"
-          fi
-        fi
-
-        LAST_PERM_TIME=$ELAPSED
-        continue
-      fi
-    fi
-  fi
-
-  # 質問自動応答（クールダウン付き）
-  if [ -n "$QUESTION_PATTERN" ]; then
-    SINCE_LAST=$((ELAPSED - LAST_ANSWER_TIME))
-    if [ $SINCE_LAST -ge $ANSWER_COOLDOWN ]; then
-      if echo "$PANE_CONTENT" | grep -q "$QUESTION_PATTERN"; then
-        BEFORE_HASH=$(echo "$PANE_CONTENT" | md5sum | cut -d' ' -f1)
-        echo "[${ELAPSED}s] Question detected, sending Enter"
-        tmux send-keys -t $TARGET Enter
-        sleep 3
-        AFTER_HASH=$(tmux capture-pane -t $TARGET -p 2>/dev/null | md5sum | cut -d' ' -f1)
-        if [ "$BEFORE_HASH" != "$AFTER_HASH" ]; then
-          echo "[${ELAPSED}s] Question answered (content changed)"
-          LAST_ANSWER_TIME=$ELAPSED
-        else
-          echo "[${ELAPSED}s] WARNING: content unchanged after Enter"
-        fi
-      fi
-    fi
-  fi
-
-  # pipeline-state.json チェック（60秒ごと）
-  if [ $((CHECK % 6)) -eq 0 ]; then
-    STATE_FILE=$(find "$COMBO_DIR" -not -path '*/_runs/*' -name "pipeline-state.json" 2>/dev/null | head -1)
-    if [ -n "$STATE_FILE" ]; then
-      CURRENT=$(jq -r '.current' "$STATE_FILE" 2>/dev/null)
-      COMPLETED=$(jq -r '.completed | length' "$STATE_FILE" 2>/dev/null)
-      STATUS=$(jq -r '.status // "unknown"' "$STATE_FILE" 2>/dev/null)
-      echo "[${ELAPSED}s] current=$CURRENT completed=$COMPLETED status=$STATUS"
-      if [ "$STATUS" = "completed" ]; then
-        echo "BENCH_PIPELINE_COMPLETE: <combo>"; exit 0
-      fi
-      if [ "$CURRENT" = "null" ] && [ "$COMPLETED" -gt 0 ]; then
-        echo "BENCH_PIPELINE_COMPLETE: <combo>"; exit 0
-      fi
-      if [ "$STATUS" = "error" ]; then
-        echo "BENCH_PIPELINE_ERROR: <combo>"; exit 1
-      fi
-      if [ "$STATUS" = "awaiting-approval" ]; then
-        echo "[${ELAPSED}s] awaiting-approval detected, checking for questions..."
-      fi
-    else
-      echo "[${ELAPSED}s] pipeline-state.json not found yet"
-    fi
-
-    # TUI アイドル検知（pipeline-state.json が生成されないケースの完了検知）
-    # 最初の 120 秒はモデル起動中の誤検知を防ぐためスキップ
-    # TUI idle + 成果物 mtime の両方を確認して誤検知を防ぐ
-    if [ $ELAPSED -ge 120 ]; then
-      TUI_IDLE=false
-      PANE_CONTENT=$(tmux capture-pane -t $TARGET -p 2>/dev/null)
-      if [ "$ORCH_CLI" = "opencode" ]; then
-        # "Ask anything" プレースホルダーは tmux capture-pane に含まれないため
-        # ステータスバー存在 + スピナー/割り込みマーカー不在でアイドル判定
-        if echo "$PANE_CONTENT" | grep -q "tab agents"; then
-          if ! echo "$PANE_CONTENT" | grep -qE '[⬝■]{3,}|esc interrupt'; then
-            TUI_IDLE=true
-          fi
-        fi
-      else
-        echo "$PANE_CONTENT" | grep -q "^>" && TUI_IDLE=true
-      fi
-
-      if [ "$TUI_IDLE" = true ]; then
-        # 成果物の存在 + mtime チェック（.gitignore より新しいファイルがあるか）
-        HAS_OUTPUT=false
-        if [ -f "$COMBO_DIR/.gitignore" ]; then
-          OUTPUT_FILES=$(find "$COMBO_DIR" \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -newer "$COMBO_DIR/.gitignore" -not -path '*/_runs/*' -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -1)
-          [ -n "$OUTPUT_FILES" ] && HAS_OUTPUT=true
-        fi
-        if [ "$HAS_OUTPUT" = true ]; then
-          echo "BENCH_TUI_IDLE: <combo> (output files confirmed)"; exit 0
-        else
-          echo "[${ELAPSED}s] TUI idle but no output files yet, continuing..."
-        fi
-      fi
-    fi
-  fi
-done
-echo "BENCH_TIMEOUT: <combo>"
-```
-
-## Step 10: 完了時ポスト処理
-
-完了検知後、左ペインでポスト処理を実行する。
-
-```bash
-./benchmarks/run-benchmark.sh --post <combo>
-```
-
-メトリクス収集 + PoorDevSkills 分析 + `.bench-complete` マーカー作成。
-
-ベンチペイン状態のクリーンアップ:
-
-```bash
-BENCH_STATE="/tmp/bench-active-panes.json"
-if [ -f "$BENCH_STATE" ]; then
-  jq --arg c "<combo>" 'del(.[$c])' "$BENCH_STATE" > "${BENCH_STATE}.tmp" \
-    && mv "${BENCH_STATE}.tmp" "$BENCH_STATE"
-  [ "$(jq 'length' "$BENCH_STATE" 2>/dev/null)" = "0" ] && rm -f "$BENCH_STATE"
-fi
-```
-
-ユーザーに完了を通知し、`/bench --results <combo>` で結果確認を案内する。
-
-## Step 11: 結果表示（`--results` モード）
-
-`$ARGUMENTS` から combo 名を取得し、以下を表示:
+### 8a. 基本結果表示
 
 1. **poordev-analysis.yaml**: `benchmarks/<combo>/poordev-analysis.yaml` を Read して表示
 2. **レビューファイル**: `benchmarks/reviews/<combo>.review.yaml` の存在確認と概要
 3. **成果物一覧**: spec.md, plan.md, tasks.md, review-log.yaml の有無を確認
-4. **次のアクション案内**:
-   - 分析結果に基づく改善点の要約
-   - `poor-dev benchmark compare` で比較レポートを生成可能なこと
+
+### 8b. 知見飽和検出 (Maturity Detector)
+
+対象タスクの過去レビュー (`benchmarks/reviews/` + `_runs/`) を横断分析する。
+
+```bash
+COMBO_DIR="benchmarks/<combo>"
+REVIEW_FILE="benchmarks/reviews/<combo>.review.yaml"
+
+# --- シグナル 1: スコア安定（直近3回 ±2pt 以内）---
+# _runs/ 内の poordev-analysis.yaml から scoring.total を収集
+SCORES=()
+for run_dir in $(ls -dt "$COMBO_DIR/_runs"/*/ 2>/dev/null | head -5); do
+  score=$(grep -A1 'scoring:' "$run_dir/poordev-analysis.yaml" 2>/dev/null | grep 'total:' | awk '{print $2}')
+  [ -n "$score" ] && SCORES+=("$score")
+done
+SCORE_STABLE=false
+if [ ${#SCORES[@]} -ge 3 ]; then
+  # 直近3回の最大差を計算
+  RECENT=("${SCORES[@]:0:3}")
+  MAX=${RECENT[0]}; MIN=${RECENT[0]}
+  for s in "${RECENT[@]}"; do
+    [ "$s" -gt "$MAX" ] 2>/dev/null && MAX=$s
+    [ "$s" -lt "$MIN" ] 2>/dev/null && MIN=$s
+  done
+  [ $((MAX - MIN)) -le 2 ] && SCORE_STABLE=true
+fi
+
+# --- シグナル 2: レビュー ROI 低下（直近3回 C/H = 0）---
+REVIEW_ROI_LOW=false
+CH_COUNTS=()
+for run_dir in $(ls -dt "$COMBO_DIR/_runs"/*/ 2>/dev/null | head -3); do
+  ch=$(grep -cE 'severity:\s*(critical|high)' "$run_dir/review-log.yaml" 2>/dev/null || echo 0)
+  CH_COUNTS+=("$ch")
+done
+if [ ${#CH_COUNTS[@]} -ge 3 ]; then
+  ALL_ZERO=true
+  for c in "${CH_COUNTS[@]:0:3}"; do
+    [ "$c" -ne 0 ] && ALL_ZERO=false
+  done
+  $ALL_ZERO && REVIEW_ROI_LOW=true
+fi
+
+# --- シグナル 3: 完走率安定（直近5回中4回以上完走）---
+COMPLETION_STABLE=false
+COMPLETE_COUNT=0; TOTAL_RUNS=0
+for run_dir in $(ls -dt "$COMBO_DIR/_runs"/*/ 2>/dev/null | head -5); do
+  TOTAL_RUNS=$((TOTAL_RUNS + 1))
+  state_file=$(find "$run_dir" -name "pipeline-state.json" 2>/dev/null | head -1)
+  if [ -n "$state_file" ]; then
+    status=$(jq -r '.status // "unknown"' "$state_file" 2>/dev/null)
+    [ "$status" = "completed" ] && COMPLETE_COUNT=$((COMPLETE_COUNT + 1))
+  fi
+done
+[ $TOTAL_RUNS -ge 5 ] && [ $COMPLETE_COUNT -ge 4 ] && COMPLETION_STABLE=true
+
+# --- シグナル 4: 新規障害消滅（直近3回で新しい失敗パターンなし）---
+NEW_FAILURES_GONE=false
+FAIL_PATTERNS=()
+for run_dir in $(ls -dt "$COMBO_DIR/_runs"/*/ 2>/dev/null | head -3); do
+  fails=$(grep -l 'status.*error\|ERROR\|FAILED' "$run_dir"/*.txt "$run_dir"/*.log 2>/dev/null | wc -l)
+  FAIL_PATTERNS+=("$fails")
+done
+if [ ${#FAIL_PATTERNS[@]} -ge 3 ]; then
+  ALL_ZERO=true
+  for f in "${FAIL_PATTERNS[@]:0:3}"; do
+    [ "$f" -ne 0 ] && ALL_ZERO=false
+  done
+  $ALL_ZERO && NEW_FAILURES_GONE=true
+fi
+
+# --- 判定 ---
+SIGNAL_COUNT=0
+$SCORE_STABLE && SIGNAL_COUNT=$((SIGNAL_COUNT + 1))
+$REVIEW_ROI_LOW && SIGNAL_COUNT=$((SIGNAL_COUNT + 1))
+$COMPLETION_STABLE && SIGNAL_COUNT=$((SIGNAL_COUNT + 1))
+$NEW_FAILURES_GONE && SIGNAL_COUNT=$((SIGNAL_COUNT + 1))
+
+case $SIGNAL_COUNT in
+  4) MATURITY="SATURATED" ;;
+  3) MATURITY="CONVERGING" ;;
+  *) MATURITY="LEARNING" ;;
+esac
+```
+
+### 8c. 飽和検出結果の表示
+
+結果表示にマチュリティ判定を含める:
+
+```
+=== 知見飽和検出 ===
+スコア安定:       [YES/NO] (直近3回 ±2pt 以内)
+レビュー ROI:     [YES/NO] (直近3回 C/H = 0)
+完走率安定:       [YES/NO] (直近5回中4回以上完走)
+新規障害消滅:     [YES/NO] (直近3回で新しい失敗パターンなし)
+
+判定: 🔴 SATURATED / 🟡 CONVERGING / 🟢 LEARNING
+```
+
+- `SATURATED`: 「このタスクから得られる知見は飽和しています。FeatureBench 方式（既存コードへの機能追加タスク）への移行を推奨します。」
+- `CONVERGING`: 「あと 1-2 回で飽和する可能性があります。新しいタスクの検討を開始してください。」
+- `LEARNING`: 「まだ知見が蓄積されています。引き続きベンチマークを実行してください。」
+
+データが不十分（_runs/ が3回未満）の場合は飽和検出をスキップして「データ不足」と表示。
+
+### 8d. 次のアクション案内
+
+- 分析結果に基づく改善点の要約
+- `poor-dev benchmark compare` で比較レポートを生成可能なこと
+- 飽和判定が SATURATED の場合: 新タスクへの移行を推奨

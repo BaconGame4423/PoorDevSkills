@@ -44,7 +44,7 @@ Follow this execution flow:
    - Read the inline templates within each command file (poor-dev.plan.md, poor-dev.specify.md, poor-dev.tasks.md respectively) and ensure any "Constitution Check" or rules align with updated principles.
    - Verify scope/requirements alignment in poor-dev.specify.md—update if constitution adds/removes mandatory sections or constraints.
    - Verify task categorization in poor-dev.tasks.md reflects new or removed principle-driven task types (e.g., observability, versioning, testing discipline).
-   - Read each command file in `.opencode/command/*.md` (including this one) to verify no outdated references (agent-specific names like CLAUDE only) remain when generic guidance is required.
+   - Read each command file in `commands/*.md` (including this one) to verify no outdated references remain when generic guidance is required.
    - Read any runtime guidance docs (e.g., `README.md`, `docs/quickstart.md`, or agent-specific guidance files if present). Update references to principles changed.
 
 5. Produce a Sync Impact Report (prepend as an HTML comment at top of the constitution file after update):

@@ -222,12 +222,11 @@ describe("benchmark-monitor", () => {
     expect(result.elapsedSeconds).toBeGreaterThanOrEqual(10);
   });
 
-  it("TUI アイドル + パイプライン状態なし + 成果物ファイル存在 → tui_idle で終了", async () => {
+  it("TUI アイドル + パイプライン状態なし → 完了扱いせず監視継続 (transient skip)", async () => {
     const { runMonitor } = await importMonitor();
     const options = makeDefaultOptions({ timeoutSeconds: 300 });
 
-    // pipeline-state.json が存在しない → readPipelineInfo returns null → pipelineComplete = true
-    // checkPipelineState returns { complete: false } なので periodic check は終了しない
+    // pipeline-state.json が存在しない → readPipelineInfo returns null → idle check スキップ
     mockedExistsSync.mockReturnValue(false);
 
     // "❯" を含むコンテンツ = TUI アイドル状態
@@ -237,15 +236,17 @@ describe("benchmark-monitor", () => {
 
     const promise = runMonitor(options);
     // idleCheckStartMs(120s) + idleCheckIntervalMs(60s) の余裕を持って進める
-    await vi.advanceTimersByTimeAsync(200_000);
+    await vi.advanceTimersByTimeAsync(310_000);
     const result = await promise as MonitorResult;
 
-    expect(result.exitReason).toBe("tui_idle");
+    // 修正1: null は完了扱いしない → timeout まで継続
+    expect(result.exitReason).toBe("timeout");
+    expect(result.logs.some((l: string) => l.includes("pipeline info unavailable"))).toBe(true);
   }, 10_000);
 
-  it("TUI アイドル + パイプライン未完了 → 回復メッセージ送信、6回で tui_idle", async () => {
+  it("TUI アイドル + パイプライン未完了 → 回復メッセージ送信、recovery予算消化後12回で tui_idle", async () => {
     const { runMonitor } = await importMonitor();
-    const options = makeDefaultOptions({ timeoutSeconds: 600 });
+    const options = makeDefaultOptions({ timeoutSeconds: 1500 });
     const mockedPasteBuffer = vi.mocked(pasteBuffer);
     const mockedSendKeys = vi.mocked(sendKeys);
 
@@ -258,9 +259,13 @@ describe("benchmark-monitor", () => {
     mockedExecSync.mockReturnValue("index.html\n");
 
     const promise = runMonitor(options);
-    // First idle check at 120s sets lastKnownStep (count stays 0).
-    // Then 6 checks at 180,240,300,360,420,480s → count reaches 6 at 480s → exit.
-    await vi.advanceTimersByTimeAsync(490_000);
+    // Timeline with recovery reset (修正3) + idleCountBeforeExit=12 (修正4):
+    // 120s: lastKnownStep set (count=0)
+    // 180s: count=1, 240s: count=2, 300s: count=3 → recovery#1, reset to 0
+    // 360s: count=1, 420s: count=2, 480s: count=3 → recovery#2, reset to 0
+    // 540s: count=1, ..., 1200s: count=12 → exit
+    // Total: ~1200s
+    await vi.advanceTimersByTimeAsync(1210_000);
     const result = await promise as MonitorResult;
 
     // Recovery message should have been sent via pasteBuffer (max 2 attempts)
@@ -271,40 +276,39 @@ describe("benchmark-monitor", () => {
     );
     expect(mockedSendKeys).toHaveBeenCalledWith("test-pane", "Enter");
 
-    // After 6 idle checks, should exit with tui_idle
+    // After recovery budget exhausted + 12 idle checks, should exit with tui_idle
     expect(result.exitReason).toBe("tui_idle");
     expect(result.logs.some((l: string) => l.includes("Recovery #1 sent"))).toBe(true);
+    expect(result.logs.some((l: string) => l.includes("Recovery #2 sent"))).toBe(true);
     expect(result.logs.some((l: string) => l.includes("giving up"))).toBe(true);
   }, 30_000);
 
   it("TUI 復帰後に consecutiveIdleCount がリセットされる", async () => {
     const { runMonitor } = await importMonitor();
-    const options = makeDefaultOptions({ timeoutSeconds: 600 });
+    const options = makeDefaultOptions({ timeoutSeconds: 900 });
     const mockedPasteBuffer = vi.mocked(pasteBuffer);
 
     // pipeline active
     setPipelineState("active", ["specify"], "suggest", ["specify", "suggest", "plan"]);
     mockExists((p) => p.includes("pipeline-state.json"));
 
-    // idle checks at: 120s(c13), 180s(c19), 240s(c25), 300s(c31), 360s(c37), 420s(c43), 480s(c49)
-    // Recovery at count>=3 (idleCountBeforeRecovery=3), exit at count>=6
-    // Make idle for first 3 checks, active at 300s, idle again for 3 checks → recovery twice
+    // With recovery reset (修正3): idle count resets after each recovery send.
+    // Timeline:
+    // 120s: lastKnownStep set (count=0)
+    // 180s: count=1, 240s: count=2, 300s: count=3 → recovery#1, reset to 0
+    // 360s(active→external reset), 420s: count=1, 480s: count=2, 540s: count=3 → recovery#2, reset to 0
     let callCount = 0;
     mockedCapturePaneContent.mockImplementation(() => {
       callCount++;
-      // call 31 = 300s → active (reset count)
-      if (callCount === 31) return "Working...";
+      // call 37 = 360s → active (TUI not idle → external reset)
+      if (callCount === 37) return "Working...";
       // All other calls → idle
       return "❯ ";
     });
 
     const promise = runMonitor(options);
-    // Advance to 500s to cover: idle checks at 120(1),180(2),240(3→recovery#1),
-    // 300(active→reset), 360(1),420(2),480(3→recovery#2)
-    await vi.advanceTimersByTimeAsync(500_000);
-
-    // Force timeout
-    await vi.advanceTimersByTimeAsync(200_000);
+    // Advance enough to see both recoveries + eventual timeout
+    await vi.advanceTimersByTimeAsync(910_000);
     const result = await promise as MonitorResult;
 
     // Recovery should have been sent twice

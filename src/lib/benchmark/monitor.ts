@@ -73,6 +73,7 @@ function checkPipelineState(comboDir: string): {
       status?: string;
       current?: string | null;
       completed?: string[];
+      pipeline?: string[];
     };
 
     if (state.status === "completed") {
@@ -81,7 +82,15 @@ function checkPipelineState(comboDir: string): {
     if (state.status === "error") {
       return { complete: false, error: true };
     }
-    if (state.current === null && state.completed && state.completed.length > 0) {
+    // current === null: only treat as complete if ALL pipeline steps are in completed
+    if (
+      state.current === null
+      && state.completed
+      && state.completed.length > 0
+      && state.pipeline
+      && state.pipeline.length > 0
+      && state.pipeline.every((step: string) => state.completed!.includes(step))
+    ) {
       return { complete: true, error: false };
     }
 
@@ -133,7 +142,8 @@ export function buildRecoveryMessage(info: PipelineInfo): string {
 
 function hasArtifacts(comboDir: string): boolean {
   const findOpts = `-maxdepth 4 -type f \\( -name "*.html" -o -name "*.js" -o -name "*.css" \\) ` +
-    `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/.git/*'`;
+    `-not -path '*/lib/*' -not -path '*/.poor-dev/*' -not -path '*/commands/*' -not -path '*/.git/*' ` +
+    `-not -path '*/node_modules/*' -not -path '*/agents/*' -not -path '*/dist/*'`;
   try {
     // Pass 1: combo root (excluding _runs/ — fast path)
     const rootFiles = execSync(
@@ -223,7 +233,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   // Recovery thresholds: only send recovery after sustained idle on same step
   const idleCountBeforeRecovery = 3;   // 3 consecutive idle checks (3 min)
   const maxRecoveryAttempts = 2;
-  const idleCountBeforeExit = 6;       // 6 consecutive idle checks (6 min)
+  const idleCountBeforeExit = 12;      // 12 consecutive idle checks (12 min, after recovery budget exhausted)
 
   while (true) {
     const elapsed = Date.now() - startTime;
@@ -320,43 +330,49 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
 
         if (isTUIIdle(paneContent)) {
           const pipelineInfo = readPipelineInfo(options.comboDir);
-          const pipelineComplete = pipelineInfo === null
-            || pipelineInfo.current === null
-            || checkPipelineState(options.comboDir).complete;
 
-          if (pipelineComplete) {
-            if (hasArtifacts(options.comboDir)) {
-              return {
-                exitReason: "tui_idle",
-                elapsedSeconds,
-                combo: options.combo,
-                logs: [...logs, "TUI idle with artifacts present"],
-              };
-            }
-            logs.push("TUI idle but no artifacts yet");
+          if (pipelineInfo === null) {
+            // null = file not found or transient read error → skip entire idle check
+            logs.push("TUI idle but pipeline info unavailable (transient?)");
           } else {
-            // Track if pipeline step has progressed — reset idle counter if so
-            const currentStep = pipelineInfo?.current ?? "";
-            if (currentStep !== lastKnownStep) {
-              lastKnownStep = currentStep;
-              consecutiveIdleCount = 0;
-              recoveryAttempts = 0; // Fresh recovery budget for each new step
-            } else {
-              consecutiveIdleCount++;
-              if (consecutiveIdleCount >= idleCountBeforeExit) {
-                logs.push(`Pipeline stuck at "${currentStep}" for ${consecutiveIdleCount} idle cycles, giving up`);
+            const pipelineComplete = pipelineInfo.current === null
+              || checkPipelineState(options.comboDir).complete;
+
+            if (pipelineComplete) {
+              if (hasArtifacts(options.comboDir)) {
                 return {
                   exitReason: "tui_idle",
                   elapsedSeconds,
                   combo: options.combo,
-                  logs,
+                  logs: [...logs, "TUI idle with artifacts present"],
                 };
-              } else if (consecutiveIdleCount >= idleCountBeforeRecovery && recoveryAttempts < maxRecoveryAttempts) {
-                recoveryAttempts++;
-                const msg = buildRecoveryMessage(pipelineInfo);
-                pasteBuffer(options.targetPane, "monitor-recovery", msg);
-                sendKeys(options.targetPane, "Enter");
-                logs.push(`Recovery #${recoveryAttempts} sent (current: ${currentStep}, idle cycles: ${consecutiveIdleCount})`);
+              }
+              logs.push("TUI idle but no artifacts yet");
+            } else {
+              // Track if pipeline step has progressed — reset idle counter if so
+              const currentStep = pipelineInfo.current ?? "";
+              if (currentStep !== lastKnownStep) {
+                lastKnownStep = currentStep;
+                consecutiveIdleCount = 0;
+                recoveryAttempts = 0; // Fresh recovery budget for each new step
+              } else {
+                consecutiveIdleCount++;
+                if (consecutiveIdleCount >= idleCountBeforeExit) {
+                  logs.push(`Pipeline stuck at "${currentStep}" for ${consecutiveIdleCount} idle cycles, giving up`);
+                  return {
+                    exitReason: "tui_idle",
+                    elapsedSeconds,
+                    combo: options.combo,
+                    logs,
+                  };
+                } else if (consecutiveIdleCount >= idleCountBeforeRecovery && recoveryAttempts < maxRecoveryAttempts) {
+                  recoveryAttempts++;
+                  const msg = buildRecoveryMessage(pipelineInfo);
+                  pasteBuffer(options.targetPane, "monitor-recovery", msg);
+                  sendKeys(options.targetPane, "Enter");
+                  logs.push(`Recovery #${recoveryAttempts} sent (current: ${currentStep}, idle cycles: ${consecutiveIdleCount})`);
+                  consecutiveIdleCount = 0; // Reset after recovery to avoid rapid re-send
+                }
               }
             }
           }

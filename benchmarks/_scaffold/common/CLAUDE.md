@@ -20,4 +20,4 @@
 ## パイプライン遵守（/poor-dev 実行時）
 - /poor-dev フローでは Plan Mode 終了後、必ず TS helper で Core Loop を開始すること
 - 実装コード（.html/.js/.css/.ts/.py）を直接書くことは禁止（hook でブロック済み）
-- 全コード生成は Core Loop の bash_dispatch (glm -p) 経由で行う
+- 全コード生成は Core Loop の bash_dispatch (dispatch-worker) 経由で行う

@@ -80,9 +80,29 @@ init-from-plan が feature ディレクトリ作成・pipeline 初期化・最�
    - `--flow` オプションで plan の `## Selected flow` を上書き可能
    - `skip` の場合は `{ action: "done" }` が返り終了
 
+### CRITICAL: Model Switch Checkpoint (opusplan)
+
+`opusplan` モードでは ExitPlanMode 後に Opus→Sonnet のモデル切替が発生します。
+Sonnet として Core Loop を開始する際:
+
+1. Step 6 の `--init-from-plan` を Bash で実行する
+2. stdout の **JSON をパースする** (テキストでの要約は禁止)
+3. JSON の `action` に応じて **即座に** Core Loop のアクションを実行:
+   - `bash_dispatch` → `command` をそのまま Bash で実行 (**コマンドを改変・自力構成しない**)
+   - `bash_review_dispatch` → `reviewerCommand` をそのまま Bash で実行
+   - `done` → 完了
+4. この Checkpoint を完了するまでテキスト出力・解説を行わないこと
+
 ## Core Loop
 
 After Phase 0 (`--init-from-plan` の出力が最初のアクション), execute the pipeline via TS helper:
+
+**First-action guard**: pipeline-state.json が存在するが `.pd-dispatch/` 内に `*-worker-result.json` が 0 件の場合、
+Core Loop の最初のアクションが未実行。TS ヘルパーを再実行してアクションを取得:
+```bash
+node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch
+```
+JSON 出力の `command` をそのまま Bash で実行する。
 
 1. **初回**: `--init-from-plan` の JSON 出力をそのまま使用。`_initFromPlan.featureDir` を以降の `<DIR>` として記録
    **2回目以降**: `node .poor-dev/dist/bin/poor-dev-next.js --state-dir <DIR> --project-dir . --prompt-dir <DIR>/.pd-dispatch`
@@ -163,9 +183,11 @@ For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトラ�
    <action.command>
    ```
    コマンドは TS ヘルパーが完全生成済み。**LLM がコマンドを自力構成してはならない。**
-   dispatch-worker が内部で timeout (600s) + リトライ (1回) を処理する。
+   dispatch-worker が内部で timeout + リトライを処理する（値は config.json の dispatch セクションで設定）。
+   **dispatch-worker は長時間実行になる場合がある。完了を待ち、途中で中断しないこと。**
 2. result-file を Read:
-   - `"status": "failed"` → dispatch-worker がリトライ済みで最終失敗。ユーザーに報告
+   - `"status": "failed"` + `"lastError": "timeout"` → dispatch-worker が timeout 上限まで待機してリトライ済み。ユーザーに「タイムアウトで失敗。config.json dispatch.timeout の増加を検討」と報告。即座にパイプライン中断せず、ユーザー判断を仰ぐ
+   - `"status": "failed"` + その他 → dispatch-worker がリトライ済みで最終失敗。ユーザーに報告
    - `subtype: "success"` → 成功
    - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
    - `subtype: "error_during_execution"` → エラー、ユーザーに報告

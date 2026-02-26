@@ -97,6 +97,16 @@ export function computeNextInstruction(
   const completedSet = new Set(state.completed ?? []);
   const pipeline = state.pipeline?.length > 0 ? state.pipeline : flowDef.steps;
 
+  // config.json から worker CLI を解決
+  const configPath = path.join(projectDir, ".poor-dev", "config.json");
+  let workerCli = "glm";
+  if (fs.exists(configPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFile(configPath));
+      workerCli = resolveWorkerCli(cfg?.default?.cli);
+    } catch { /* fallback to glm */ }
+  }
+
   // 次の未完了ステップを探す
   const nextStep = pipeline.find((s) => !completedSet.has(s));
 
@@ -119,7 +129,7 @@ export function computeNextInstruction(
     for (const step of parallelGroup) {
       const tc = flowDef.teamConfig?.[step];
       if (!tc) continue;
-      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet));
+      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli));
     }
     const meta: ActionMeta = {
       recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
@@ -161,12 +171,23 @@ export function computeNextInstruction(
   };
 
   // Bash dispatch
-  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet);
+  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli);
   action._meta = meta;
   return action;
 }
 
 // --- 内部ヘルパー ---
+
+/**
+ * config.json の cli 値から dispatch-worker に渡す CLI 名を解決する。
+ */
+function resolveWorkerCli(configCli: string | undefined): string {
+  switch (configCli) {
+    case "qwen": return "qwen";
+    case "opencode": return "glm";
+    default: return "glm";
+  }
+}
 
 /**
  * nextStep が parallelGroups のグループに属し、
@@ -252,9 +273,11 @@ function buildDispatchCommand(opts: {
   resultFile: string;
   timeout?: number;
   maxRetries?: number;
+  cli?: string;
 }): string {
   const parts = [
     "node .poor-dev/dist/bin/dispatch-worker.js",
+    `--cli ${opts.cli ?? "glm"}`,
     `--prompt-file ${opts.promptFile}`,
     `--append-system-prompt-file ${opts.agentFile}`,
     `--allowedTools '${opts.tools}'`,
@@ -274,7 +297,8 @@ function buildBashDispatchTeamAction(
   flowDef: FlowDefinition,
   fs: Pick<FileSystem, "exists" | "readFile">,
   pipeline: string[] = [],
-  completedSet: Set<string> = new Set()
+  completedSet: Set<string> = new Set(),
+  workerCli: string = "glm"
 ): BashDispatchAction | BashReviewDispatchAction {
   const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
@@ -296,6 +320,7 @@ function buildBashDispatchTeamAction(
         tools: WORKER_TOOLS,
         maxTurns,
         resultFile,
+        cli: workerCli,
       });
 
       const artifactDef = flowDef.artifacts?.[step];
@@ -342,6 +367,7 @@ function buildBashDispatchTeamAction(
         tools: REVIEWER_TOOLS,
         maxTurns: reviewerMaxTurns,
         resultFile: reviewerResultFile,
+        cli: workerCli,
       });
 
       // fixer は --prompt-file が動的（iteration ごとに変わる）なので prefix のみ
@@ -352,6 +378,7 @@ function buildBashDispatchTeamAction(
         tools: WORKER_TOOLS,
         maxTurns: fixerMaxTurns,
         resultFile: fixerResultFile,
+        cli: workerCli,
       }).replace(" --prompt-file __PROMPT_FILE__", "");
 
       return {

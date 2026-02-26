@@ -71,6 +71,7 @@ describe("computeNextInstruction", () => {
         expect(action.command).toContain("specify-prompt.txt");
         expect(action.command).toContain("--result-file");
         expect(action.command).toContain("specify-worker-result.json");
+        expect(action.command).toContain("--cli glm");
         expect(action.command).toContain("--timeout 600");
         expect(action.command).toContain("--max-retries 1");
         expect(action.command).toContain("--append-system-prompt-file agents/claude/worker-specify.md");
@@ -88,6 +89,31 @@ describe("computeNextInstruction", () => {
       expect(action.action).toBe("bash_dispatch");
       if (action.action === "bash_dispatch") {
         expect(action.step).toBe("plan");
+      }
+    });
+
+    it("config.json の cli=qwen で --cli qwen が含まれる", () => {
+      const ctx = makeCtx();
+      const configJson = JSON.stringify({ default: { cli: "qwen", model: "qwen3.5" } });
+      const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.command).toContain("--cli qwen");
+        expect(action.command).not.toContain("--cli glm");
+      }
+    });
+
+    it("config.json の cli=opencode で --cli glm にフォールバック", () => {
+      const ctx = makeCtx();
+      const configJson = JSON.stringify({ default: { cli: "opencode", model: "glm5" } });
+      const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.command).toContain("--cli glm");
       }
     });
 

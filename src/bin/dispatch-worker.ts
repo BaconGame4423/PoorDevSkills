@@ -30,6 +30,7 @@ interface CliArgs {
   timeout: number;
   maxRetries: number;
   retryDelay: number;
+  cli: string;
 }
 
 interface FailureResult {
@@ -51,6 +52,7 @@ function parseArgs(argv: string[]): CliArgs {
     timeout: 600,
     maxRetries: 1,
     retryDelay: 30,
+    cli: "glm",
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -89,6 +91,10 @@ function parseArgs(argv: string[]): CliArgs {
         args.retryDelay = parseInt(next ?? "30", 10);
         i++;
         break;
+      case "--cli":
+        args.cli = next ?? "glm";
+        i++;
+        break;
     }
   }
   return args;
@@ -100,19 +106,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function runGlm(
+function runWorker(
   prompt: string,
   args: CliArgs,
   timeoutSec: number,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const env = { ...process.env };
-    // glm の CLAUDECODE unset と defense-in-depth
+    // worker CLI の CLAUDECODE unset と defense-in-depth
     delete env.CLAUDECODE;
 
-    const glmArgs = [
+    const workerArgs = [
       String(timeoutSec),
-      "glm",
+      args.cli,
       "-p",
       prompt,
       "--append-system-prompt-file",
@@ -125,7 +131,7 @@ function runGlm(
       String(args.maxTurns),
     ];
 
-    const child = spawn("timeout", glmArgs, {
+    const child = spawn("timeout", workerArgs, {
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -186,7 +192,7 @@ async function main(): Promise<void> {
       `[dispatch-worker] Attempt ${attempt}/${totalAttempts} (timeout=${args.timeout}s)\n`,
     );
 
-    const result = await runGlm(prompt, args, args.timeout);
+    const result = await runWorker(prompt, args, args.timeout);
     lastExitCode = result.exitCode;
 
     // stderr を透過出力（デバッグ用）

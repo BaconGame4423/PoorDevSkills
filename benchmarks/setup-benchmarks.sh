@@ -216,16 +216,32 @@ HOOK_EOF
     echo "  recreated .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
   fi
 
-  # 4b) team モード: scaffold に含まれないスキルファイルを直接コピー
+  # 4b) team モード: sub_agent cli に応じた poor-dev Skill を選択
   if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-    for team_file in poor-dev.md; do
-      local src="$DEVSKILLS_DIR/.opencode/command/$team_file"
+    local sub_agent sub_cli skill_src
+    sub_agent=$(jq -r --arg c "$dir_name" \
+      '.combinations[] | select(.dir_name == $c) | .sub_agent' "$CONFIG")
+    sub_cli=$(jq -r --arg m "$sub_agent" '.models[$m].cli' "$CONFIG")
+
+    case "$sub_cli" in
+      qwen) skill_src="$SCAFFOLD/common/poor-dev-qwen.md" ;;
+      *)    skill_src="$SCAFFOLD/common/poor-dev-glm.md" ;;
+    esac
+
+    if [[ -f "$skill_src" ]]; then
+      cp "$skill_src" "$target/.opencode/command/poor-dev.md"
+      ln -sf "../../.opencode/command/poor-dev.md" \
+        "$target/.claude/commands/poor-dev.md"
+    else
+      # fallback: ソースリポから直接コピー (scaffold 未更新時)
+      local src="$DEVSKILLS_DIR/.opencode/command/poor-dev.md"
       if [[ -f "$src" ]]; then
-        cp "$src" "$target/.opencode/command/"
-        ln -sf "../../.opencode/command/$team_file" "$target/.claude/commands/$team_file"
+        cp "$src" "$target/.opencode/command/poor-dev.md"
+        ln -sf "../../.opencode/command/poor-dev.md" \
+          "$target/.claude/commands/poor-dev.md"
       fi
-    done
-    echo "  added team-required skill files"
+    fi
+    echo "  added team-required skill files (${sub_cli})"
   fi
 
   # 5) git commit（変更がある場合のみ、.git が存在する場合のみ）
@@ -434,16 +450,30 @@ ENDJSON
       echo "  created .claude/commands/ symlinks ($(ls "$target/.claude/commands/" | wc -l) files)"
     fi
 
-    # 7b) team モード: scaffold に含まれないスキルファイルを直接コピー
+    # 7b) team モード: sub_agent cli に応じた poor-dev Skill を選択
     if [[ "$mode" == "team" && "$orch_cli" == "claude" ]]; then
-      for team_file in poor-dev.md; do
-        src="$DEVSKILLS_DIR/.opencode/command/$team_file"
+      local sub_cli skill_src
+      sub_cli=$(jq -r --arg m "$sub" '.models[$m].cli' "$CONFIG")
+
+      case "$sub_cli" in
+        qwen) skill_src="$SCAFFOLD/common/poor-dev-qwen.md" ;;
+        *)    skill_src="$SCAFFOLD/common/poor-dev-glm.md" ;;
+      esac
+
+      if [[ -f "$skill_src" ]]; then
+        cp "$skill_src" "$target/.opencode/command/poor-dev.md"
+        ln -sf "../../.opencode/command/poor-dev.md" \
+          "$target/.claude/commands/poor-dev.md"
+      else
+        # fallback: ソースリポから直接コピー (scaffold 未更新時)
+        src="$DEVSKILLS_DIR/.opencode/command/poor-dev.md"
         if [[ -f "$src" ]]; then
-          cp "$src" "$target/.opencode/command/"
-          ln -sf "../../.opencode/command/$team_file" "$target/.claude/commands/$team_file"
+          cp "$src" "$target/.opencode/command/poor-dev.md"
+          ln -sf "../../.opencode/command/poor-dev.md" \
+            "$target/.claude/commands/poor-dev.md"
         fi
-      done
-      echo "  added team-required skill files"
+      fi
+      echo "  added team-required skill files (${sub_cli})"
     fi
 
     # 8) git init + 初期コミット（--no-git でなければ）

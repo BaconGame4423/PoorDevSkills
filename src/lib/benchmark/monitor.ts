@@ -225,6 +225,11 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   let lastKnownStep = "";
   let recoveryAttempts = 0;
 
+  // Verbose heartbeat state
+  let lastPaneHash = "";
+  let lastPaneChangeTime = startTime;
+  let lastPaneLineCount = 0;
+
   const intervalMs = 10_000;
   const pipelineCheckIntervalMs = 10_000;
   const idleCheckStartMs = 120_000;
@@ -396,14 +401,52 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
       const info = readPipelineInfo(options.comboDir);
       if (info) stepLabel = `${info.current ?? "done"}(${info.completed.length}/${info.pipeline.length})`;
     }
-    const dbgParts = [`phase0=${phase0Done ? "done" : "active"}`, `step=${stepLabel}`];
-    if (!phase0Done) {
-      const lastLines = paneContent.split("\n").slice(-5).map(l => l.trim()).filter(l => l.length > 0);
-      dbgParts.push(`selUI=${isSelectionUIActive(paneContent)}`, `tail=${JSON.stringify(lastLines).slice(0, 200)}`);
+
+    if (options.verboseHeartbeat) {
+      // Verbose heartbeat mode: detailed pane change tracking
+      const currentHash = simpleHash(paneContent);
+      const paneChanged = currentHash !== lastPaneHash;
+      if (paneChanged) {
+        lastPaneHash = currentHash;
+        lastPaneChangeTime = Date.now();
+      }
+      const unchangedSec = Math.floor((Date.now() - lastPaneChangeTime) / 1000);
+
+      const currentLineCount = paneContent.split("\n").length;
+      const lineDelta = currentLineCount - lastPaneLineCount;
+      lastPaneLineCount = currentLineCount;
+
+      let tuiState = "idle";
+      if (paneContent.includes("esc to int")) tuiState = "streaming";
+      else if (paneContent.includes("⎿  Running")) tuiState = "running";
+      else if (isSelectionUIActive(paneContent)) tuiState = "selectionUI";
+
+      const elapsedStr = formatElapsed(elapsedSeconds);
+      const parts = [
+        elapsedStr,
+        `step: ${stepLabel}`,
+        `TUI: ${tuiState}`,
+        `lines: ${lineDelta >= 0 ? "+" : ""}${lineDelta}`,
+        paneChanged ? "pane: changed" : `pane: unchanged (${unchangedSec}s)`,
+      ];
+      process.stderr.write(`[heartbeat] ${options.combo} | ${parts.join(" | ")}\n`);
+
+      if (unchangedSec >= 60) {
+        process.stderr.write(
+          `[heartbeat] ⚠ ${options.combo} | pane unchanged for ${unchangedSec}s — model may be thinking\n`
+        );
+      }
+    } else {
+      // Standard concise log
+      const dbgParts = [`phase0=${phase0Done ? "done" : "active"}`, `step=${stepLabel}`];
+      if (!phase0Done) {
+        const lastLines = paneContent.split("\n").slice(-5).map(l => l.trim()).filter(l => l.length > 0);
+        dbgParts.push(`selUI=${isSelectionUIActive(paneContent)}`, `tail=${JSON.stringify(lastLines).slice(0, 200)}`);
+      }
+      process.stderr.write(
+        `[monitor] ${options.combo} elapsed=${elapsedSeconds}s ${dbgParts.join(" ")}\n`
+      );
     }
-    process.stderr.write(
-      `[monitor] ${options.combo} elapsed=${elapsedSeconds}s ${dbgParts.join(" ")}\n`
-    );
 
     await sleep(intervalMs);
   }
@@ -411,4 +454,25 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Simple string hash for pane content change detection */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + ch) | 0;
+  }
+  return hash.toString(36);
+}
+
+/** Format elapsed seconds as human-readable string (e.g., "5m30s") */
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return s > 0 ? `${m}m${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h${rm}m` : `${h}h`;
 }

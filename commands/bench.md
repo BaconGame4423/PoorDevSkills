@@ -214,6 +214,14 @@ TASK_ID=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .
 PHASE0_FILE=$(jq -r --arg t "$TASK_ID" '.tasks[$t].phase0_responses' benchmarks/benchmarks.json)
 PHASE0_CONFIG="benchmarks/_scaffold/common/${PHASE0_FILE}"
 
+# Verbose heartbeat for slow models (non-claude CLI = external LLM)
+SUB_AGENT=$(jq -r --arg c "<combo>" '.combinations[] | select(.dir_name == $c) | .sub_agent' benchmarks/benchmarks.json)
+SUB_CLI=$(jq -r --arg m "$SUB_AGENT" '.models[$m].cli' benchmarks/benchmarks.json)
+VERBOSE_FLAG=""
+if [ "$SUB_CLI" != "claude" ]; then
+  VERBOSE_FLAG="--verbose-heartbeat"
+fi
+
 node dist/lib/benchmark/bin/bench-team-monitor.js \
   --combo <combo> \
   --target $TARGET \
@@ -221,7 +229,8 @@ node dist/lib/benchmark/bin/bench-team-monitor.js \
   --phase0-config "$PHASE0_CONFIG" \
   --post-command "./benchmarks/run-benchmark.sh --post <combo>" \
   --timeout 7200 \
-  --caller-pane $CURRENT
+  --caller-pane $CURRENT \
+  $VERBOSE_FLAG
 ```
 
 Bash(run_in_background) で実行。

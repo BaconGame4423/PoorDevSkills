@@ -36,6 +36,10 @@ const { values } = parseArgs({
     "caller-pane": {
       type: "string",
     },
+    "verbose-heartbeat": {
+      type: "boolean",
+      default: false,
+    },
   },
   strict: true,
 });
@@ -105,6 +109,7 @@ const options: MonitorOptions = {
   timeoutSeconds: parseInt(values.timeout ?? "7200", 10),
   projectRoot: values["project-root"] ?? process.cwd(),
   ...(values["post-command"] ? { postCommand: values["post-command"] } : {}),
+  verboseHeartbeat: values["verbose-heartbeat"] ?? false,
 };
 
 process.on("SIGTERM", () => cleanup(options.targetPane, options.combo));

@@ -92,6 +92,7 @@ export interface MonitorOptions {
   timeoutSeconds: number;
   projectRoot: string;
   postCommand?: string;
+  verboseHeartbeat?: boolean;
 }
 
 // --- tmux ラッパー型 ---

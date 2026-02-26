@@ -97,13 +97,17 @@ export function computeNextInstruction(
   const completedSet = new Set(state.completed ?? []);
   const pipeline = state.pipeline?.length > 0 ? state.pipeline : flowDef.steps;
 
-  // config.json から worker CLI を解決
+  // config.json から worker CLI + dispatch 設定を解決
   const configPath = path.join(projectDir, ".poor-dev", "config.json");
   let workerCli = "glm";
+  let dispatchConfig: DispatchConfig | undefined;
   if (fs.exists(configPath)) {
     try {
       const cfg = JSON.parse(fs.readFile(configPath));
       workerCli = resolveWorkerCli(cfg?.default?.cli);
+      if (cfg?.dispatch) {
+        dispatchConfig = cfg.dispatch as DispatchConfig;
+      }
     } catch { /* fallback to glm */ }
   }
 
@@ -129,7 +133,7 @@ export function computeNextInstruction(
     for (const step of parallelGroup) {
       const tc = flowDef.teamConfig?.[step];
       if (!tc) continue;
-      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli));
+      parallelActions.push(buildBashDispatchTeamAction(step, tc, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig));
     }
     const meta: ActionMeta = {
       recovery_hint: `Resume: node .poor-dev/dist/bin/poor-dev-next.js --state-dir ${featureDir} --project-dir ${projectDir}`,
@@ -171,12 +175,36 @@ export function computeNextInstruction(
   };
 
   // Bash dispatch
-  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli);
+  const action = buildBashDispatchTeamAction(nextStep, teamConfig, fd, featureDir, flowDef, fs, pipeline, completedSet, workerCli, dispatchConfig);
   action._meta = meta;
   return action;
 }
 
 // --- 内部ヘルパー ---
+
+/**
+ * config.json の dispatch セクション型。
+ * timeout/max_retries のデフォルト + ステップ固有オーバーライドを提供。
+ */
+interface DispatchConfig {
+  timeout?: number;
+  max_retries?: number;
+  step_overrides?: Record<string, { timeout?: number; max_retries?: number }>;
+}
+
+/**
+ * DispatchConfig からステップ固有の timeout/maxRetries を解決する。
+ */
+function resolveDispatchParams(
+  step: string,
+  dispatchConfig?: DispatchConfig
+): { timeout: number; maxRetries: number } {
+  const stepOverride = dispatchConfig?.step_overrides?.[step];
+  return {
+    timeout: stepOverride?.timeout ?? dispatchConfig?.timeout ?? 600,
+    maxRetries: stepOverride?.max_retries ?? dispatchConfig?.max_retries ?? 1,
+  };
+}
 
 /**
  * config.json の cli 値から dispatch-worker に渡す CLI 名を解決する。
@@ -298,7 +326,8 @@ function buildBashDispatchTeamAction(
   fs: Pick<FileSystem, "exists" | "readFile">,
   pipeline: string[] = [],
   completedSet: Set<string> = new Set(),
-  workerCli: string = "glm"
+  workerCli: string = "glm",
+  dispatchConfig?: DispatchConfig
 ): BashDispatchAction | BashReviewDispatchAction {
   const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
@@ -314,12 +343,15 @@ function buildBashDispatchTeamAction(
 
       const promptFile = path.join(dispatchDir, `${step}-prompt.txt`);
       const resultFile = path.join(dispatchDir, `${step}-worker-result.json`);
+      const dp = resolveDispatchParams(step, dispatchConfig);
       const command = buildDispatchCommand({
         promptFile,
         agentFile,
         tools: WORKER_TOOLS,
         maxTurns,
         resultFile,
+        timeout: dp.timeout,
+        maxRetries: dp.maxRetries,
         cli: workerCli,
       });
 
@@ -361,12 +393,15 @@ function buildBashDispatchTeamAction(
 
       const reviewerPromptFile = path.join(dispatchDir, `${step}-review-prompt.txt`);
       const reviewerResultFile = path.join(dispatchDir, `${step}-reviewer-result.json`);
+      const dp = resolveDispatchParams(step, dispatchConfig);
       const reviewerCommand = buildDispatchCommand({
         promptFile: reviewerPromptFile,
         agentFile: reviewerAgentFile,
         tools: REVIEWER_TOOLS,
         maxTurns: reviewerMaxTurns,
         resultFile: reviewerResultFile,
+        timeout: dp.timeout,
+        maxRetries: dp.maxRetries,
         cli: workerCli,
       });
 
@@ -378,6 +413,8 @@ function buildBashDispatchTeamAction(
         tools: WORKER_TOOLS,
         maxTurns: fixerMaxTurns,
         resultFile: fixerResultFile,
+        timeout: dp.timeout,
+        maxRetries: dp.maxRetries,
         cli: workerCli,
       }).replace(" --prompt-file __PROMPT_FILE__", "");
 

@@ -117,6 +117,76 @@ describe("computeNextInstruction", () => {
       }
     });
 
+    it("config.json の dispatch.timeout でデフォルトタイムアウトを上書きする", () => {
+      const ctx = makeCtx();
+      const configJson = JSON.stringify({
+        default: { cli: "qwen" },
+        dispatch: { timeout: 1800, max_retries: 1 },
+      });
+      const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.command).toContain("--timeout 1800");
+        expect(action.command).toContain("--max-retries 1");
+      }
+    });
+
+    it("config.json の dispatch.step_overrides でステップ固有タイムアウトを適用する", () => {
+      const ctx = makeCtx({
+        state: makeState({
+          completed: ["specify", "plan", "planreview", "tasks", "tasksreview"],
+        }),
+      });
+      const configJson = JSON.stringify({
+        default: { cli: "qwen" },
+        dispatch: {
+          timeout: 1800,
+          step_overrides: {
+            implement: { timeout: 3600, max_retries: 2 },
+          },
+        },
+      });
+      const fs = mockFs({
+        "/proj/.poor-dev/config.json": configJson,
+        "/proj/specs/001-test/tasks.md": "tasks",
+        "/proj/specs/001-test/spec.md": "spec",
+      });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        expect(action.step).toBe("implement");
+        expect(action.command).toContain("--timeout 3600");
+        expect(action.command).toContain("--max-retries 2");
+      }
+    });
+
+    it("dispatch.step_overrides 未定義のステップはデフォルトにフォールバックする", () => {
+      const ctx = makeCtx();
+      const configJson = JSON.stringify({
+        default: { cli: "qwen" },
+        dispatch: {
+          timeout: 1800,
+          max_retries: 1,
+          step_overrides: {
+            implement: { timeout: 3600 },
+          },
+        },
+      });
+      const fs = mockFs({ "/proj/.poor-dev/config.json": configJson });
+      const action = computeNextInstruction(ctx, fs);
+
+      expect(action.action).toBe("bash_dispatch");
+      if (action.action === "bash_dispatch") {
+        // specify は step_overrides にないので dispatch.timeout (1800) を使用
+        expect(action.step).toBe("specify");
+        expect(action.command).toContain("--timeout 1800");
+        expect(action.command).toContain("--max-retries 1");
+      }
+    });
+
     it("レビューステップで bash_review_dispatch を返す", () => {
       const ctx = makeCtx({
         state: makeState({

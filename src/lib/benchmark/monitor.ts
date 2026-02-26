@@ -238,7 +238,7 @@ export async function runMonitor(options: MonitorOptions): Promise<MonitorResult
   // Recovery thresholds: only send recovery after sustained idle on same step
   const idleCountBeforeRecovery = 3;   // 3 consecutive idle checks (3 min)
   const maxRecoveryAttempts = 2;
-  const idleCountBeforeExit = 12;      // 12 consecutive idle checks (12 min, after recovery budget exhausted)
+  const idleCountBeforeExit = options.verboseHeartbeat ? 30 : 12; // verbose-heartbeat (non-claude CLI): 30 min tolerance
 
   while (true) {
     const elapsed = Date.now() - startTime;

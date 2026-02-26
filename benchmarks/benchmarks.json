@@ -101,6 +101,14 @@
       "config_extras": {
         "command_variant": "simple",
         "review_mode": "bash",
+        "dispatch": {
+          "timeout": 1800,
+          "max_retries": 1,
+          "step_overrides": {
+            "plan": { "timeout": 2400 },
+            "implement": { "timeout": 3600, "max_retries": 2 }
+          }
+        },
         "polling": {
           "interval": 2,
           "idle_timeout": 600,

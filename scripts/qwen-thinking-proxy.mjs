@@ -46,7 +46,7 @@ const server = http.createServer(async (req, res) => {
       path: req.url,
       method: req.method,
       headers,
-      timeout: 1_800_000, // 30 min — ローカル 122B 推論は遅い
+      timeout: 7_200_000, // 2h — ローカル 122B は長時間推論あり
     },
     (proxyRes) => {
       const ct = proxyRes.headers['content-type'] || '';
@@ -90,9 +90,19 @@ function handleStreaming(id, proxyRes, res) {
   const thinkingIndices = new Set();
   let stripped = 0;
   let buffer = '';
+  const startTime = Date.now();
+  let totalBytes = 0;
+  let lastLog = startTime;
 
   proxyRes.on('data', (chunk) => {
     buffer += chunk.toString();
+    totalBytes += chunk.length;
+    const now = Date.now();
+    if (now - lastLog >= 30_000) {
+      const elapsed = Math.round((now - startTime) / 1000);
+      console.log(`  #${id} streaming: ${elapsed}s elapsed, ${(totalBytes / 1024).toFixed(1)}KB received`);
+      lastLog = now;
+    }
 
     // Process complete SSE events (delimited by \n\n)
     let pos = 0;
@@ -121,9 +131,8 @@ function handleStreaming(id, proxyRes, res) {
         res.write(result + '\n\n');
       }
     }
-    if (stripped > 0) {
-      console.log(`  #${id} stripped ${stripped} thinking SSE events`);
-    }
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.log(`  #${id} complete: ${elapsed}s, ${(totalBytes / 1024).toFixed(1)}KB, stripped ${stripped} thinking events`);
     res.end();
   });
 

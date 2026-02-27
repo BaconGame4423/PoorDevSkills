@@ -46,7 +46,7 @@ const server = http.createServer(async (req, res) => {
       path: req.url,
       method: req.method,
       headers,
-      timeout: 600_000, // 10 min — ローカル推論は遅い
+      timeout: 1_800_000, // 30 min — ローカル 122B 推論は遅い
     },
     (proxyRes) => {
       const ct = proxyRes.headers['content-type'] || '';

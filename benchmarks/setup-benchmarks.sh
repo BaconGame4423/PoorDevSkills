@@ -291,6 +291,7 @@ if [[ "$MODE" == "update" ]]; then
   for i in $(seq 0 $((combo_count - 1))); do
     dir_name=$(jval ".combinations[$i].dir_name")
     orch=$(jval ".combinations[$i].orchestrator")
+    sub=$(jval ".combinations[$i].sub_agent")
     orch_cli=$(model_cli "$orch")
     target="$SCRIPT_DIR/$dir_name"
 
@@ -306,6 +307,13 @@ if [[ "$MODE" == "update" ]]; then
     fi
 
     update_skill "$target" "$orch_cli" "$dir_name" "$mode"
+
+    # config.json 再生成（benchmarks.json の config_extras が反映されるよう常に更新）
+    if [[ -d "$target/.poor-dev" ]]; then
+      step_overrides=$(jval ".combinations[$i].step_overrides // {}")
+      derive_config "$orch" "$sub" "$step_overrides" > "$target/.poor-dev/config.json"
+      echo "  regenerated .poor-dev/config.json"
+    fi
   done
 
   echo ""

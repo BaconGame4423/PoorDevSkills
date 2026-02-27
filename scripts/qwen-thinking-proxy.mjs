@@ -26,6 +26,7 @@ let requestCount = 0;
 const server = http.createServer(async (req, res) => {
   const id = ++requestCount;
   const ts = new Date().toISOString().slice(11, 19);
+  const reqStartTime = Date.now();
   console.log(`[${ts}] #${id} ${req.method} ${req.url}`);
 
   // Collect request body
@@ -33,11 +34,31 @@ const server = http.createServer(async (req, res) => {
   for await (const chunk of req) chunks.push(chunk);
   const body = Buffer.concat(chunks);
 
+  // Detect streaming request
+  let isStreamingRequest = false;
+  try { isStreamingRequest = JSON.parse(body.toString()).stream === true; } catch {}
+
+  // SSE Pre-Response: upstream 応答前に即座にヘッダーを送信（TTFB 予防）
+  let headersSentEarly = false;
+  let keepAliveInterval = null;
+  if (isStreamingRequest) {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      'connection': 'close',
+    });
+    headersSentEarly = true;
+    keepAliveInterval = setInterval(() => {
+      if (!res.writableEnded) res.write(': keepalive\n\n');
+    }, 15_000);
+  }
+
   // Build upstream request
   const headers = { ...req.headers, host: upstream.host };
   // Remove hop-by-hop headers
   delete headers['connection'];
   delete headers['keep-alive'];
+  headers['connection'] = 'close'; // クライアントにも接続再利用を禁止
 
   const proxyReq = http.request(
     {
@@ -49,15 +70,19 @@ const server = http.createServer(async (req, res) => {
       timeout: 7_200_000, // 2h — ローカル 122B は長時間推論あり
     },
     (proxyRes) => {
+      if (keepAliveInterval) clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
       const ct = proxyRes.headers['content-type'] || '';
 
       if (ct.includes('text/event-stream')) {
-        handleStreaming(id, proxyRes, res);
+        handleStreaming(id, proxyRes, res, headersSentEarly);
       } else if (ct.includes('application/json')) {
-        handleJSON(id, proxyRes, res);
+        handleJSON(id, proxyRes, res, headersSentEarly);
       } else {
         // Pass through (health, etc.)
-        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        if (!headersSentEarly) {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        }
         proxyRes.pipe(res);
       }
     }
@@ -66,13 +91,15 @@ const server = http.createServer(async (req, res) => {
   // クライアント切断時に upstream も abort → llama.cpp スロット解放
   // req.socket (= res.socket) の close でクライアント切断を検出
   res.on('close', () => {
+    if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
     if (!res.writableFinished) {
-      console.log(`[${ts}] #${id} client disconnected`);
+      console.log(`[${ts}] #${id} client disconnected (after ${Date.now() - reqStartTime}ms, stream=${isStreamingRequest})`);
       proxyReq.destroy(new Error('client disconnected'));
     }
   });
 
   proxyReq.on('error', (err) => {
+    if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
     if (err.message === 'client disconnected') {
       // Already logged above; don't send error response to closed client
       return;
@@ -87,6 +114,7 @@ const server = http.createServer(async (req, res) => {
   });
 
   proxyReq.on('timeout', () => {
+    if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
     console.error(`[${ts}] #${id} upstream timeout`);
     proxyReq.destroy(new Error('upstream timeout'));
   });
@@ -98,11 +126,13 @@ const server = http.createServer(async (req, res) => {
 // ── Streaming (SSE) handler ──────────────────────────────────────────────
 const STALL_TIMEOUT = 300_000; // 5分 — llama.cpp がスタックした場合の自動 abort
 
-function handleStreaming(id, proxyRes, res) {
-  const responseHeaders = { ...proxyRes.headers };
-  // Ensure chunked transfer for streaming
-  delete responseHeaders['content-length'];
-  res.writeHead(proxyRes.statusCode, responseHeaders);
+function handleStreaming(id, proxyRes, res, headersSentEarly) {
+  if (!headersSentEarly) {
+    const responseHeaders = { ...proxyRes.headers };
+    // Ensure chunked transfer for streaming
+    delete responseHeaders['content-length'];
+    res.writeHead(proxyRes.statusCode, responseHeaders);
+  }
 
   const thinkingIndices = new Set();
   let stripped = 0;
@@ -251,7 +281,7 @@ function adjustIndex(index, thinkingIndices) {
 }
 
 // ── Non-streaming (JSON) handler ─────────────────────────────────────────
-function handleJSON(id, proxyRes, res) {
+function handleJSON(id, proxyRes, res, headersSentEarly) {
   const chunks = [];
   proxyRes.on('data', (chunk) => chunks.push(chunk));
   proxyRes.on('end', () => {
@@ -262,8 +292,14 @@ function handleJSON(id, proxyRes, res) {
       parsed = JSON.parse(raw);
     } catch {
       // Not valid JSON — pass through
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      res.end(raw);
+      if (headersSentEarly) {
+        // SSE ヘッダー送信済み → SSE error event で伝達
+        res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'api_error', message: 'Invalid JSON from upstream' } })}\n\n`);
+        res.end();
+      } else {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        res.end(raw);
+      }
       return;
     }
 
@@ -280,10 +316,18 @@ function handleJSON(id, proxyRes, res) {
     }
 
     const filtered = JSON.stringify(parsed);
-    const responseHeaders = { ...proxyRes.headers };
-    responseHeaders['content-length'] = Buffer.byteLength(filtered).toString();
-    res.writeHead(proxyRes.statusCode, responseHeaders);
-    res.end(filtered);
+
+    if (headersSentEarly) {
+      // SSE ヘッダー送信済み → JSON を SSE error event に変換して送信
+      // upstream が non-200 JSON エラーを返した場合（ステータスは既に 200 送信済み）
+      res.write(`event: error\ndata: ${filtered}\n\n`);
+      res.end();
+    } else {
+      const responseHeaders = { ...proxyRes.headers };
+      responseHeaders['content-length'] = Buffer.byteLength(filtered).toString();
+      res.writeHead(proxyRes.statusCode, responseHeaders);
+      res.end(filtered);
+    }
   });
 
   proxyRes.on('error', (err) => {
@@ -296,6 +340,9 @@ function handleJSON(id, proxyRes, res) {
 }
 
 // ── Start ────────────────────────────────────────────────────────────────
+server.keepAliveTimeout = 0;  // keep-alive 無効 → レスポンス毎に接続を閉じる（stale socket 防止）
+server.requestTimeout = 0;    // Node.js v22 デフォルト 300s を無効化（long-running 推論対応）
+
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Thinking-strip proxy listening on http://127.0.0.1:${PORT}`);
   console.log(`Upstream: ${UPSTREAM_URL}`);

@@ -63,12 +63,27 @@ const server = http.createServer(async (req, res) => {
     }
   );
 
+  // クライアント切断時に upstream も abort → llama.cpp スロット解放
+  // req.socket (= res.socket) の close でクライアント切断を検出
+  res.on('close', () => {
+    if (!res.writableFinished) {
+      console.log(`[${ts}] #${id} client disconnected`);
+      proxyReq.destroy(new Error('client disconnected'));
+    }
+  });
+
   proxyReq.on('error', (err) => {
+    if (err.message === 'client disconnected') {
+      // Already logged above; don't send error response to closed client
+      return;
+    }
     console.error(`[${ts}] #${id} upstream error: ${err.message}`);
     if (!res.headersSent) {
       res.writeHead(502, { 'content-type': 'application/json' });
     }
-    res.end(JSON.stringify({ type: 'error', error: { type: 'api_error', message: `Upstream error: ${err.message}` } }));
+    if (!res.writableEnded) {
+      res.end(JSON.stringify({ type: 'error', error: { type: 'api_error', message: `Upstream error: ${err.message}` } }));
+    }
   });
 
   proxyReq.on('timeout', () => {
@@ -81,6 +96,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ── Streaming (SSE) handler ──────────────────────────────────────────────
+const STALL_TIMEOUT = 300_000; // 5分 — llama.cpp がスタックした場合の自動 abort
+
 function handleStreaming(id, proxyRes, res) {
   const responseHeaders = { ...proxyRes.headers };
   // Ensure chunked transfer for streaming
@@ -92,15 +109,32 @@ function handleStreaming(id, proxyRes, res) {
   let buffer = '';
   const startTime = Date.now();
   let totalBytes = 0;
+  let lastLogBytes = 0;
   let lastLog = startTime;
 
+  // ストリーミングストール検出: データが STALL_TIMEOUT 間来なければ abort
+  let stallTimer = setTimeout(onStall, STALL_TIMEOUT);
+
+  function onStall() {
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.error(`  #${id} stall detected: no data for ${STALL_TIMEOUT / 1000}s (total ${elapsed}s, ${(totalBytes / 1024).toFixed(1)}KB)`);
+    proxyRes.destroy(new Error('upstream stall'));
+    if (!res.writableEnded) res.end();
+  }
+
   proxyRes.on('data', (chunk) => {
+    // ストールタイマーリセット
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(onStall, STALL_TIMEOUT);
+
     buffer += chunk.toString();
     totalBytes += chunk.length;
     const now = Date.now();
     if (now - lastLog >= 30_000) {
       const elapsed = Math.round((now - startTime) / 1000);
-      console.log(`  #${id} streaming: ${elapsed}s elapsed, ${(totalBytes / 1024).toFixed(1)}KB received`);
+      const deltaKB = ((totalBytes - lastLogBytes) / 1024).toFixed(1);
+      console.log(`  #${id} streaming: ${elapsed}s elapsed, ${(totalBytes / 1024).toFixed(1)}KB total (+${deltaKB}KB/30s)`);
+      lastLogBytes = totalBytes;
       lastLog = now;
     }
 
@@ -124,6 +158,7 @@ function handleStreaming(id, proxyRes, res) {
   });
 
   proxyRes.on('end', () => {
+    clearTimeout(stallTimer);
     // Flush remaining buffer
     if (buffer.trim()) {
       const result = processSSEEvent(buffer.trim(), thinkingIndices);
@@ -137,8 +172,9 @@ function handleStreaming(id, proxyRes, res) {
   });
 
   proxyRes.on('error', (err) => {
+    clearTimeout(stallTimer);
     console.error(`  #${id} stream error: ${err.message}`);
-    res.end();
+    if (!res.writableEnded) res.end();
   });
 }
 

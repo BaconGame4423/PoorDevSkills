@@ -322,6 +322,15 @@ function buildDispatchCommand(opts: {
   return parts.join(" ");
 }
 
+/**
+ * detach モード用の polling コマンドを生成。
+ * 36×16s = 576s（Bash tool timeout 600s 以内）で result file を監視。
+ * DISPATCH_COMPLETE or DISPATCH_PENDING を stdout に出力。
+ */
+function buildPollCommand(resultFile: string): string {
+  return `RESULT='${resultFile}'; for i in $(seq 1 36); do [ -f "$RESULT" ] && echo DISPATCH_COMPLETE && exit 0; sleep 16; done; echo DISPATCH_PENDING`;
+}
+
 function buildBashDispatchTeamAction(
   step: string,
   teamConfig: StepTeamConfig,
@@ -382,6 +391,7 @@ function buildBashDispatchTeamAction(
       if (detach) {
         action.detached = true;
         action.resultFile = resultFile;
+        action.pollCommand = buildPollCommand(resultFile);
       }
       return action;
     }
@@ -458,7 +468,9 @@ function buildBashDispatchTeamAction(
       if (detach) {
         reviewAction.detached = true;
         reviewAction.reviewerResultFile = reviewerResultFile;
+        reviewAction.reviewerPollCommand = buildPollCommand(reviewerResultFile);
         reviewAction.fixerResultFile = fixerResultFile;
+        reviewAction.fixerPollCommand = buildPollCommand(fixerResultFile);
       }
       return reviewAction;
     }

@@ -31,6 +31,8 @@ export interface BashDispatchAction {
   detached?: boolean;
   /** detach モード: polling 対象の result file パス */
   resultFile?: string;
+  /** detach モード: result file を polling する Bash コマンド（DISPATCH_COMPLETE or DISPATCH_PENDING を出力） */
+  pollCommand?: string;
   worker: {
     role: string;
     agentFile: string;
@@ -54,8 +56,12 @@ export interface BashReviewDispatchAction {
   detached?: boolean;
   /** detach モード: reviewer の polling 対象 result file パス */
   reviewerResultFile?: string;
+  /** detach モード: reviewer の result file を polling する Bash コマンド */
+  reviewerPollCommand?: string;
   /** detach モード: fixer の polling 対象 result file パス */
   fixerResultFile?: string;
+  /** detach モード: fixer の result file を polling する Bash コマンド */
+  fixerPollCommand?: string;
   reviewer: {
     role: string;
     agentFile: string;

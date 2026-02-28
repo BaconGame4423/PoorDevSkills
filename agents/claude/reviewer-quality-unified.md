@@ -52,3 +52,9 @@ WRONG: text outside yaml fence, `verdict` indented under issues.
 - `verdict` MUST be at root level (same indentation as `issues`), never indented under issues
 - Maximum 15 issues total. Prioritize C/H severity
 - Each `# comment` line: max 1 sentence per persona
+
+## Pre-Review File Verification (MANDATORY)
+1. Use Glob to list ALL files in the target directory
+2. Use Read to read each implementation file (.html/.js/.css/.ts/.py)
+3. If a file expected to be substantial has < 100 lines, flag as C-severity "incomplete/truncated"
+4. Do NOT synthesize reviews from spec alone — you MUST read actual file content before issuing a verdict

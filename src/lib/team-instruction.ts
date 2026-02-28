@@ -10,6 +10,22 @@ import path from "node:path";
 import type { FlowDefinition } from "./flow-types.js";
 import type { FileSystem } from "./interfaces.js";
 
+/**
+ * inject コンテンツ内の相対ファイルパスを絶対パスに変換する。
+ * `**File**: \`index.html\`` → `**File**: \`/abs/path/index.html\``
+ * 既に絶対パスの場合はスキップ。マッチしなければ変換なし。
+ */
+export function rewriteRelativeFilePaths(content: string, featureDir: string): string {
+  return content.replace(
+    /(\*\*File\*\*:\s*)`([^`\n]+)`/g,
+    (_match, prefix: string, filePath: string) => {
+      const trimmed = filePath.trim();
+      if (trimmed.startsWith("/")) return `${prefix}\`${trimmed}\``;
+      return `${prefix}\`${path.join(featureDir, trimmed)}\``;
+    }
+  );
+}
+
 // --- Bash Dispatch ヘルパー ---
 
 const BASH_DISPATCH_SUFFIX = `
@@ -43,6 +59,7 @@ function buildContextBlocks(
     if (shouldInject && exists) {
       contextLines.push(`  ${key}: ${fullPath} [inject — content below]`);
       let content = fs.readFile(fullPath);
+      content = rewriteRelativeFilePaths(content, fd);
       if (content.length > MAX_INJECT_CHARS) {
         content = content.slice(0, MAX_INJECT_CHARS) + "\n... (truncated)";
       }
@@ -95,6 +112,15 @@ export function buildBashDispatchPrompt(
     `Feature directory: ${fd}`,
     outputDesc,
   ];
+
+  if (step === "implement" || step === "testdesign") {
+    parts.push(
+      `CRITICAL: All files MUST be written to ${fd}/ (the feature directory above).\n` +
+      `File paths in the task list below are relative to this directory.\n` +
+      `Example: "File: index.html" means write to ${fd}/index.html\n` +
+      `Do NOT write files to the current working directory.`
+    );
+  }
 
   appendContextToParts(parts, buildContextBlocks(step, fd, flowDef, fs));
   parts.push(BASH_DISPATCH_SUFFIX);

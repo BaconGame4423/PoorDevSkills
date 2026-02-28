@@ -197,6 +197,12 @@ For `bash_dispatch` actions. `dispatch-worker.js` が timeout + 自動リトラ�
    - `subtype: "success"` → 成功
    - `subtype: "error_max_turns"` → max-turns 超過、ユーザーに報告
    - `subtype: "error_during_execution"` → エラー、ユーザーに報告
+
+**Implement ステップ後の追加検証** (implement のみ):
+- `ls <FEATURE_DIR>/*.html <FEATURE_DIR>/*.js <FEATURE_DIR>/*.css 2>/dev/null` でファイル存在確認
+- ファイルが FEATURE_DIR に無い場合、プロジェクトルートを確認: `ls *.html *.js *.css 2>/dev/null`
+- ルートにあれば FEATURE_DIR に移動: `mv <file> <FEATURE_DIR>/`
+
 3. artifacts を git add && commit
 4. Step complete: `node .poor-dev/dist/bin/poor-dev-next.js --step-complete <step> --state-dir <DIR> --project-dir .`
 5. 次のステップへ (Core Loop に戻る)

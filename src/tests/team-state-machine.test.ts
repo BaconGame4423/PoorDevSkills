@@ -5,8 +5,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeNextInstruction, type ComputeContext, extractFixedDescs, collectPriorFixes } from "../lib/team-state-machine.js";
+import { computeNextInstruction, type ComputeContext, extractFixedDescs, collectPriorFixes, collectReviewTargets } from "../lib/team-state-machine.js";
 import { FEATURE_FLOW, BUGFIX_FLOW, EXPLORATION_FLOW } from "../lib/flow-definitions.js";
+import type { FlowDefinition } from "../lib/flow-types.js";
 import type { PipelineState } from "../lib/types.js";
 
 // --- ヘルパー ---
@@ -767,6 +768,68 @@ describe("extractFixedDescs", () => {
     }
     const descs = extractFixedDescs(lines.join("\n"));
     expect(descs).toHaveLength(5);
+  });
+});
+
+describe("collectReviewTargets", () => {
+  it("reviewTargets='*' で feature dir 全体を返す（missingWarning なし）", () => {
+    const result = collectReviewTargets("architecturereview", "/proj/specs/001", FEATURE_FLOW, mockFs());
+    expect(result.targets).toEqual(["/proj/specs/001"]);
+    expect(result.missingWarning).toBeUndefined();
+  });
+
+  it("コンテキストファイルが全て欠損時に missingWarning を返す", () => {
+    const flowDef: FlowDefinition = {
+      steps: ["myreview"],
+      context: { myreview: { impl: "index.html", style: "style.css" } },
+    };
+    const result = collectReviewTargets("myreview", "/proj/specs/001", flowDef, mockFs());
+    expect(result.targets).toEqual(["/proj/specs/001"]);
+    expect(result.missingWarning).toContain("WARNING");
+    expect(result.missingWarning).toContain("/proj/specs/001");
+  });
+
+  it("コンテキストファイルが存在する場合は missingWarning なし", () => {
+    const flowDef: FlowDefinition = {
+      steps: ["myreview"],
+      context: { myreview: { impl: "index.html" } },
+    };
+    const fs = mockFs({ "/proj/specs/001/index.html": "<html></html>" });
+    const result = collectReviewTargets("myreview", "/proj/specs/001", flowDef, fs);
+    expect(result.targets).toEqual(["/proj/specs/001/index.html"]);
+    expect(result.missingWarning).toBeUndefined();
+  });
+
+  it("missingWarning が review prompt に注入される", () => {
+    // reviewTargets を持たず context ファイルが全て欠損するカスタムフロー
+    const customFlow: FlowDefinition = {
+      steps: ["myreview"],
+      reviews: ["myreview"],
+      context: { myreview: { impl: "index.html", style: "style.css" } },
+      teamConfig: {
+        myreview: {
+          type: "review-loop",
+          teammates: [
+            { role: "reviewer-quality-unified", writeAccess: false, maxTurns: 15 },
+            { role: "review-fixer", maxTurns: 20 },
+          ],
+          maxReviewIterations: 4,
+        },
+      },
+    };
+    const ctx = makeCtx({
+      state: makeState({ flow: "custom", pipeline: ["myreview"], completed: [] }),
+      flowDef: customFlow,
+    });
+    const fs = mockFs({});
+    const action = computeNextInstruction(ctx, fs);
+
+    expect(action.action).toBe("bash_review_dispatch");
+    if (action.action === "bash_review_dispatch") {
+      expect(action.step).toBe("myreview");
+      expect(action.reviewPrompt).toContain("WARNING");
+      expect(action.reviewPrompt).toContain("No implementation files found");
+    }
   });
 });
 

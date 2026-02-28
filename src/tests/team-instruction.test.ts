@@ -9,6 +9,7 @@ import {
   buildBashDispatchPrompt,
   buildBashReviewPrompt,
   buildBashFixerBasePrompt,
+  rewriteRelativeFilePaths,
 } from "../lib/team-instruction.js";
 import { FEATURE_FLOW } from "../lib/flow-definitions.js";
 import type { FlowDefinition } from "../lib/flow-types.js";
@@ -180,6 +181,73 @@ describe("buildBashReviewPrompt", () => {
     );
 
     expect(prompt).not.toContain("Already Fixed");
+  });
+});
+
+describe("CRITICAL directive for implement/testdesign", () => {
+  it("implement ステップで CRITICAL ディレクティブを含む", () => {
+    const fs = mockFs({
+      "/proj/specs/001/spec.md": "spec",
+      "/proj/specs/001/tasks.md": "tasks",
+    });
+    const prompt = buildBashDispatchPrompt("implement", "/proj/specs/001", FEATURE_FLOW, fs);
+    expect(prompt).toContain("CRITICAL:");
+    expect(prompt).toContain("/proj/specs/001/");
+    expect(prompt).toContain("Do NOT write files to the current working directory");
+  });
+
+  it("testdesign ステップで CRITICAL ディレクティブを含む", () => {
+    const fs = mockFs({
+      "/proj/specs/001/spec.md": "spec",
+      "/proj/specs/001/tasks.md": "tasks",
+    });
+    const prompt = buildBashDispatchPrompt("testdesign", "/proj/specs/001", FEATURE_FLOW, fs);
+    expect(prompt).toContain("CRITICAL:");
+    expect(prompt).toContain("/proj/specs/001/");
+  });
+
+  it("plan ステップで CRITICAL ディレクティブを含まない", () => {
+    const fs = mockFs({
+      "/proj/specs/001/spec.md": "spec",
+    });
+    const prompt = buildBashDispatchPrompt("plan", "/proj/specs/001", FEATURE_FLOW, fs);
+    expect(prompt).not.toContain("CRITICAL:");
+  });
+
+  it("specify ステップで CRITICAL ディレクティブを含まない", () => {
+    const prompt = buildBashDispatchPrompt("specify", "/proj/specs/001", FEATURE_FLOW, mockFs());
+    expect(prompt).not.toContain("CRITICAL:");
+  });
+});
+
+describe("rewriteRelativeFilePaths", () => {
+  it("相対パスを絶対パスに変換する", () => {
+    const content = "**File**: `index.html`\nSome text\n**File**: `styles/main.css`";
+    const result = rewriteRelativeFilePaths(content, "/proj/specs/001");
+    expect(result).toContain("**File**: `/proj/specs/001/index.html`");
+    expect(result).toContain("**File**: `/proj/specs/001/styles/main.css`");
+  });
+
+  it("既に絶対パスの場合は変換しない", () => {
+    const content = "**File**: `/absolute/path/index.html`";
+    const result = rewriteRelativeFilePaths(content, "/proj/specs/001");
+    expect(result).toBe("**File**: `/absolute/path/index.html`");
+  });
+
+  it("マッチしない場合は変換なし", () => {
+    const content = "No file references here.\nJust plain text.";
+    const result = rewriteRelativeFilePaths(content, "/proj/specs/001");
+    expect(result).toBe(content);
+  });
+
+  it("inject 時に tasks.md 内の相対パスが変換される", () => {
+    const fs = mockFs({
+      "/proj/specs/001/spec.md": "spec content",
+      "/proj/specs/001/tasks.md": "# Tasks\n- Task 1\n  **File**: `index.html`\n  **File**: `app.js`",
+    });
+    const prompt = buildBashDispatchPrompt("implement", "/proj/specs/001", FEATURE_FLOW, fs);
+    expect(prompt).toContain("**File**: `/proj/specs/001/index.html`");
+    expect(prompt).toContain("**File**: `/proj/specs/001/app.js`");
   });
 });
 

@@ -54,8 +54,15 @@ echo ""
 # ----------------------------------------------------------
 echo "--- File Statistics ---"
 
+# Implementation search path: features/ があればそこのみ検索
+if [ -d "$DIR_PATH/features" ]; then
+  IMPL_SEARCH="$DIR_PATH/features"
+else
+  IMPL_SEARCH="$DIR_PATH"
+fi
+
 # Count source files (exclude hidden dirs, node_modules)
-total_files=$(find "$DIR_PATH" -type f \
+total_files=$(find "$IMPL_SEARCH" -type f \
     -not -path '*/.git/*' \
     -not -path '*/.opencode/*' \
     -not -path '*/.claude/*' \
@@ -77,7 +84,7 @@ while IFS= read -r f; do
     printf "  %-40s %6d lines  %8d bytes\n" "$relpath" "$lines" "$bytes"
     total_output_lines=$((total_output_lines + lines))
     total_output_bytes=$((total_output_bytes + bytes))
-done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' | sort)
+done < <(_find_excluding_archives "$IMPL_SEARCH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.opencode/*' -not -path '*/.claude/*' -not -path '*/.poor-dev/*' | sort)
 echo ""
 echo "Total output: $total_output_lines lines, $total_output_bytes bytes"
 
@@ -157,7 +164,7 @@ else
         if [ -z "$earliest_mod" ] || [ "$mod" -lt "$earliest_mod" ]; then
             earliest_mod=$mod
         fi
-    done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
+    done < <(_find_excluding_archives "$IMPL_SEARCH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
     first_ts="${earliest_mod:-}"
 fi
 
@@ -169,7 +176,7 @@ while IFS= read -r f; do
     if [ "$mod" -gt "$latest_mod" ]; then
         latest_mod=$mod
     fi
-done < <(_find_excluding_archives "$DIR_PATH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
+done < <(_find_excluding_archives "$IMPL_SEARCH" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.ts" -o -name "*.py" \) -not -path '*/.git/*' -not -path '*/node_modules/*')
 
 if [ -n "$first_ts" ] && [ "$latest_mod" -gt 0 ]; then
     wall_clock=$((latest_mod - first_ts))

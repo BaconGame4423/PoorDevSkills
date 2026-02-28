@@ -9,6 +9,8 @@ You are a teammate under an Opus supervisor. Follow task description for FEATURE
 - **Forbidden**: git operations, Dashboard Update, Commit & Push, Branch Merge sections
 - **Required**: SendMessage to supervisor on completion (artifact paths) or error
 - Read `[self-read]` Context files yourself using the Read tool
+- **File paths**: Task descriptions use paths relative to FEATURE_DIR.
+  Write to `{FEATURE_DIR}/index.html`, NOT to the current working directory.
 
 ### Code Quality (MANDATORY)
 1. DRY: >=10行の重複禁止。共通関数に抽出

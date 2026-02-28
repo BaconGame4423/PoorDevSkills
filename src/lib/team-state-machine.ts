@@ -408,9 +408,12 @@ function buildBashDispatchTeamAction(
       const reviewerMaxTurns = reviewerRole?.maxTurns ?? 15;
       const fixerMaxTurns = fixerRole?.maxTurns ?? 20;
 
-      const targetFiles = collectReviewTargets(step, fd, flowDef, fs);
+      const { targets: targetFiles, missingWarning } = collectReviewTargets(step, fd, flowDef, fs);
       const priorFixes = collectPriorFixes(step, dispatchDir, pipeline, completedSet, fs);
-      const reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs, priorFixes);
+      let reviewPrompt = buildBashReviewPrompt(step, fd, targetFiles, flowDef, fs, priorFixes);
+      if (missingWarning) {
+        reviewPrompt = `${missingWarning}\n\n${reviewPrompt}`;
+      }
       const fixerBasePrompt = buildBashFixerBasePrompt(step, fd, targetFiles, flowDef, fs);
 
       const reviewerPromptFile = path.join(dispatchDir, `${step}-review-prompt.txt`);
@@ -477,30 +480,36 @@ function buildBashDispatchTeamAction(
   }
 }
 
-function collectReviewTargets(
+export function collectReviewTargets(
   step: string,
   fd: string,
   flowDef: FlowDefinition,
   fs: Pick<FileSystem, "exists">
-): string[] {
+): { targets: string[]; missingWarning?: string } {
   // reviewTargets が明示的に定義されている場合
   const pattern = flowDef.reviewTargets?.[step];
   if (pattern) {
-    if (pattern === "*") return [fd];
+    if (pattern === "*") return { targets: [fd] };
     const fullPath = path.join(fd, pattern);
-    if (fs.exists(fullPath)) return [fullPath];
+    if (fs.exists(fullPath)) return { targets: [fullPath] };
   }
 
   // デフォルト: コンテキストファイルを対象にする
   const ctx = flowDef.context?.[step];
-  if (!ctx) return [fd];
+  if (!ctx) return { targets: [fd] };
 
   const targets: string[] = [];
   for (const filename of Object.values(ctx)) {
     const fullPath = path.join(fd, filename);
     if (fs.exists(fullPath)) targets.push(fullPath);
   }
-  return targets.length > 0 ? targets : [fd];
+  if (targets.length === 0) {
+    return {
+      targets: [fd],
+      missingWarning: `WARNING: No implementation files found in ${fd}. Review may be based on incomplete data.`,
+    };
+  }
+  return { targets };
 }
 
 const FIXED_DESC_RE = /^\s*-?\s*desc:\s*"?(.+?)"?\s*$/;

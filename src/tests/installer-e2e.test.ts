@@ -156,7 +156,7 @@ describe("poor-dev-next CLI subcommands", () => {
     execSync(`mkdir -p ${condDir}`, { stdio: "pipe" });
     execSync(`node ${nextBin()} --init --flow bugfix --state-dir ${condDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
     // Complete bugfix step then set conditional
-    execSync(`node ${nextBin()} --step-complete bugfix --state-dir ${condDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
+    execSync(`node ${nextBin()} --step-complete bugfix --skip-validation --state-dir ${condDir} --project-dir ${tmpDir}`, { encoding: "utf8" });
     const output = execSync(
       `node ${nextBin()} --set-conditional "bugfix:SCALE_SMALL" --state-dir ${condDir} --project-dir ${tmpDir}`,
       { encoding: "utf8" }

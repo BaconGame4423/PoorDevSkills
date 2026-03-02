@@ -114,6 +114,7 @@ describe("writePromptsToFiles", () => {
 
       const result = runJson([
         "--step-complete", "specify",
+        "--skip-validation",
         "--state-dir", stateDir,
         "--project-dir", tmpDir,
       ]);
@@ -136,6 +137,7 @@ describe("writePromptsToFiles", () => {
 
       const result = runJson([
         "--steps-complete", "specify,plan",
+        "--skip-validation",
         "--state-dir", stateDir,
         "--project-dir", tmpDir,
       ]);
@@ -160,6 +162,7 @@ describe("writePromptsToFiles", () => {
       // specify を完了させる
       run([
         "--step-complete", "specify",
+        "--skip-validation",
         "--state-dir", stateDir,
         "--project-dir", tmpDir,
       ]);
@@ -191,6 +194,7 @@ describe("writePromptsToFiles ユニットテスト的検証", () => {
     // specify, plan を完了させて planreview にする
     const result = runJson([
       "--steps-complete", "specify,plan",
+      "--skip-validation",
       "--state-dir", stateDir,
       "--project-dir", tmpDir,
     ]);
@@ -225,6 +229,7 @@ describe("writePromptsToFiles ユニットテスト的検証", () => {
     const preSteps = ["specify", "plan", "planreview", "tasks", "tasksreview"];
     run([
       "--steps-complete", preSteps.join(","),
+      "--skip-validation",
       "--state-dir", stateDir,
       "--project-dir", tmpDir,
     ]);

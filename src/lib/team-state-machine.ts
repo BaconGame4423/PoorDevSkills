@@ -24,6 +24,61 @@ import {
   buildBashFixerBasePrompt,
 } from "./team-instruction.js";
 
+// --- Result ファイル検証 ---
+
+/**
+ * dispatch-worker.js が生成した正規の result ファイルか検証。
+ *
+ * 正規パターン:
+ * - 成功: { type: "result", ... }  (worker CLI stdout — duration_ms, modelUsage 等を含む)
+ * - 失敗: { status: "failed", exitCode: N, ... }  (dispatch-worker.js の全リトライ失敗出力)
+ *
+ * 拒否パターン:
+ * - Opus 捏造: { status: "completed", artifacts: [...] } 等
+ * - 不正 JSON / ファイル不在
+ */
+export function validateResultFile(
+  resultPath: string,
+  fs: Pick<FileSystem, "exists" | "readFile">
+): { valid: boolean; reason?: string } {
+  if (!fs.exists(resultPath)) {
+    return { valid: false, reason: `result file not found: ${resultPath}` };
+  }
+  try {
+    const data = JSON.parse(fs.readFile(resultPath));
+    // dispatch-worker.js 成功パス: worker CLI の stdout をそのまま書き込み
+    if (data.type === "result") {
+      return { valid: true };
+    }
+    // dispatch-worker.js 失敗パス: 全リトライ失敗時の構造化エラー
+    if (data.status === "failed" && typeof data.exitCode === "number") {
+      return { valid: true }; // 失敗でも「dispatch は実行された」
+    }
+    // 上記以外 = Opus 捏造の可能性
+    return { valid: false, reason: `invalid result format: expected type:"result" or status:"failed" with exitCode, got keys [${Object.keys(data).join(",")}] in ${resultPath}` };
+  } catch {
+    return { valid: false, reason: `result file is not valid JSON: ${resultPath}` };
+  }
+}
+
+/**
+ * ステップの teamConfig から期待される result ファイルパスを解決する。
+ * teamConfig がない場合は null を返す（検証スキップ）。
+ */
+export function resolveExpectedResultFile(
+  step: string,
+  stateDir: string,
+  flowDef: FlowDefinition
+): string | null {
+  const stepConfig = flowDef.teamConfig?.[step];
+  if (!stepConfig) return null;
+
+  const dispatchDir = path.join(stateDir, ".pd-dispatch");
+  return stepConfig.type === "team"
+    ? path.join(dispatchDir, `${step}-worker-result.json`)
+    : path.join(dispatchDir, `${step}-reviewer-result.json`);
+}
+
 // --- コア関数 ---
 
 export interface ComputeContext {
@@ -352,8 +407,9 @@ function buildBashDispatchTeamAction(
   workerCli: string = "glm",
   dispatchConfig?: DispatchConfig
 ): BashDispatchAction | BashReviewDispatchAction {
-  const WORKER_TOOLS = "Read,Write,Edit,Bash,Grep,Glob";
+  const WORKER_TOOLS = teamConfig.tools ?? "Read,Write,Edit,Bash,Grep,Glob";
   const REVIEWER_TOOLS = "Read,Glob,Grep";
+  const effectiveCli = teamConfig.cli ?? workerCli;
   const dispatchDir = path.join(featureDir, ".pd-dispatch");
 
   switch (teamConfig.type) {
@@ -362,7 +418,9 @@ function buildBashDispatchTeamAction(
       const role = teammate?.role ?? `worker-${step}`;
       const agentFile = `agents/claude/${role}.md`;
       const maxTurns = teammate?.maxTurns ?? 30;
-      const prompt = buildBashDispatchPrompt(step, fd, flowDef, fs);
+      const prompt = buildBashDispatchPrompt(step, fd, flowDef, fs, {
+        teamEnabled: !!teamConfig.cli,
+      });
 
       const promptFile = path.join(dispatchDir, `${step}-prompt.txt`);
       const resultFile = path.join(dispatchDir, `${step}-worker-result.json`);
@@ -376,7 +434,7 @@ function buildBashDispatchTeamAction(
         resultFile,
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
-        cli: workerCli,
+        cli: effectiveCli,
         detach,
       });
 
@@ -437,7 +495,7 @@ function buildBashDispatchTeamAction(
         resultFile: reviewerResultFile,
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
-        cli: workerCli,
+        cli: effectiveCli,
         detach,
       });
 
@@ -451,7 +509,7 @@ function buildBashDispatchTeamAction(
         resultFile: fixerResultFile,
         timeout: dp.timeout,
         maxRetries: dp.maxRetries,
-        cli: workerCli,
+        cli: effectiveCli,
         detach,
       }).replace(" --prompt-file __PROMPT_FILE__", "");
 

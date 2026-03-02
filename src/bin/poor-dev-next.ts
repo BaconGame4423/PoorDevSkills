@@ -17,7 +17,7 @@ import { NodeFileSystem } from "../lib/node-adapters.js";
 import { FilePipelineStateManager } from "../lib/pipeline-state.js";
 import { resolveFlow, mergeFlows } from "../lib/flow-loader.js";
 import { getFlowDefinition, BUILTIN_FLOWS } from "../lib/flow-definitions.js";
-import { computeNextInstruction } from "../lib/team-state-machine.js";
+import { computeNextInstruction, validateResultFile, resolveExpectedResultFile } from "../lib/team-state-machine.js";
 import { parseReviewerOutputYaml, checkConvergence, processReviewCycle } from "../lib/team-review.js";
 import { parsePlanFile, resolveNextFeatureNumber, generateDiscussionSummary } from "../lib/plan-parser.js";
 import type { TeamAction, BashParallelDispatchAction } from "../lib/team-types.js";
@@ -44,6 +44,7 @@ interface CliArgs {
   promptDir?: string;
   listFlows?: boolean;
   initFromPlan?: string;
+  skipValidation?: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -100,6 +101,9 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--init-from-plan":
         args.initFromPlan = next();
+        break;
+      case "--skip-validation":
+        args.skipValidation = true;
         break;
       case "--token-report":
         args.tokenReport = next();
@@ -385,6 +389,28 @@ async function main(): Promise<void> {
       process.stderr.write(JSON.stringify({ error: "pipeline-state.json not found" }) + "\n");
       process.exit(1);
     }
+
+    // Result ファイル検証ゲート: dispatch-worker.js の正規出力があるか確認
+    if (!args.skipValidation) {
+      const preState = stateManager.read(stateFile);
+      const preFlowDef = resolveFlow(preState.flow, projectDir, fs) ?? getFlowDefinition(preState.flow);
+      if (preFlowDef) {
+        const resultFile = resolveExpectedResultFile(args.stepComplete, stateDir, preFlowDef);
+        if (resultFile) {
+          const validation = validateResultFile(resultFile, fs);
+          if (!validation.valid) {
+            process.stderr.write(JSON.stringify({
+              error: "step_complete_blocked",
+              step: args.stepComplete,
+              reason: validation.reason,
+              hint: "dispatch command を実行して result file を生成してください",
+            }) + "\n");
+            process.exit(1);
+          }
+        }
+      }
+    }
+
     stateManager.completeStep(stateFile, args.stepComplete);
     process.stdout.write(JSON.stringify({ status: "step_completed", step: args.stepComplete }) + "\n");
 
@@ -425,6 +451,30 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const steps = args.stepsComplete.split(",").map((s) => s.trim()).filter(Boolean);
+
+    // Result ファイル検証ゲート: 各ステップの dispatch-worker.js 正規出力を個別検証
+    if (!args.skipValidation) {
+      const preState = stateManager.read(stateFile);
+      const preFlowDef = resolveFlow(preState.flow, projectDir, fs) ?? getFlowDefinition(preState.flow);
+      if (preFlowDef) {
+        for (const step of steps) {
+          const resultFile = resolveExpectedResultFile(step, stateDir, preFlowDef);
+          if (resultFile) {
+            const validation = validateResultFile(resultFile, fs);
+            if (!validation.valid) {
+              process.stderr.write(JSON.stringify({
+                error: "step_complete_blocked",
+                step,
+                reason: validation.reason,
+                hint: "dispatch command を実行して result file を生成してください",
+              }) + "\n");
+              process.exit(1);
+            }
+          }
+        }
+      }
+    }
+
     for (const step of steps) {
       stateManager.completeStep(stateFile, step);
     }
